@@ -1,0 +1,5 @@
+# Reimagined Launcher - Installer checksums (SHA-256)
+# Verifica tu descarga con:  Get-FileHash .\Reimagined-Setup-1.0.1.exe -Algorithm SHA256
+# Si el hash NO coincide con el de abajo: NO ejecutes el archivo, descargalo de nuevo.
+
+d9f3b0c0ad3c0362c1d112c66d450a1d1e2c09a14e293dcd2bcace48c31d6467  Reimagined-Setup-1.0.1.exe

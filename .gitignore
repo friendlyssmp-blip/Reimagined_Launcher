@@ -10,6 +10,8 @@ out/
 # directly from the repository). win-unpacked/ stays ignored.
 dist/*
 !dist/*.exe
+!dist/SHA256SUMS.txt
+!dist/*.exe
 release/
 
 # ---- User data (profiles, accounts, tokens, logs, caches) — NEVER commit ----
