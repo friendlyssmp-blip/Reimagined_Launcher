@@ -6,7 +6,10 @@ node_modules/
 
 # Build output
 out/
-dist/
+# Everything in dist/ except the installer .exe (people download the setup
+# directly from the repository). win-unpacked/ stays ignored.
+dist/*
+!dist/*.exe
 release/
 
 # ---- User data (profiles, accounts, tokens, logs, caches) — NEVER commit ----
