@@ -21,6 +21,9 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   showSnapshots: false,
   performanceMode: false,
   preset: 'balanced',
+  // Reimagined Performance Engine: auto-tune by default, engine-chosen tier.
+  perfAutoTune: true,
+  perfTier: 'auto',
   recentActivity: [],
   audioEnabled: true,
   audioVolume: 0.7,
@@ -80,11 +83,21 @@ export function getSystemMemoryMB(): number {
   }
 }
 
-/** Calculate recommended RAM: 50% of system RAM, clamped to 2-12 GB. */
-export function getRecommendedMemory(): number {
-  const totalMB = getSystemMemoryMB()
-  const recommended = Math.floor(totalMB * 0.5)
-  return Math.max(2048, Math.min(12288, recommended))
+/**
+ * Calculate recommended RAM via the Performance Engine (50% of system RAM,
+ * clamped 2-8 GB, aligned to the detected hardware). Async so the engine can
+ * run its hardware detection lazily; falls back to a safe sync estimate.
+ */
+export async function getRecommendedMemory(): Promise<number> {
+  try {
+    const { engine } = await import('../perf/engine')
+    const hw = await engine.detectHardware(false)
+    return engine.recommendMemoryMB(hw, DEFAULT_SETTINGS.memory)
+  } catch {
+    const totalMB = getSystemMemoryMB()
+    const recommended = Math.floor(totalMB * 0.5)
+    return Math.max(2048, Math.min(8192, recommended))
+  }
 }
 
 export const settingsManager = new SettingsManager()

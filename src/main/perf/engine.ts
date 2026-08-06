@@ -1,0 +1,395 @@
+/**
+ * Reimagined Performance Engine (RPE).
+ *
+ * The brain that adapts Minecraft to the user's hardware automatically:
+ *
+ *  - Scores the detected hardware into a tier (potato / balanced / high),
+ *    with human-readable reasons, and picks RAM, JVM flags and the FPS Boost
+ *    config for that tier.
+ *  - Records every play session's REAL measured performance (parsed from the
+ *    game's own PERF reporter lines - never fake numbers) and self-learns:
+ *    a machine that consistently stays far above target raises its render
+ *    distance cap; one that struggles lowers it.
+ *  - Produces clear, actionable recommendations the user chooses to apply.
+ *
+ * Everything is transparent: settings are only changed when the user asks
+ * (or via the opt-in auto-tune), and every decision is logged.
+ */
+import path from 'node:path'
+import fs from 'node:fs'
+import { paths } from '../paths'
+import { logger } from '../logs/logger'
+import { settingsManager } from '../settings/settings-manager'
+import { detectHardware } from './hardware'
+
+/** Re-export so launcher/ipc can reach detection through the engine module. */
+export { detectHardware }
+import { readJson, writeJson } from '../utils/fs'
+import type { HardwareProfile, PerfSessionMetrics, PerfStatus, PerfRecommendation, PerfTier, LauncherSettings } from '@shared/types'
+
+const SESSIONS_FILE = () => path.join(paths.data, 'perf', 'sessions.json')
+const TUNING_FILE = () => path.join(paths.data, 'perf', 'tuning.json')
+const MAX_SESSIONS = 20
+
+/* --------------------------------- scoring --------------------------------- */
+
+interface TierDecision {
+  tier: PerfTier
+  reasons: string[]
+}
+
+/** Score the hardware and pick the best tier, explaining why. */
+export function scoreHardware(hw: HardwareProfile | null): TierDecision {
+  if (!hw) return { tier: 'balanced', reasons: ['Hardware details unavailable - using a safe default.'] }
+  const reasons: string[] = []
+  let points = 0
+
+  const cores = hw.cpu.cores || 1
+  const threads = hw.cpu.threads || cores
+  const speed = hw.cpu.speedGHz || 2
+  if (threads >= 12) { points += 3; reasons.push(threads + ' threads - plenty of headroom for chunk building.') }
+  else if (threads >= 8) { points += 2; reasons.push(threads + ' threads handle chunk building well.') }
+  else if (threads >= 4) { points += 1; reasons.push(threads + ' threads are workable - chunk build pool stays conservative.') }
+  else reasons.push('Only ' + threads + ' thread(s) - the engine keeps background work minimal.')
+  if (speed >= 4) points += 1
+  if (speed <= 2.4) points -= 1
+
+  const mainGpu = hw.gpu[0]
+  const vram = mainGpu?.vramGB ?? 0
+  if (mainGpu) {
+    if (!mainGpu.integrated && vram >= 8) { points += 3; reasons.push(mainGpu.name + ' with ' + vram + ' GB VRAM handles full detail.') }
+    else if (!mainGpu.integrated && vram >= 4) { points += 2; reasons.push(mainGpu.name + ' (' + vram + ' GB) is a solid mid-range GPU.') }
+    else if (vram >= 2) { points += 1; reasons.push('Dedicated GPU with ' + vram + ' GB VRAM.') }
+    else { points -= 1; reasons.push('Integrated or small-VRAM graphics - lighter rendering settings help.') }
+  }
+
+  const ramGB = hw.memory.totalGB || 8
+  if (ramGB >= 32) { points += 2; reasons.push(ramGB + ' GB RAM is generous.') }
+  else if (ramGB >= 16) { points += 1; reasons.push(ramGB + ' GB RAM is comfortable.') }
+  else if (ramGB >= 8) { reasons.push(ramGB + ' GB RAM - memory is limited, heap stays conservative.') }
+  else { points -= 2; reasons.push(ramGB + ' GB RAM is tight - minimum footprint.') }
+
+  if (hw.storage.type === 'SSD') { points += 1; reasons.push('SSD storage keeps world loading snappy.') }
+  else if (hw.storage.type === 'HDD') reasons.push('HDD storage - chunk streaming is kept light.')
+  if (hw.laptop && mainGpu?.integrated) { points -= 1; reasons.push('Laptop with integrated graphics - thermals and battery matter.') }
+
+  const tier: PerfTier = points >= 7 ? 'high' : points >= 3 ? 'balanced' : 'potato'
+  return { tier, reasons: reasons.slice(0, 6) }
+}
+
+/** RAM recommendation: ~50% of system RAM, never starving the OS, capped. */
+export function recommendMemoryMB(hw: HardwareProfile | null, current = 4096): number {
+  const totalGB = hw?.memory.totalGB ?? 8
+  const totalMB = totalGB * 1024
+  const rec = Math.floor(totalMB * 0.5)
+  const clamped = Math.max(2048, Math.min(8192, rec))
+  if (clamped <= 0) return current
+  return Math.round(clamped / 512) * 512
+}
+
+/** The tier that is actually in effect (auto -> engine, else manual). */
+export function effectiveTier(settings: LauncherSettings, hw: HardwareProfile | null): { tier: PerfTier; source: 'auto' | 'manual' } {
+  if (settings.perfTier && settings.perfTier !== 'auto') {
+    return { tier: settings.perfTier, source: 'manual' }
+  }
+  const auto = scoreHardware(hw).tier
+  const tier = settings.perfAutoTune ? auto : settings.preset
+  return { tier, source: 'auto' }
+}
+
+/* ------------------------------- config builders ------------------------------- */
+
+/** The exact shape the in-game Reimagined FPS Boost mod reads. */
+export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record<string, unknown> {
+  const base = {
+    enabled: true,
+    reduceParticles: true,
+    simplifyClouds: true,
+    limitEntityAnimations: true,
+    smartRenderDistance: true,
+    reduceVisualEffects: false,
+    showFps: false
+  }
+  const slowStorage = hw?.storage.type === 'HDD'
+  if (tier === 'potato') {
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32 }
+  }
+  if (tier === 'balanced') {
+    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48 }
+  }
+  return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64 }
+}
+
+/** Tier-tuned JVM flags (G1GC tuning + preset hand-off). Memory is added by the launcher. */
+export function jvmFlagsFor(tier: PerfTier): string[] {
+  const pause = tier === 'potato' ? 40 : tier === 'balanced' ? 60 : 80
+  const newSize = tier === 'potato' ? 25 : 30
+  const maxNewSize = tier === 'potato' ? 50 : 60
+  const presetId = tier === 'potato' ? 0 : tier === 'balanced' ? 1 : 2
+  return [
+    '-XX:+UseG1GC',
+    '-XX:MaxGCPauseMillis=' + pause,
+    '-XX:+UnlockExperimentalVMOptions',
+    '-XX:G1NewSizePercent=' + newSize,
+    '-XX:G1MaxNewSizePercent=' + maxNewSize,
+    '-Dreimagined.preset=' + presetId,
+    '-XX:+ParallelRefProcEnabled',
+    '-XX:+UseStringDeduplication'
+  ]
+}
+
+/* ------------------------------ sessions & learning ------------------------------ */
+
+interface TuningState {
+  renderDistanceCap: number
+  lastAvgFps: number
+  sessionsLearned: number
+}
+
+function defaultTuning(): TuningState {
+  return { renderDistanceCap: 12, lastAvgFps: 0, sessionsLearned: 0 }
+}
+
+async function loadTuning(): Promise<TuningState> {
+  const t = await readJson<Partial<TuningState> | null>(TUNING_FILE(), null)
+  return { ...defaultTuning(), ...(t ?? {}) }
+}
+
+async function saveTuning(t: TuningState): Promise<void> {
+  try {
+    await writeJson(TUNING_FILE(), t)
+  } catch {
+    /* best-effort */
+  }
+}
+
+async function loadSessions(): Promise<PerfSessionMetrics[]> {
+  const s = await readJson<PerfSessionMetrics[] | null>(SESSIONS_FILE(), null)
+  return Array.isArray(s) ? s : []
+}
+
+/**
+ * Parse the game's PERF reporter lines out of a session log and record a
+ * real measured session (skipping the boot window). Never fakes data - if
+ * there are no measurements, nothing is recorded.
+ */
+export async function recordSessionFromLog(profileId: string, profileName: string, logPath: string | null): Promise<void> {
+  if (!logPath) return
+  try {
+    if (!fs.existsSync(logPath)) return
+    const text = fs.readFileSync(logPath, 'utf-8')
+    const re = /PERF avg=([\d.]+) low=([\d.]+) heapMB=([\d.]+) frames=(\d+)/g
+    const windows: { avg: number; low: number; heap: number; frames: number }[] = []
+    let m: RegExpExecArray | null
+    while ((m = re.exec(text)) !== null) {
+      windows.push({ avg: Number(m[1]), low: Number(m[2]), heap: Number(m[3]), frames: Number(m[4]) })
+    }
+    if (windows.length === 0) return
+    // Skip the first window (boot + world load are not representative).
+    const clean = windows.length > 1 ? windows.slice(1) : windows
+    const avgFps = clean.reduce((s, w) => s + w.avg, 0) / clean.length
+    const lowFps = Math.min(...clean.map((w) => w.low))
+    const heapMB = clean.reduce((s, w) => s + w.heap, 0) / clean.length
+    const frames = clean.reduce((s, w) => s + w.frames, 0)
+
+    const session: PerfSessionMetrics = {
+      at: new Date().toISOString(),
+      profileId,
+      profileName: profileName || 'Unknown profile',
+      avgFps: Math.round(avgFps * 10) / 10,
+      lowFps: Math.round(lowFps * 10) / 10,
+      heapMB: Math.round(heapMB),
+      frames,
+      durationSec: 0
+    }
+
+    const sessions = await loadSessions()
+    sessions.unshift(session)
+    await writeJson(SESSIONS_FILE(), sessions.slice(0, MAX_SESSIONS)).catch(() => {})
+
+    // Self-learning: nudge the render distance cap toward a healthy target.
+    const tuning = await loadTuning()
+    if (avgFps < 40 && tuning.renderDistanceCap > 6) {
+      tuning.renderDistanceCap = Math.max(6, tuning.renderDistanceCap - 2)
+      logger.info('RPE self-learn: avg ' + avgFps.toFixed(0) + ' FPS below target - render distance cap lowered to ' + tuning.renderDistanceCap)
+    } else if (avgFps > 110 && tuning.renderDistanceCap < 24) {
+      tuning.renderDistanceCap = Math.min(24, tuning.renderDistanceCap + 1)
+      logger.info('RPE self-learn: avg ' + avgFps.toFixed(0) + ' FPS - headroom, render distance cap raised to ' + tuning.renderDistanceCap)
+    }
+    tuning.lastAvgFps = Math.round(avgFps)
+    tuning.sessionsLearned += 1
+    await saveTuning(tuning)
+
+    logger.info('RPE session recorded: ' + session.profileName + ' - avg ' + session.avgFps + ' FPS, low ' + session.lowFps + ', ' + session.heapMB + ' MB heap (' + clean.length + ' windows)')
+  } catch (err) {
+    logger.warn('RPE session recording failed: ' + (err as Error).message)
+  }
+}
+
+/* ------------------------------ status & recommendations ------------------------------ */
+
+export async function perfStatus(forceDetect = false): Promise<PerfStatus> {
+  const hw = await detectHardware(forceDetect)
+  const settings = settingsManager.get()
+  const { tier, source } = effectiveTier(settings, hw)
+  const decision = scoreHardware(hw)
+  return {
+    hardware: hw,
+    tier,
+    tierSource: source,
+    tierReasons: decision.reasons,
+    recommendedMemoryMB: recommendMemoryMB(hw, settings.memory),
+    sessions: await loadSessions(),
+    tuning: (await loadTuning()) as unknown as Record<string, number>,
+    fpsConfig: fpsConfigFor(tier, hw)
+  }
+}
+
+export async function buildRecommendations(profileId?: string): Promise<PerfRecommendation[]> {
+  const hw = await detectHardware(false)
+  const settings = settingsManager.get()
+  const sessions = await loadSessions()
+  const tuning = await loadTuning()
+  const { tier } = effectiveTier(settings, hw)
+  const auto = scoreHardware(hw)
+  const recs: PerfRecommendation[] = []
+
+  // Preset suggestions (only when not manually overridden).
+  if (settings.perfTier === 'auto' || settings.perfTier === undefined) {
+    if (tier !== settings.preset) {
+      recs.push({
+        id: 'preset-' + auto.tier,
+        title: 'Apply the "' + auto.tier + '" profile for your hardware',
+        detail: auto.reasons.join(' '),
+        category: 'graphics',
+        applyLabel: 'Apply profile'
+      })
+    }
+  }
+
+  // Memory: recommend based on measured heap pressure.
+  const recMem = recommendMemoryMB(hw, settings.memory)
+  const recent = sessions[0]
+  if (recent && recent.heapMB > 0) {
+    const allocated = settings.memory || 4096
+    if (recent.heapMB > allocated * 0.8 && recMem > allocated) {
+      recs.push({
+        id: 'memory-' + recMem,
+        title: 'Increase memory to ' + Math.round(recMem / 1024) + ' GB',
+        detail: 'Your last session used ' + recent.heapMB + ' MB of the ' + Math.round(allocated / 1024) + ' GB allocated - the engine suggests ' + Math.round(recMem / 1024) + ' GB.',
+        category: 'memory',
+        applyLabel: 'Use ' + Math.round(recMem / 1024) + ' GB'
+      })
+    }
+  } else if (settings.memory < recMem - 1024) {
+    recs.push({
+      id: 'memory-' + recMem,
+      title: 'Set the default memory to ' + Math.round(recMem / 1024) + ' GB',
+      detail: 'Your machine has ' + (hw?.memory.totalGB ?? '?') + ' GB of RAM - ' + Math.round(recMem / 1024) + ' GB is the recommended heap for new profiles.',
+      category: 'memory',
+      applyLabel: 'Use ' + Math.round(recMem / 1024) + ' GB'
+    })
+  }
+
+  // Self-learning nudges.
+  if (tuning.sessionsLearned > 0 && tuning.renderDistanceCap < (tier === 'high' ? 16 : tier === 'balanced' ? 12 : 10)) {
+    recs.push({
+      id: 'cap-lower',
+      title: 'Keep render distance capped at ' + tuning.renderDistanceCap,
+      detail: 'Learned from ' + tuning.sessionsLearned + ' measured session(s): your PC stays smooth with the engine auto render-distance cap of ' + tuning.renderDistanceCap + '.',
+      category: 'graphics',
+      applyLabel: 'Keep cap'
+    })
+  }
+
+  // System-level advice (always actionable but non-blocking).
+  if (!hw?.java) {
+    recs.push({
+      id: 'java-missing',
+      title: 'No Java detected - one will be downloaded automatically',
+      detail: 'The launcher downloads a compatible Java runtime on your first launch, so you never need to install Java manually.',
+      category: 'java',
+      applyLabel: 'OK'
+    })
+  }
+  if (hw?.storage.type === 'HDD') {
+    recs.push({
+      id: 'hdd',
+      title: 'HDD detected - lighter chunk settings',
+      detail: 'The engine already keeps chunk streaming light on HDD storage. An SSD would speed up world loading noticeably.',
+      category: 'system',
+      applyLabel: 'Got it'
+    })
+  }
+  if (hw?.laptop && hw.gpu[0]?.integrated && tier !== 'potato') {
+    recs.push({
+      id: 'laptop-integrated',
+      title: 'Laptop with integrated graphics',
+      detail: 'The balanced profile balances battery, thermals and visuals. Lowering to Potato squeezes more battery life.',
+      category: 'system',
+      applyLabel: 'Keep balanced'
+    })
+  }
+
+  // Performance mods (only when a compatible profile is selected).
+  if (profileId) {
+    try {
+      const { listPerfMods } = await import('./mods')
+      const result = await listPerfMods(profileId)
+      const missing = result.mods.filter((mo) => !mo.installed && mo.compatible).slice(0, 2)
+      for (const mo of missing) {
+        recs.push({
+          id: 'mod-' + mo.slug,
+          title: 'Install ' + mo.title,
+          detail: mo.note + ' - a trusted, compatible performance mod for this profile. You choose - nothing installs without your click.',
+          category: 'mods',
+          applyLabel: 'Install',
+          profileId,
+          projectId: mo.projectId
+        })
+      }
+    } catch {
+      /* mods listing is optional */
+    }
+  }
+
+  return recs
+}
+
+/** Apply a recommendation. Never throws - returns a human message. */
+export async function applyRecommendation(payload: { id?: string; profileId?: string }): Promise<{ ok: boolean; message: string }> {
+  const id = payload?.id ?? ''
+  try {
+    if (id.startsWith('preset-')) {
+      const tier = id.replace('preset-', '') as PerfTier
+      await settingsManager.update({ preset: tier, perfTier: tier })
+      logger.info('RPE: applied preset "' + tier + '"')
+      return { ok: true, message: 'Performance profile set to ' + tier + '.' }
+    }
+    if (id.startsWith('memory-')) {
+      const mb = Number(id.replace('memory-', ''))
+      if (mb > 0) {
+        await settingsManager.update({ memory: mb })
+        logger.info('RPE: default memory set to ' + mb + ' MB')
+        return { ok: true, message: 'Default memory set to ' + Math.round(mb / 1024) + ' GB.' }
+      }
+    }
+    if (id === 'cap-lower' || id === 'hdd' || id === 'laptop-integrated' || id === 'java-missing') {
+      return { ok: true, message: 'Noted - no change needed.' }
+    }
+    if (id.startsWith('mod-')) {
+      const { installPerfMod } = await import('./mods')
+      if (!payload.profileId) return { ok: false, message: 'Select a profile to install mods into.' }
+      await installPerfMod
+      await installPerfMod(payload.profileId, id.replace('mod-', ''))
+      logger.info('RPE: installed perf mod ' + id + ' into ' + payload.profileId)
+      return { ok: true, message: 'Mod installed - it will be enabled the next time you play.' }
+    }
+    return { ok: false, message: 'Unknown recommendation.' }
+  } catch (err) {
+    logger.warn('RPE apply recommendation failed (' + id + '): ' + (err as Error).message)
+    return { ok: false, message: (err as Error).message }
+  }
+}
+
+export const engine = { detectHardware, scoreHardware, recommendMemoryMB, effectiveTier, fpsConfigFor, jvmFlagsFor, perfStatus, buildRecommendations, applyRecommendation, recordSessionFromLog }

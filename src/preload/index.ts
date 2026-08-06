@@ -154,6 +154,16 @@ const api = {
     install: (): Promise<unknown> => ipcRenderer.invoke(IPC.updateInstall)
   },
   
+  /** Reimagined Performance Engine (RPE). */
+  perf: {
+    status: (): Promise<unknown> => ipcRenderer.invoke(IPC.perfStatus),
+    recommendations: (profileId?: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfRecommendations, profileId),
+    apply: (payload: { id: string; profileId?: string }): Promise<unknown> => ipcRenderer.invoke(IPC.perfApply, payload),
+    mods: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfMods, profileId),
+    installMod: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfInstallMod, { profileId, slug }),
+    removeMod: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfRemoveMod, { profileId, slug })
+  },
+  
   /** Subscribe to main-process push events. Returns an unsubscribe fn. */
   onEvent: (cb: (event: AppEvent) => void): (() => void) => {
     const listener = (_e: unknown, event: AppEvent): void => cb(event)

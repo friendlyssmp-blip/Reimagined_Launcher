@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '../state/AppContext'
-import { Button, Field, TextInput, Toggle, Slider, Select } from '../components/ui'
+import { Button, Field, TextInput, Toggle, Slider, Select, Spinner } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { sound, SOUND_PACKS } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
 import { IconSettings, IconGamepad, IconShield, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle } from '../components/icons'
-import type { ThemeId, LauncherSettings } from '@shared/types'
+import type { ThemeId, LauncherSettings, PerfStatus, PerfRecommendation, PerfModOption } from '@shared/types'
 
 const themes: { id: ThemeId; label: string; colors: string[] }[] = [
   { id: 'night', label: 'Night', colors: ['#0d0d0f', '#1a1a20', '#8b5cf6'] },
@@ -13,10 +13,17 @@ const themes: { id: ThemeId; label: string; colors: string[] }[] = [
   { id: 'obsidian', label: 'Obsidian', colors: ['#0a0a0e', '#15151d', '#9d8cff'] }
 ]
 
+const IconBolt = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+)
+
 const sections = [
   { id: 'general', label: 'General', icon: IconSettings },
   { id: 'minecraft', label: 'Minecraft', icon: IconGamepad },
   { id: 'java', label: 'Java', icon: IconShield },
+  { id: 'performance', label: 'Performance', icon: IconBolt },
   { id: 'downloads', label: 'Downloads', icon: IconDownload },
   { id: 'updates', label: 'Updates', icon: IconRefresh },
   { id: 'appearance', label: 'Appearance', icon: IconImage },
@@ -171,6 +178,8 @@ export function SettingsPage() {
               </div>
             </div>
           )}
+
+          {section === 'performance' && <PerformanceSection />}
 
           {section === 'downloads' && (
             <div className="panel">
@@ -448,5 +457,285 @@ export function SettingsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/* ------------------------------ Reimagined Performance Engine (RPE) ------------------------------ */
+
+function PerformanceSection() {
+  const { settings, updateSettings, notify, profiles } = useApp()
+  const [status, setStatus] = useState<PerfStatus | null>(null)
+  const [recs, setRecs] = useState<PerfRecommendation[]>([])
+  const [mods, setMods] = useState<PerfModOption[]>([])
+  const [selectedProfile, setSelectedProfile] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const profileId = selectedProfile || profiles[0]?.id || ''
+
+  async function load(): Promise<void> {
+    setLoading(true)
+    try {
+      const s = await api.perf.status()
+      setStatus(s)
+      const r = await api.perf.recommendations(profileId || undefined)
+      setRecs(r)
+      if (profileId) {
+        const m = await api.perf.mods(profileId).catch(() => ({ profileId, mods: [] as PerfModOption[] }))
+        setMods(m.mods)
+      } else {
+        setMods([])
+      }
+    } catch (err) {
+      notify('error', 'Performance engine', friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (profiles.length > 0 && !selectedProfile) setSelectedProfile(profiles[0].id)
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const applyRec = async (r: PerfRecommendation): Promise<void> => {
+    setBusy(true)
+    try {
+      const res = await api.perf.apply({ id: r.id, profileId: (r.profileId ?? profileId) || undefined })
+      notify(res.ok ? 'success' : 'error', res.ok ? 'Applied' : 'Not applied', res.message)
+      // Pull the freshest settings from main so every UI reflects the change.
+      await updateSettings(await api.settings.get())
+      void load()
+    } catch (err) {
+      notify('error', 'Could not apply', friendlyError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const setTier = async (t: 'auto' | 'potato' | 'balanced' | 'high'): Promise<void> => {
+    if (t === 'auto') {
+      await updateSettings({ perfTier: 'auto', perfAutoTune: true })
+      notify('success', 'Auto-optimization on', 'The engine will pick the best profile for your hardware.')
+    } else {
+      await updateSettings({ perfTier: t, preset: t, perfAutoTune: false })
+      notify('success', 'Profile set', t.charAt(0).toUpperCase() + t.slice(1) + ' will be used for every launch.')
+    }
+    void load()
+  }
+
+  const toggleMod = async (mo: PerfModOption): Promise<void> => {
+    if (!profileId) return
+    setBusy(true)
+    try {
+      if (mo.installed) {
+        await api.perf.removeMod(profileId, mo.slug)
+        notify('success', 'Removed', mo.title + ' was removed from this profile.')
+      } else {
+        await api.perf.installMod(profileId, mo.slug)
+        notify('success', 'Installed', mo.title + ' is ready — it activates the next time you play.')
+      }
+      void load()
+    } catch (err) {
+      notify('error', 'Mod action failed', friendlyError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const hw = status?.hardware
+  const tierLabel = status?.tier === 'potato' ? 'Potato' : status?.tier === 'high' ? 'High' : 'Balanced'
+  const tierEmoji = status?.tier === 'potato' ? '🥔' : status?.tier === 'high' ? '🚀' : '⚖️'
+
+  return (
+    <>
+      <div className="panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div>
+            <div className="panel-title">Reimagined Performance Engine</div>
+            <p className="panel-sub">
+              Detects your hardware and adapts Minecraft to it — RAM, JVM flags, render distance, particles, clouds and entity distance. Everything is transparent and logged.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+            {loading ? <Spinner /> : 'Refresh'}
+          </Button>
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <Toggle
+            checked={settings.perfAutoTune ?? true}
+            onChange={(v) => void updateSettings({ perfAutoTune: v }).then(() => notify('info', 'Auto-tune ' + (v ? 'enabled' : 'disabled'))).then(() => void load())}
+            label="Auto-optimize for this computer"
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--accent-3)',
+              background: 'var(--accent-soft, rgba(139,92,246,0.12))',
+              color: 'var(--accent-3)',
+              fontSize: 13,
+              fontWeight: 700
+            }}
+          >
+            {tierEmoji} {tierLabel} profile {status?.tierSource === 'auto' ? '(auto)' : '(manual)'}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+            Recommended memory: <b>{Math.round((status?.recommendedMemoryMB ?? 4096) / 1024)} GB</b>
+            {status?.tuning?.sessionsLearned ? <> · learned from <b>{status.tuning.sessionsLearned}</b> session(s)</> : null}
+          </div>
+          <div style={{ flex: 1 }} />
+          <div className="row" style={{ gap: 6 }}>
+            {(['auto', 'potato', 'balanced', 'high'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => void setTier(t)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-2)',
+                  color: 'var(--text-2)',
+                  fontSize: 11.5,
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                {t === 'auto' ? '✨ Auto' : t === 'potato' ? '🥔' : t === 'high' ? '🚀' : '⚖️'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {status?.tierReasons?.length ? (
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+            {status.tierReasons.map((r, i) => (
+              <div key={i}>• {r}</div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Your hardware</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 12 }}>
+          {[
+            ['CPU', hw ? hw.cpu.model + ' · ' + hw.cpu.threads + ' threads · ' + hw.cpu.speedGHz + ' GHz · ' + hw.cpu.cache : 'Detecting…'],
+            ['GPU', hw && hw.gpu.length ? hw.gpu.map((g) => g.name + (g.integrated ? ' (iGPU)' : ' · ' + g.vramGB + ' GB')).join(' + ') : 'Detecting…'],
+            ['Memory', hw ? hw.memory.totalGB + ' GB' + (hw.memory.speedMHz ? ' · ' + hw.memory.speedMHz + ' MHz' : '') : 'Detecting…'],
+            ['Storage', hw ? hw.storage.type + ' · ' + hw.storage.totalGB + ' GB' : 'Detecting…'],
+            ['Display', hw ? hw.display.resolution + (hw.display.refreshHz ? ' · ' + hw.display.refreshHz + ' Hz' : '') : 'Detecting…'],
+            ['Java', hw ? (hw.java ? 'Java ' + hw.java.major : 'auto-download on first launch') : 'Detecting…'],
+            ['System', hw ? hw.os + (hw.laptop ? ' · laptop' : ' · desktop') : 'Detecting…']
+          ].map(([label, value]) => (
+            <div key={label} style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-1)', lineHeight: 1.45, wordBreak: 'break-word' }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Recommendations</div>
+        <p className="panel-sub">Based on your hardware and measured sessions — you decide what t
+o apply."
+        </p>
+        {recs.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12 }}>
+            {loading ? 'Analyzing your machine…' : 'Nothing to suggest right now — your setup already matches your hardware.'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            {recs.map((r) => (
+              <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{r.title}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.45 }}>{r.detail}</div>
+                </div>
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => void applyRec(r)} style={{ flexShrink: 0 }}>
+                  {r.applyLabel}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Measured sessions</div>
+        <p className="panel-sub">Real performance recorded from your play sessions — the engine learns from these.</p>
+        {status?.sessions?.length ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+            {status.sessions.slice(0, 6).map((s, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--bg-2)', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>{new Date(s.at).toLocaleDateString()}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-1)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.profileName}</span>
+                <span style={{ color: s.avgFps >= 60 ? 'var(--ok, #34d399)' : s.avgFps >= 45 ? 'var(--warning, #fbbf24)' : 'var(--danger, #f87171)', fontWeight: 700 }}>{s.avgFps} FPS</span>
+                <span className="muted" style={{ flexShrink: 0 }}>low {s.lowFps}</span>
+                <span className="muted" style={{ flexShrink: 0 }}>{s.heapMB} MB</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12 }}>
+            No sessions measured yet — play a few minutes and the profiler records real numbers here.
+          </div>
+        )}
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">Performance mods (optional)</div>
+        <p className="panel-sub">
+          Trusted, compatible mods for the selected profile — resolved live from Modrinth. Nothing installs without your click.
+        </p>
+        {profiles.length > 0 ? (
+          <>
+            <div style={{ marginTop: 12, maxWidth: 360 }}>
+              <Field label="Profile">
+                <Select value={selectedProfile || profiles[0].id} onChange={(e) => { setSelectedProfile(e.target.value); }}>
+                  {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+              </Field>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+              {mods.length === 0 && !loading ? (
+                <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+                  {profiles.find((p) => p.id === profileId)?.loader.type === 'vanilla'
+                    ? 'This profile uses Vanilla — performance mods need a Fabric or Forge profile.'
+                    : 'No compatible performance mods found for this profile.'}
+                </div>
+              ) : null}
+              {mods.map((mo) => (
+                <div key={mo.slug} style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
+                  {mo.iconUrl ? <img src={mo.iconUrl} alt="" style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg-3)', flexShrink: 0 }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{mo.title}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>{mo.note}</div>
+                  </div>
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {mo.installed ? <span style={{ fontSize: 11, color: 'var(--ok, #34d399)', fontWeight: 600 }}>Installed</span> : null}
+                    {!mo.compatible ? (
+                      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>No version for {profiles.find((p) => p.id === profileId)?.minecraftVersion}</span>
+                    ) : (
+                      <Button size="sm" variant={mo.installed ? 'ghost' : 'primary'} disabled={busy} onClick={() => void toggleMod(mo)}>
+                        {mo.installed ? 'Remove' : 'Install'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12 }}>Create a profile first — performance mods are installed per profile.</div>
+        )}
+      </div>
+    </>
   )
 }

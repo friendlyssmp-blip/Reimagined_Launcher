@@ -18,7 +18,10 @@ import type {
   MinecraftVersionSummary,
   ShareSnapshot,
   ProjectDetail,
-  ProjectVersionInfo
+  ProjectVersionInfo,
+  PerfStatus,
+  PerfRecommendation,
+  PerfModOption
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -184,6 +187,21 @@ export const api = {
     getInfo: () => unwrap<UpdateInfo>(window.reimagined.update.getInfo()),
     download: () => unwrap<{ progress: number; path: string }>(window.reimagined.update.download()),
     install: () => unwrap<void>(window.reimagined.update.install())
+  },
+
+  /** Reimagined Performance Engine (RPE). */
+  perf: {
+    status: () => unwrap<PerfStatus>(window.reimagined.perf.status()),
+    recommendations: (profileId?: string) =>
+      unwrap<PerfRecommendation[]>(window.reimagined.perf.recommendations(profileId)),
+    apply: (payload: { id: string; profileId?: string }) =>
+      unwrap<{ ok: boolean; message: string }>(window.reimagined.perf.apply(payload)),
+    mods: (profileId: string) =>
+      unwrap<{ profileId: string; mods: PerfModOption[] }>(window.reimagined.perf.mods(profileId)),
+    installMod: (profileId: string, slug: string) =>
+      unwrap<boolean>(window.reimagined.perf.installMod(profileId, slug)),
+    removeMod: (profileId: string, slug: string) =>
+      unwrap<boolean>(window.reimagined.perf.removeMod(profileId, slug))
   },
   
   future: {

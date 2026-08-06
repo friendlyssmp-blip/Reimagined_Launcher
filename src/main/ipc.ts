@@ -433,6 +433,42 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return updater.install()
   })
 
+  /* ------------------------------- performance engine (RPE) ------------------------------- */
+
+  on(IPC.perfStatus, async () => {
+    const { engine } = await import('./perf/engine')
+    return engine.perfStatus()
+  })
+
+  on(IPC.perfRecommendations, async (profileId?: string) => {
+    const { engine } = await import('./perf/engine')
+    return engine.buildRecommendations(profileId || undefined)
+  })
+
+  on(IPC.perfApply, async (payload: { id?: string; profileId?: string }) => {
+    const { engine } = await import('./perf/engine')
+    return engine.applyRecommendation(payload ?? {})
+  })
+
+  on(IPC.perfMods, async (profileId: string) => {
+    const { listPerfMods } = await import('./perf/mods')
+    return listPerfMods(profileId)
+  })
+
+  on(IPC.perfInstallMod, async (payload: { profileId?: string; slug?: string }) => {
+    const { installPerfMod } = await import('./perf/mods')
+    if (!payload?.profileId || !payload?.slug) throw new Error('Missing profile or mod.')
+    await installPerfMod(payload.profileId, payload.slug)
+    return true
+  })
+
+  on(IPC.perfRemoveMod, async (payload: { profileId?: string; slug?: string }) => {
+    const { removePerfMod } = await import('./perf/mods')
+    if (!payload?.profileId || !payload?.slug) throw new Error('Missing profile or mod.')
+    await removePerfMod(payload.profileId, payload.slug)
+    return true
+  })
+
   /* ------------------------------ future systems ------------------------------ */
 
   on(IPC.modpackExport, (profileId) => futureSystems.modpack.export(profileId))

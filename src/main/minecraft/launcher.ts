@@ -56,6 +56,7 @@ class Launcher {
   private profile: Profile | null = null
   private startedAt = 0
   private sessionLog: fs.WriteStream | null = null
+  private sessionLogPath: string | null = null
 
   isRunning(): boolean {
     return !!this.child && this.child.exitCode === null
@@ -140,10 +141,11 @@ class Launcher {
       fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true })
       // FPS Boost is ON by default for EVERY profile, Vanilla included — the
       // Reimagined performance layer reads this config (the Fabric mod only
-      // carries the in-game knobs; the JVM flags below apply regardless).
-      this.seedFpsBoostConfig(gameDir)
+      // carries the in-game knobs; the JVM flags apply regardless). The
+      // values come from the RPE for the current hardware tier.
+      await this.seedFpsBoostConfig(gameDir)
 
-      const args = this.buildArgs({
+      const args = await this.buildArgs({
         vj,
         versionId,
         classpath: [...classpath, clientJar],
@@ -171,7 +173,7 @@ class Launcher {
 
   /* ---------------------------------- args ---------------------------------- */
 
-  private buildArgs(v: {
+  private async buildArgs(v: {
     vj: VersionJson
     versionId: string
     classpath: string[]
@@ -180,7 +182,7 @@ class Launcher {
     log4jConfig: string | null
     profile: Profile
     account: Account
-  }): string[] {
+  }): Promise<string[]> {
     const { vj, versionId, classpath, nativesDir, assetsDir, log4jConfig, profile, account } = v
     const mcProfile = account.profile!
     // assetIndex is verified to exist before buildArgs is called (launch() guards it).
@@ -203,19 +205,13 @@ class Launcher {
     jvm.push(`-Xmx${profile.memory}M`, '-Xms256M', `-Djava.library.path=${nativesDir}`)
     jvm.push('-Dminecraft.launcher.brand=reimagined', `-Dminecraft.launcher.version=${appVersion}`)
 
-    // Reimagined native performance layer (v1): G1GC tuning + hardware preset
-    // hand-off. The in-game client reads -Dreimagined.preset to tune how
-    // aggressively its own optimizations apply (0=potato 1=balanced 2=high).
-    const preset = settingsManager.get().preset ?? 'balanced'
-    const presetId = preset === 'potato' ? 0 : preset === 'high' ? 2 : 1
-    // G1NewSizePercent/G1MaxNewSizePercent are experimental — they crash the
-    // JVM unless UnlockExperimentalVMOptions precedes them (order matters).
-    jvm.push('-XX:+UseG1GC', '-XX:MaxGCPauseMillis=50', '-XX:+UnlockExperimentalVMOptions', '-XX:G1NewSizePercent=30', '-XX:G1MaxNewSizePercent=60')
-    jvm.push(`-Dreimagined.preset=${presetId}`)
-    // Extra always-safe GC flags applied to every profile (Vanilla included):
-    // parallel reference processing + string deduplication cut allocation
-    // stalls without any behavior change.
-    jvm.push('-XX:+ParallelRefProcEnabled', '-XX:+UseStringDeduplication')
+    // Reimagined Performance Engine: tier-tuned JVM flags (G1GC tuning +
+    // preset hand-off, ordered so UnlockExperimentalVMOptions precedes the
+    // G1 size flags). The in-game client reads -Dreimagined.preset.
+    const rpe = await import('../perf/engine')
+    const hw = await rpe.detectHardware(false)
+    const { tier } = rpe.effectiveTier(settingsManager.get(), hw)
+    jvm.push(...rpe.jvmFlagsFor(tier))
     jvm.push('-cp', classpath.join(CLASSPATH_SEP))
     if (profile.extraJvmArgs.trim()) jvm.push(...this.splitArgs(profile.extraJvmArgs))
 
@@ -327,9 +323,11 @@ class Launcher {
     const file = path.join(paths.logs, `game-${profile.id}-${dateStamp()}-${Date.now()}.log`)
     try {
       this.sessionLog = fs.createWriteStream(file)
+      this.sessionLogPath = file
       this.emitLog('system', `Session log: ${file}`)
     } catch {
       this.sessionLog = null
+      this.sessionLogPath = null
     }
   }
 
@@ -344,7 +342,15 @@ class Launcher {
     logger.info(`Game exited (code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}) after ${Math.round(duration)}s`)
     this.emitLog('system', `Game exited with code ${code ?? 'n/a'}`)
 
+    // RPE profiler: record this session's real measured performance.
     if (profile) {
+      try {
+        const { recordSessionFromLog } = await import('../perf/engine')
+        await recordSessionFromLog(profile.id, profile.name, this.sessionLogPath)
+      } catch {
+        /* profiler is best-effort */
+      }
+      this.sessionLogPath = null
       await profileManager.recordLaunch(profile.id, duration, true)
       if (settingsManager.get().closeOnLaunch) {
         const { showMainWindow } = await import('../window')
@@ -380,29 +386,17 @@ class Launcher {
 
   /* ---------------------------------- events ---------------------------------- */
 
-  /** Write the Reimagined performance config — enabled by default. */
-  private seedFpsBoostConfig(gameDir: string): void {
+  /** Write the Reimagined performance config — RPE tier-tuned values. */
+  private async seedFpsBoostConfig(gameDir: string): Promise<void> {
     try {
+      const rpe = await import('../perf/engine')
+      const hw = await rpe.detectHardware(false)
+      const { tier } = rpe.effectiveTier(settingsManager.get(), hw)
+      const config = rpe.fpsConfigFor(tier, hw)
       const dir = path.join(gameDir, 'config')
       fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(
-        path.join(dir, 'reimagined-fps-boost.json'),
-        JSON.stringify(
-          {
-            enabled: true,
-            reduceParticles: true,
-            simplifyClouds: true,
-            limitEntityAnimations: true,
-            smartRenderDistance: true,
-            reduceVisualEffects: false,
-            showFps: false,
-            smartRdCap: 16,
-            entityAnimDistance: 48
-          },
-          null,
-          2
-        )
-      )
+      fs.writeFileSync(path.join(dir, 'reimagined-fps-boost.json'), JSON.stringify(config, null, 2))
+      logger.info(`RPE: seeded FPS Boost config for tier "${tier}" (render cap ${String(config.smartRdCap)})`)
     } catch (err) {
       logger.warn(`Could not write FPS Boost config: ${(err as Error).message}`)
     }

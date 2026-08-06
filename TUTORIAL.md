@@ -1,7 +1,7 @@
 # Reimagined Launcher - Guia de Descarga e Instalacion Segura
 
 > Idioma: Espanol - Duracion: ~3 minutos
-> Version del instalador: v1.0.2
+> Version del instalador: v1.0.3
 
 ---
 
@@ -16,7 +16,7 @@ https://github.com/friendlyssmp-blip/Reimagined_Launcher
 El instalador real esta en la carpeta **`dist/`** del repo:
 
 - **Link directo:**
-  `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.2.exe`
+  `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.3.exe`
 - **O en GitHub:** abre el repo - carpeta `dist` - `Reimagined-Setup-1.0.1.exe` - boton Download.
 
 > Regla de oro: si alguien te pasa el .exe por Discord/WhatsApp/enlace raro, **verifica el checksum** (paso 2) antes de ejecutarlo. Solo confia en el hash publicado en el repositorio.
@@ -30,13 +30,13 @@ Esto garantiza que el archivo es **exactamente** el publicado y que nadie lo ha 
 **En PowerShell** (Win + R - escribe `powershell` - Enter):
 
 ```powershell
-Get-FileHash "C:\Users\TU_USUARIO\Downloads\Reimagined-Setup-1.0.2.exe" -Algorithm SHA256
+Get-FileHash "C:\Users\TU_USUARIO\Downloads\Reimagined-Setup-1.0.3.exe" -Algorithm SHA256
 ```
 
 Debe devolver **exactamente**:
 
 ```
-e5911a90a7a8c1f3cbae0f500ae853511862bacda9d86b374837600624da2681
+43e2e26dae919d7d664514a4d4f1925e3d5cd90c2f0df404753a4be70decfff7
 ```
 
 - Si **coincide** - el archivo es autentico, puedes instalarlo tranquilo.
@@ -64,7 +64,7 @@ Al ejecutar el instalador, Windows mostrara:
 
 ## 4. Instalar
 
-1. Doble clic en `Reimagined-Setup-1.0.2.exe`
+1. Doble clic en `Reimagined-Setup-1.0.3.exe`
 2. Elige la carpeta de instalacion (deja la que propone)
 3. **Instalar** - espera a que termine (~1 minuto)
 4. Abre el acceso directo del Escritorio / Menu Inicio

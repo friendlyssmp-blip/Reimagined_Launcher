@@ -114,7 +114,15 @@ export const IPC = {
   shareExportZip: 'share:export-zip',
   shareReadZip: 'share:read-zip',
   shareImportZip: 'share:import-zip',
-  sharePickZip: 'share:pick-zip'
+  sharePickZip: 'share:pick-zip',
+
+  // Performance Engine (RPE)
+  perfStatus: 'perf:status',
+  perfRecommendations: 'perf:recommendations',
+  perfApply: 'perf:apply',
+  perfMods: 'perf:mods',
+  perfInstallMod: 'perf:install-mod',
+  perfRemoveMod: 'perf:remove-mod'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -30,6 +30,10 @@ export interface LauncherSettings {
   performanceMode: boolean
   /** Hardware-aware preset: how aggressively native optimizations apply. */
   preset: 'potato' | 'balanced' | 'high'
+  /** RPE: auto-tune the preset to the detected hardware. */
+  perfAutoTune: boolean
+  /** RPE: 'auto' = engine-chosen tier, otherwise a manual override. */
+  perfTier: 'auto' | 'potato' | 'balanced' | 'high'
   /** Recently performed activities shown on the Home page. */
   recentActivity: RecentActivity[]
 
@@ -350,6 +354,74 @@ export interface JavaRuntime {
   major: number
   vendor?: string
   version: string
+}
+
+/* ------------------------------ Performance Engine (RPE) ------------------------------ */
+
+export type PerfTier = 'potato' | 'balanced' | 'high'
+
+/** Full snapshot of the user's machine, detected by the RPE. */
+export interface HardwareProfile {
+  detectedAt: string
+  cpu: { model: string; cores: number; threads: number; speedGHz: number; cache: string }
+  gpu: { name: string; vendor: string; vramGB: number; integrated: boolean }[]
+  memory: { totalGB: number; speedMHz: number | null }
+  storage: { type: string; totalGB: number }
+  os: string
+  display: { resolution: string; refreshHz: number | null }
+  java: { major: number; version: string } | null
+  laptop: boolean
+}
+
+/** One measured play session recorded by the profiler. */
+export interface PerfSessionMetrics {
+  at: string
+  profileId: string
+  profileName: string
+  avgFps: number
+  lowFps: number
+  heapMB: number
+  frames: number
+  durationSec: number
+}
+
+/** A user-facing, actionable suggestion from the RPE. */
+export interface PerfRecommendation {
+  id: string
+  title: string
+  detail: string
+  category: 'graphics' | 'memory' | 'java' | 'mods' | 'system'
+  applyLabel: string
+  /** Optional context the apply handler needs (e.g. which profile). */
+  profileId?: string
+  projectId?: string
+}
+
+/** A trusted performance mod offered for one-click install (user chooses). */
+export interface PerfModOption {
+  slug: string
+  projectId: string
+  title: string
+  iconUrl?: string
+  downloads: number
+  note: string
+  installed: boolean
+  versionNumber: string | null
+  compatible: boolean
+}
+
+/** Everything the UI needs about the engine's state. */
+export interface PerfStatus {
+  hardware: HardwareProfile | null
+  tier: PerfTier
+  tierSource: 'auto' | 'manual'
+  tierReasons: string[]
+  recommendedMemoryMB: number
+  sessions: PerfSessionMetrics[]
+  /** Learned per-machine tuning values (self-learning). */
+  tuning: Record<string, number>
+  /** The FPS Boost config the engine seeds for the current tier. */
+  fpsConfig: Record<string, unknown>
 }
 
 /* ---------------------------------- Misc --------------------------------- */
