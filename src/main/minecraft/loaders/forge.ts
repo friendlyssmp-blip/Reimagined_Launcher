@@ -61,7 +61,7 @@ export async function installForge(mcVersion: string, forgeVersion: string): Pro
   const genMatch = mcVersion.match(/^(?:1\.)?(\d+)/)
   const generation = genMatch ? parseInt(genMatch[1], 10) : 0
   const requiredMajor = generation >= 13 ? 17 : 8
-  const java = pickJava(requiredMajor)
+  const java = await pickJava(requiredMajor)
   if (!java) throw new Error(`No Java ${requiredMajor}+ found to run the Forge installer`)
 
   const installerUrl = `${MAVEN_BASE}/net/minecraftforge/forge/${mcVersion}-${forgeVersion}/forge-${mcVersion}-${forgeVersion}-installer.jar`

@@ -1,4 +1,5 @@
 {
   "version": "1.0.2",
-  "notes": "Compact Search button inside the Mods/Modpacks search bars + new folder-based update system (detects the update/ folder in the repository)."
+  "notes": "Self-contained .exe: the installer now updates itself by downloading and running the new setup (no dev tools needed), auto-downloads a Java runtime when the PC has none, and ships with everything required to play.",
+  "installer": "dist/Reimagined-Setup-1.0.2.exe"
 }

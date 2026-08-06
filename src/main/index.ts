@@ -536,7 +536,7 @@ async function ensureBenchWorld(profile: Profile, worldName: string, say: (s: st
   const { classpath } = await versionManager.ensureLibraries(versionId, () => undefined)
   const clientJar = await versionManager.ensureClient(versionId)
   const { pickJava } = await import('./minecraft/java')
-  const java = pickJava(25) ?? pickJava(21) ?? pickJava(17)
+  const java = (await pickJava(25)) ?? (await pickJava(21)) ?? (await pickJava(17))
   if (!java) throw new Error('no Java runtime found for world generation')
 
   const sep = process.platform === 'win32' ? ';' : ':'

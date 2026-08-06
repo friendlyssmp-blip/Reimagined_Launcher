@@ -133,7 +133,7 @@ class Launcher {
       const log4jConfig = await versionManager.ensureLog4jConfig(versionId)
 
       const requiredMajor = vj.javaVersion?.majorVersion ?? 8
-      const java = pickJava(requiredMajor)
+      const java = await pickJava(requiredMajor)
       if (!java) throw Errors.missingJava(requiredMajor)
 
       const gameDir = path.join(paths.games, profile.gameDir)

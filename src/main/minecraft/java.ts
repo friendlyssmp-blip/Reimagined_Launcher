@@ -12,13 +12,15 @@
  * so detection must combine both streams — `execFileSync` discards stderr
  * when the exit code is 0, which silently broke detection before.
  */
-import { spawnSync } from 'node:child_process'
+import { spawnSync, execFile } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { settingsManager } from '../settings/settings-manager'
+import { paths } from '../paths'
 import { logger } from '../logs/logger'
-import type { JavaRuntime } from '@shared/types'
+import { eventBus } from '../core/event-bus'
+import type { JavaRuntime, LaunchProgress } from '@shared/types'
 
 export type { JavaRuntime }
 
@@ -150,22 +152,112 @@ export function detectJavaRuntimes(): JavaRuntime[] {
   return found
 }
 
+function timeoutSignal(ms: number): AbortSignal {
+  const ctrl = new AbortController()
+  setTimeout(() => ctrl.abort(), ms)
+  return ctrl.signal
+}
+
+/** Look for a bin/java.exe under a runtime dir (handles a single nested folder). */
+function findJavaUnder(root: string): string | null {
+  try {
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return null
+    const direct = path.join(root, 'bin', 'java.exe')
+    if (existsFile(direct)) return direct
+    for (const entry of fs.readdirSync(root)) {
+      const nested = path.join(root, entry, 'bin', 'java.exe')
+      if (existsFile(nested)) return nested
+    }
+  } catch {
+    /* unreadable */
+  }
+  return null
+}
+
 /**
- * Pick the best Java for a required major version.
- * Returns null when nothing suitable exists.
+ * Download a JRE for a required major version into data/games/runtime so a
+ * fresh install with NO system Java can still launch — the .exe installer is
+ * fully self-contained. Uses the official Adoptium API. Never throws;
+ * returns null when the download fails so the caller can fall back.
  */
-export function pickJava(requiredMajor: number): JavaRuntime | null {
-  const runtimes = detectJavaRuntimes()
-  if (runtimes.length === 0) {
-    logger.warn('No Java runtime found on this system')
+async function ensureRuntimeJava(requiredMajor: number): Promise<JavaRuntime | null> {
+  const dir = path.join(paths.runtime, `jre-${requiredMajor}`)
+  const existing = findJavaUnder(dir)
+  if (existing) {
+    const rt = probeJava(existing)
+    if (rt) return rt
+  }
+
+  const progress: LaunchProgress = {
+    stage: 'downloading',
+    message: `No compatible Java found — downloading Java ${requiredMajor} runtime…`,
+    percent: null
+  }
+  eventBus.emit('launch:progress', progress)
+  logger.info(`Downloading Java ${requiredMajor} runtime (Adoptium)…`)
+
+  try {
+    fs.mkdirSync(paths.runtime, { recursive: true })
+    const zipPath = path.join(paths.runtime, `adoptium-${requiredMajor}.zip`)
+    const url = `https://api.adoptium.net/v3/binary/latest/${requiredMajor}/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk`
+
+    const res = await fetch(url, { redirect: 'follow', signal: timeoutSignal(600_000) })
+    if (!res.ok || !res.body) throw new Error(`Adoptium returned HTTP ${res.status}`)
+    const file = fs.createWriteStream(zipPath)
+    const reader = res.body.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        if (!file.write(Buffer.from(value))) {
+          await new Promise<void>((resolve) => file.once('drain', resolve))
+        }
+      }
+    }
+    await new Promise<void>((resolve, reject) => file.end((err?: Error | null) => (err ? reject(err) : resolve())))
+
+    // Windows ships bsdtar which handles .zip archives natively.
+    fs.rmSync(dir, { recursive: true, force: true })
+    fs.mkdirSync(dir, { recursive: true })
+    await new Promise<void>((resolve, reject) => {
+      execFile('tar', ['-xf', zipPath, '-C', dir], { timeout: 180_000, windowsHide: true }, (err) => (err ? reject(err) : resolve()))
+    })
+
+    const exe = findJavaUnder(dir)
+    if (!exe) throw new Error('The extracted runtime has no java.exe')
+    const rt = probeJava(exe)
+    if (!rt) throw new Error('The downloaded runtime failed its version probe')
+    logger.info(`Java ${requiredMajor} runtime ready at ${exe}`)
+    return rt
+  } catch (err) {
+    logger.warn(`Java runtime download failed: ${(err as Error).message}`)
     return null
   }
+}
+
+/**
+ * Pick the best Java for a required major version.
+ * When no suitable system runtime exists, downloads one (self-contained
+ * installs). Returns null only when both system detection and the download
+ * fallback fail.
+ */
+export async function pickJava(requiredMajor: number): Promise<JavaRuntime | null> {
+  const runtimes = detectJavaRuntimes()
   const best = runtimes.find((r) => r.major >= requiredMajor)
-  const chosen = best ?? runtimes[0]
-  if (!best) {
-    logger.warn(`No Java >= ${requiredMajor} found; falling back to Java ${chosen.major}`)
-  } else {
-    logger.info(`Using Java ${chosen.major} at ${chosen.path}`)
+  if (best) {
+    logger.info(`Using Java ${best.major} at ${best.path}`)
+    return best
   }
-  return chosen
+
+  // No runtime at/above the required major — download one before degrading.
+  const downloaded = await ensureRuntimeJava(requiredMajor)
+  if (downloaded) return downloaded
+
+  const chosen = runtimes[0]
+  if (chosen) {
+    logger.warn(`No Java >= ${requiredMajor} found; falling back to Java ${chosen.major}`)
+    return chosen
+  }
+  logger.warn('No Java runtime found on this system')
+  return null
 }

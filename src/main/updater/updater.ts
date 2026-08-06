@@ -2,20 +2,32 @@
  * GitHub folder-based updater.
  *
  * The launcher watches the `update/` folder in the official repository: a
- * small `update/latest.json` file there declares the newest available version.
- * When it is newer than the installed version (tracked in
- * data/updates/applied-version.json, falling back to the launcher's own
- * version), the launcher downloads the repository as a .zip directly from
- * GitHub's public codeload endpoint — no releases, no tokens, no setup — and
- * applies it over the project directory (user data and dependencies are
- * preserved), rebuilds the app and relaunches.
+ * small `update/latest.json` file there declares the newest available version
+ * and (for packaged installs) the path of the new installer .exe inside the
+ * repo.
+ *
+ * Two install paths:
+ *
+ * 1. SOURCE RUN (dev / zip installs with a Node toolchain):
+ *    Download the repository as a .zip directly from GitHub's public codeload
+ *    endpoint, extract it over the project directory (user data and
+ *    dependencies are preserved), rebuild the app and relaunch.
+ *
+ * 2. PACKAGED (installed via the NSIS installer — Program Files / per-user
+ *    dir, read-only asar, no Node toolchain):
+ *    Download the new installer .exe from the repository and run it silently
+ *    (`/S --updated`). The installer replaces the application — no write
+ *    access to the install directory or npm/tsc is required. The downloaded
+ *    file is unblocked first so Windows SmartScreen does not silently block
+ *    the silent install.
  *
  * Flow: push changes to the repo → bump update/latest.json → every launcher
- * sees "Update available" → one click downloads and applies the new code.
+ * sees "Update available" → one click downloads and applies the new version.
  */
 import path from 'node:path'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { app } from 'electron'
 import { paths, appVersion } from '../paths'
 import { logger } from '../logs/logger'
@@ -31,10 +43,12 @@ const CACHE_MAX_AGE = 30 * 60_000 // re-check GitHub at most every 30 min
  * ever checks updates from here; there is no user-facing repo setting.
  */
 const OFFICIAL_REPO = 'friendlyssmp-blip/Reimagined_Launcher'
-/** The trigger file inside the repo's `update/` folder: {"version": "1.0.2"}. */
+/** The trigger file inside the repo's `update/` folder: {"version":"1.0.2","installer":"dist/..."}. */
 const LATEST_JSON = `https://raw.githubusercontent.com/${OFFICIAL_REPO}/main/update/latest.json`
 /** Whole-repository archive — always the latest committed state of `main`. */
 const CODELOAD_ZIP = `https://codeload.github.com/${OFFICIAL_REPO}/zip/refs/heads/main`
+/** Raw file base — used to fetch the installer exe in packaged builds. */
+const RAW_BASE = `https://raw.githubusercontent.com/${OFFICIAL_REPO}/main`
 
 /** AbortController-based timeout (works on every supported Node/Electron). */
 function timeoutSignal(ms: number): AbortSignal {
@@ -46,14 +60,17 @@ function timeoutSignal(ms: number): AbortSignal {
 function cacheFile(): string {
   return path.join(paths.updates, 'check.json')
 }
-function downloadFile(): string {
-  return path.join(paths.updates, 'reimagined-update.zip')
-}
 function stagingDir(): string {
   return path.join(paths.updates, 'staging')
 }
 function markerFile(): string {
   return path.join(paths.updates, 'applied-version.json')
+}
+
+/** The file the last download produced (zip in source runs, .exe in packaged). */
+function downloadFile(info: UpdateInfo): string {
+  const name = info.assetName && /\.(exe|zip)$/i.test(info.assetName) ? info.assetName : 'reimagined-update.zip'
+  return path.join(paths.updates, name)
 }
 
 /** `1.2.3` vs `1.2.10` numeric comparison (leading `v` tolerated). */
@@ -105,10 +122,16 @@ export const updater = {
       }
       if (!res.ok) throw new Error(`GitHub returned HTTP ${res.status}.`)
 
-      const data = (await res.json()) as { version?: string; notes?: string }
+      const data = (await res.json()) as { version?: string; notes?: string; installer?: string }
       const latestVersion = String(data.version ?? '').replace(/^v/i, '')
       const currentVersion = await readInstalledVersion()
       const hasUpdate = latestVersion !== '' && compareVersions(latestVersion, currentVersion) > 0
+
+      // Packaged installs cannot rebuild source — they update via the new
+      // installer .exe shipped in the repo (see `install()`).
+      const installer = app.isPackaged && data.installer ? String(data.installer).replace(/^\/+/, '') : ''
+      const assetUrl = installer ? `${RAW_BASE}/${installer}` : CODELOAD_ZIP
+      const assetName = installer ? path.basename(installer) : 'Reimagined_Launcher-main.zip'
 
       const info: UpdateInfo = {
         hasUpdate,
@@ -116,9 +139,12 @@ export const updater = {
         latestVersion: latestVersion || currentVersion,
         notes: data.notes ?? '',
         url: `https://github.com/${OFFICIAL_REPO}`,
-        assetUrl: CODELOAD_ZIP,
-        assetName: 'Reimagined_Launcher-main.zip',
+        assetUrl,
+        assetName,
         publishedAt: new Date().toISOString()
+      }
+      if (app.isPackaged) {
+        logger.info(`Update check: current ${currentVersion}, latest ${latestVersion}, installer ${assetName}${hasUpdate ? ' — UPDATE AVAILABLE' : ''}`)
       }
       try {
         await writeJson(cacheFile(), { at: Date.now(), info })
@@ -139,13 +165,15 @@ export const updater = {
     return { hasUpdate: false, currentVersion: appVersion, latestVersion: appVersion }
   },
 
-  /** Download the repository zip (codeload) with live progress events. */
+  /** Download the update payload (repo zip in source runs, installer .exe in packaged). */
   async download(): Promise<{ progress: number; path: string }> {
     mkdirp(paths.updates)
-    const dest = downloadFile()
+    const info = await this.getInfo()
+    const dest = downloadFile(info)
     if (exists(dest)) fs.rmSync(dest, { force: true })
 
-    const res = await fetch(CODELOAD_ZIP, {
+    const url = info.assetUrl || CODELOAD_ZIP
+    const res = await fetch(url, {
       headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0' },
       signal: timeoutSignal(600_000)
     })
@@ -177,24 +205,81 @@ export const updater = {
     await new Promise<void>((resolve, reject) =>
       file.end((err: Error | null | undefined) => (err ? reject(err) : resolve()))
     )
-    logger.info(`Update package downloaded (${Math.round(received / 1024 / 1024)} MB)`)
+    logger.info(`Update package downloaded (${Math.round(received / 1024 / 1024)} MB) — ${dest}`)
     return { progress: 100, path: dest }
   },
 
   /**
-   * Apply the downloaded update: extract → copy over the project root
-   * (preserving data/, node_modules/, .git/, out/) → rebuild → relaunch.
+   * Apply the downloaded update.
+   * - Packaged: run the new installer .exe silently, then exit.
+   * - Source: extract → copy over the project root (preserving data/,
+   *   node_modules/, .git/, out/) → rebuild → relaunch.
    */
   async install(): Promise<void> {
-    // A packaged (installed) app lives inside a read-only asar with no Node
-    // toolchain — the source-overlay update only applies to dev/source runs.
-    if (app.isPackaged) {
-      throw new Error('This launcher was installed with the installer. Updates are applied by downloading the new installer from the GitHub Releases page and running it.')
+    if (app.isPackaged) return this.installPackaged()
+    return this.installSource()
+  },
+
+  /** Packaged installs: silently run the freshly downloaded installer .exe. */
+  async installPackaged(): Promise<void> {
+    const info = await this.getInfo()
+    const dest = downloadFile(info)
+    if (!exists(dest)) throw new Error('No update downloaded yet — click "Download" first.')
+    if (!/\.exe$/i.test(dest)) throw new Error('This launcher was installed with the installer — the update file is not an installer (.exe).')
+
+    logger.info(`Installing update ${info.latestVersion} via the new installer…`)
+    eventBus.emit('update:progress', { phase: 'installer', percent: 90, message: 'Preparing the new installer…' })
+
+    // Remove the Windows "downloaded from the internet" mark (Zone.Identifier)
+    // so SmartScreen does not silently block the silent install.
+    const { execFile } = await import('node:child_process')
+    try {
+      await new Promise<void>((resolve) => {
+        execFile(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-Command', `Unblock-File -LiteralPath '${dest}'`],
+          { timeout: 30_000, windowsHide: true },
+          () => resolve()
+        )
+      })
+    } catch {
+      /* best-effort — the installer may still prompt, which is acceptable */
     }
-    const dest = downloadFile()
+
+    try {
+      await writeJson(markerFile(), { version: info.latestVersion })
+    } catch {
+      /* best-effort */
+    }
+    try {
+      await remove(cacheFile())
+    } catch {
+      /* best-effort */
+    }
+
+    eventBus.emit('update:progress', { phase: 'done', percent: 100, message: 'Launching the new installer…' })
+    logger.info('Launching the new installer — the launcher will close while it replaces itself.')
+
+    // NSIS: /S = fully silent, --updated = replace the existing install
+    // without prompting. Detached so it survives this process exiting.
+    try {
+      const child = spawn(dest, ['/S', '--updated'], { detached: true, stdio: 'ignore', windowsHide: false })
+      child.unref()
+    } catch (err) {
+      logger.error(`Could not start the installer: ${(err as Error).message}`)
+      throw new Error('The installer could not be started. Open the launcher folder and run the downloaded setup manually.')
+    }
+
+    // Give the child a moment to spawn, then close this instance.
+    setTimeout(() => app.exit(0), 1500)
+  },
+
+  /** Source runs: overlay the repository zip, npm install, rebuild, relaunch. */
+  async installSource(): Promise<void> {
+    const info = await this.getInfo()
+    const dest = downloadFile(info)
     if (!exists(dest)) throw new Error('No update downloaded yet — click "Download" first.')
 
-    const info = await this.getInfo()
     logger.info(`Installing update ${info.latestVersion}…`)
     eventBus.emit('update:progress', { phase: 'extract', percent: 5 })
 
