@@ -1,7 +1,7 @@
 {
   "name": "reimagined-launcher",
   "productName": "Reimagined",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reimagined — Minecraft, rebuilt around the player. A premium Minecraft launcher and modding platform.",
   "main": "./out/main/index.js",
   "author": "Reimagined",
