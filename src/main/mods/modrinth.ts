@@ -1,0 +1,249 @@
+/**
+ * Modrinth API v2 client.
+ *
+ * The Modrinth API is open and free — no key required — so the mod search,
+ * install and update pipeline is fully functional in this foundation.
+ * CurseForge (which needs an API key) lives in `placeholders.ts`.
+ */
+import { getJson } from '../utils/http'
+import { logger } from '../logs/logger'
+import type { ModrinthSearchResult, ModrinthVersion, LoaderType, ProjectDetail, ProjectVersionInfo } from '@shared/types'
+
+const API = 'https://api.modrinth.com/v2'
+const USER_AGENT = 'ReimaginedLauncher/1.0.0 (Minecraft launcher)'
+
+function headers(): Record<string, string> {
+  return { 'User-Agent': USER_AGENT }
+}
+
+export type ProjectType = 'mod' | 'resourcepack' | 'shader' | 'datapack' | 'modpack'
+
+export interface SearchOptions {
+  query: string
+  mcVersion?: string
+  loader?: LoaderType
+  projectType?: ProjectType
+  /** Server-side category facet (e.g. "performance", "utility"). */
+  category?: string
+  limit?: number
+  /** Offset for pagination (infinite scroll). */
+  offset?: number
+  /** Sort index: relevance | downloads | follows | newest | updated */
+  index?: string
+}
+
+interface SearchResponse {
+  total_hits: number
+  hits: {
+    project_id: string
+    slug: string
+    title: string
+    description: string
+    icon_url?: string
+    downloads: number
+    follows: number
+    categories: string[]
+    versions: string[]
+    latest_version: string
+    author?: string
+  }[]
+}
+
+/** One search page: the hits plus the server's total hit count (pagination). */
+export async function searchMods(opts: SearchOptions): Promise<{ items: ModrinthSearchResult[]; totalHits: number }> {
+  const projectType = opts.projectType ?? 'mod'
+  const facets: string[][] = [[`project_type:${projectType}`]]
+  if (opts.mcVersion) facets.push([`versions:${opts.mcVersion}`])
+  // Loader filters apply to mods AND modpacks (both are loader-scoped);
+  // resource packs/shaders use vanilla or renderer loaders and would be
+  // wrongly excluded otherwise.
+  if ((projectType === 'mod' || projectType === 'modpack') && opts.loader && opts.loader !== 'vanilla') {
+    facets.push([`categories:${opts.loader}`])
+  }
+  if (opts.category) facets.push([`categories:${opts.category}`])
+
+  const params = new URLSearchParams({
+    query: opts.query || '',
+    facets: JSON.stringify(facets),
+    limit: String(opts.limit ?? 24),
+    index: opts.index ?? 'relevance'
+  })
+  if (opts.offset) params.set('offset', String(opts.offset))
+
+  try {
+    const res = await getJson<SearchResponse>(`${API}/search?${params.toString()}`, {
+      headers: headers(),
+      timeoutMs: 15_000
+    })
+    return {
+      items: res.hits.map((h) => ({
+        projectId: h.project_id,
+        slug: h.slug,
+        title: h.title,
+        description: h.description,
+        iconUrl: h.icon_url,
+        downloads: h.downloads,
+        followCount: h.follows,
+        categories: h.categories,
+        versions: h.versions,
+        latestVersion: h.latest_version,
+        author: h.author
+      })),
+      totalHits: res.total_hits ?? 0
+    }
+  } catch (err) {
+    logger.warn(`Modrinth search failed: ${(err as Error).message}`)
+    throw err
+  }
+}
+
+interface ProjectResponse {
+  id: string
+  slug: string
+  title: string
+  icon_url?: string
+  downloads: number
+}
+
+export async function getProject(projectId: string): Promise<ProjectResponse> {
+  return getJson<ProjectResponse>(`${API}/project/${projectId}`, { headers: headers(), timeoutMs: 15_000 })
+}
+
+interface TagResponse {
+  name: string
+  header: string
+  icon?: string
+}
+
+/** Real category list from the Modrinth tags API (mods only). */
+export async function getCategories(projectType: ProjectType = 'mod'): Promise<string[]> {
+  const tags = await getJson<TagResponse[]>(`${API}/tag/category?project_type=${projectType}`, {
+    headers: headers(),
+    timeoutMs: 15_000
+  })
+  return tags.map((t) => t.name).filter(Boolean)
+}
+
+/**
+ * Latest version of a project matching a Minecraft version + loader.
+ * Returns null when no compatible version exists.
+ *
+ * For non-mod project types (resource packs, shaders, datapacks) the loader
+ * facet is relaxed so vanilla/iris/optifine-hosted packs are found.
+ */
+export async function latestVersionFor(
+  projectId: string,
+  mcVersion: string,
+  loader: LoaderType,
+  projectType: ProjectType = 'mod'
+): Promise<ModrinthVersion | null> {
+  const loaders =
+    projectType === 'mod'
+      ? [loader === 'vanilla' ? 'minecraft' : loader]
+      : ['minecraft', 'vanilla', loader === 'vanilla' ? 'minecraft' : loader]
+
+  const params = new URLSearchParams({
+    game_versions: JSON.stringify([mcVersion]),
+    loaders: JSON.stringify(loaders)
+  })
+  const versions = await getJson<ModrinthVersion[]>(`${API}/project/${projectId}/version?${params.toString()}`, {
+    headers: headers(),
+    timeoutMs: 15_000
+  })
+  if (versions.length > 0) return versions[0]
+  // Fallback: any version matching the MC version regardless of loader.
+  const relaxed = await getJson<ModrinthVersion[]>(
+    `${API}/project/${projectId}/version?game_versions=${encodeURIComponent(JSON.stringify([mcVersion]))}`,
+    { headers: headers(), timeoutMs: 15_000 }
+  )
+  return relaxed[0] ?? null
+}
+
+interface FullProjectResponse {
+  id: string
+  slug: string
+  title: string
+  description: string
+  body?: string
+  icon_url?: string
+  downloads: number
+  followers: number
+  categories: string[]
+  gallery?: { url: string; title?: string; description?: string }[]
+  date_modified?: string
+  project_type?: string
+  client_side?: 'required' | 'optional' | 'unsupported'
+  server_side?: 'required' | 'optional' | 'unsupported'
+}
+
+/** Full project info for the shared detail page (body, gallery, stats). */
+export async function getProjectFull(projectId: string, projectType: ProjectType = 'mod'): Promise<ProjectDetail> {
+  const project = await getJson<FullProjectResponse>(`${API}/project/${projectId}`, {
+    headers: headers(),
+    timeoutMs: 15_000
+  })
+
+  // Author names come from the project's members endpoint.
+  let author = 'Unknown'
+  try {
+    const members = await getJson<{ user?: { username?: string } }[]>(`${API}/project/${projectId}/members`, {
+      headers: headers(),
+      timeoutMs: 10_000
+    })
+    const lead = members.find((m) => m?.user?.username) ?? members[0]
+    if (lead?.user?.username) author = lead.user.username
+  } catch {
+    /* author stays Unknown */
+  }
+
+  const body = project.body || project.description || ''
+  return {
+    provider: 'modrinth',
+    projectId: project.id,
+    slug: project.slug,
+    title: project.title,
+    author,
+    iconUrl: project.icon_url,
+    description: body,
+    descriptionFormat: 'markdown',
+    downloads: project.downloads ?? 0,
+    followers: project.followers ?? 0,
+    categories: project.categories ?? [],
+    updatedAt: project.date_modified ?? '',
+    gallery: (project.gallery ?? [])
+      .filter((g) => g?.url)
+      .map((g) => ({ url: g.url, title: g.title ?? g.description ?? undefined })),
+    versions: await listVersions(projectId, projectType),
+    url: `https://modrinth.com/${project.project_type ?? projectType === 'mod' ? 'mod' : projectType}/${project.slug}`,
+    clientSide: project.client_side,
+    serverSide: project.server_side
+  }
+}
+
+/** Every version of a project, newest first, with compatibility info. */
+export async function listVersions(projectId: string, _projectType: ProjectType = 'mod'): Promise<ProjectVersionInfo[]> {
+  const versions = await getJson<
+    {
+      id: string
+      version_number: string
+      date_published: string
+      game_versions: string[]
+      loaders: string[]
+      changelog?: string
+      files?: { filename: string; url: string; size: number }[]
+    }[]
+  >(`${API}/project/${projectId}/version`, { headers: headers(), timeoutMs: 15_000 })
+  return (versions ?? []).map((v) => ({
+    id: v.id,
+    versionNumber: v.version_number,
+    datePublished: v.date_published ?? '',
+    gameVersions: v.game_versions ?? [],
+    loaders: v.loaders ?? [],
+    filename: v.files?.[0]?.filename,
+    size: v.files?.[0]?.size,
+    changelog: v.changelog,
+    fileUrl: v.files?.[0]?.url
+  }))
+}
+
+export const modrinth = { searchMods, getProject, getCategories, latestVersionFor, getProjectFull, listVersions }

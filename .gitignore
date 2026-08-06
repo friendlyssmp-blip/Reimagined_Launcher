@@ -1,0 +1,47 @@
+# --------------------------- Reimagined Launcher .gitignore ---------------------------
+# Never commit user data, credentials, caches or build output.
+
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+release/
+
+# ---- User data (profiles, accounts, tokens, logs, caches) — NEVER commit ----
+# Everything under data/ is generated at runtime except the bundled assets.
+data/*
+!data/bundled/
+!data/bundled/**
+
+# Secrets / credentials / personal files
+.env
+.env.*
+*.pem
+*.key
+*.p12
+credentials.json
+token.txt
+!*.md
+
+# Logs & temp
+*.log
+*.tmp
+.tmp/
+.cache/
+temp/
+
+# OS junk
+Thumbs.db
+.DS_Store
+desktop.ini
+$RECYCLE.BIN/
+
+# Tooling / scratch (AI build-helper scripts — not part of the launcher)
+.fpsboost-build/
+
+# IDE
+.vscode/
+.idea/
+*.swp

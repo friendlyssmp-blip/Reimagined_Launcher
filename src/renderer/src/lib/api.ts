@@ -1,0 +1,230 @@
+/**
+ * Typed API layer for the renderer.
+ *
+ * Wraps the preload bridge, unwraps the `{ ok, data | error }` envelope and
+ * rethrows failures as ApiError so pages can show friendly messages.
+ */
+import type {
+  AppInfo,
+  LauncherSettings,
+  AccountPublic,
+  Profile,
+  ProfileMod,
+  ModrinthSearchResult,
+  SearchPage,
+  UpdateInfo,
+  LaunchHandle,
+  LoaderType,
+  MinecraftVersionSummary,
+  ShareSnapshot,
+  ProjectDetail,
+  ProjectVersionInfo
+} from '@shared/types'
+import type { AppEvent } from '@shared/ipc'
+
+export interface IpcErrorShape {
+  code: string
+  message: string
+  hint?: string
+}
+
+type Envelope<T> = { ok: true; data: T } | { ok: false; error: IpcErrorShape }
+
+export class ApiError extends Error {
+  code: string
+  hint?: string
+  constructor(message: string, code: string, hint?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.hint = hint
+  }
+}
+
+async function unwrap<T>(promise: Promise<unknown>): Promise<T> {
+  const res = (await promise) as Envelope<T>
+  if (!res || !res.ok) {
+    throw new ApiError(res?.error?.message ?? 'The launcher could not complete this request.', res?.error?.code ?? 'ERROR', res?.error?.hint)
+  }
+  return res.data
+}
+
+export interface LoadersForResult {
+  fabric: string[]
+  forge: string[]
+  recommendedFabric: string | null
+  recommendedForge: string | null
+}
+
+export const api = {
+  getInfo: () => unwrap<AppInfo>(window.reimagined.getInfo()),
+  window: {
+    minimize: () => void window.reimagined.window.minimize(),
+    toggleMaximize: () => void window.reimagined.window.toggleMaximize(),
+    close: () => void window.reimagined.window.close()
+  },
+  settings: {
+    get: () => unwrap<LauncherSettings>(window.reimagined.settings.get()),
+    set: (patch: Partial<LauncherSettings>) => unwrap<LauncherSettings>(window.reimagined.settings.set(patch as Record<string, unknown>))
+  },
+  dialog: {
+    pickJava: () => unwrap<string | null>(window.reimagined.dialog.pickJava()),
+    pickFolder: () => unwrap<string | null>(window.reimagined.dialog.pickFolder())
+  },
+  logs: {
+    openFolder: () => unwrap<void>(window.reimagined.logs.openFolder()),
+    clear: () => unwrap<number>(window.reimagined.logs.clear()),
+    read: () => unwrap<{ recent: { at: string; level: string; text: string }[]; fileTail: { at: string; level: string; text: string }[] }>(window.reimagined.logs.read()),
+    listFiles: () => unwrap<string[]>(window.reimagined.logs.listFiles()),
+    write: (level: 'info' | 'warn' | 'error', message: string) => unwrap<boolean>(window.reimagined.logs.write(level, message))
+  },
+  content: {
+    worlds: (profileId: string) => unwrap<{ name: string; folder: string; sizeBytes: number; lastModified: string | null }[]>(window.reimagined.content.worlds(profileId)),
+    packs: (profileId: string, kind: 'resourcepacks' | 'shaders') => unwrap<{ name: string; kind: 'folder' | 'zip'; sizeBytes: number }[]>(window.reimagined.content.packs(profileId, kind)),
+    downloads: () => unwrap<{ id: string; label: string; kind: string; status: 'downloading' | 'done' | 'failed'; percent: number; downloadedBytes: number; totalBytes: number; at: string }[]>(window.reimagined.content.downloads()),
+    openFolder: (profileId: string, sub?: string) => unwrap<void>(window.reimagined.content.openFolder(profileId, sub)),
+    backupWorld: (profileId: string, world: string) => unwrap<{ destination: string }>(window.reimagined.content.backupWorld(profileId, world)),
+    detail: (payload: { provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }) =>
+      unwrap<ProjectDetail>(window.reimagined.content.detail(payload)),
+    versions: (payload: { provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }) =>
+      unwrap<ProjectVersionInfo[]>(window.reimagined.content.versions(payload)),
+    changelog: (projectId: string, versionId: string) =>
+      unwrap<string>(window.reimagined.content.changelog(projectId, versionId))
+  },
+  auth: {
+    getAccount: () => unwrap<AccountPublic>(window.reimagined.auth.getAccount()),
+    start: () =>
+      unwrap<{ userCode: string; verificationUri: string; message: string }>(window.reimagined.auth.start()),
+    cancel: () => unwrap<void>(window.reimagined.auth.cancel()),
+    logout: () => unwrap<void>(window.reimagined.auth.logout())
+  },
+  versions: {
+    list: () => unwrap<string[]>(window.reimagined.versions.list()),
+    loadersFor: (mcVersion: string) => unwrap<LoadersForResult>(window.reimagined.versions.loadersFor(mcVersion))
+  },
+  profiles: {
+    list: () => unwrap<Profile[]>(window.reimagined.profiles.list()),
+    create: (input: {
+      name: string
+      minecraftVersion: string
+      loader: { type: LoaderType; version: string | null }
+      memory: number
+      resolution: { width: number; height: number; fullscreen: boolean }
+      extraJvmArgs?: string
+      extraGameArgs?: string
+      icon?: string | null
+      favorite?: boolean
+    }) => unwrap<Profile>(window.reimagined.profiles.create(input)),
+    update: (id: string, patch: Partial<Profile>) => unwrap<Profile>(window.reimagined.profiles.update(id, patch)),
+    delete: (id: string, deleteFiles?: boolean) => unwrap<void>(window.reimagined.profiles.delete(id, deleteFiles)),
+    duplicate: (id: string, opts?: { name?: string; copyWorlds?: boolean }) =>
+      unwrap<Profile>(window.reimagined.profiles.duplicate(id, opts)),
+    prepare: (id: string) => unwrap<void>(window.reimagined.profiles.prepare(id))
+  },
+  mods: {
+    list: (profileId: string) => unwrap<ProfileMod[]>(window.reimagined.mods.list(profileId)),
+    search: (profileId: string, query: string, index?: string, opts?: { mcVersion?: string; loader?: string; category?: string; projectType?: string; offset?: number; limit?: number }) =>
+      unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.mods.search(profileId, query, index, opts)),
+    categories: () => unwrap<string[]>(window.reimagined.mods.categories()),
+    install: (profileId: string, projectId: string, projectType?: string) => unwrap<ProfileMod>(window.reimagined.mods.install(profileId, projectId, projectType)),
+    remove: (profileId: string, slug: string) => unwrap<void>(window.reimagined.mods.remove(profileId, slug)),
+    checkUpdates: (profileId: string) => unwrap<ProfileMod[]>(window.reimagined.mods.checkUpdates(profileId)),
+    update: (profileId: string, slug: string) => unwrap<ProfileMod>(window.reimagined.mods.update(profileId, slug)),
+    localFiles: (profileId: string) => unwrap<string[]>(window.reimagined.mods.localFiles(profileId)),
+    removeLocalFile: (profileId: string, filename: string) => unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename)),
+    searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string) =>
+      unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType)),
+    installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType)),
+    changeVersion: (profileId: string, slug: string, versionId: string) =>
+      unwrap<ProfileMod>(window.reimagined.mods.changeVersion(profileId, slug, versionId)),
+    setEnabled: (profileId: string, slug: string, enabled: boolean) =>
+      unwrap<ProfileMod>(window.reimagined.mods.setEnabled(profileId, slug, enabled)),
+    availableVersions: (profileId: string, slug: string) =>
+      unwrap<ProjectVersionInfo[]>(window.reimagined.mods.availableVersions(profileId, slug)),
+    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType))
+  },
+  launch: {
+    start: (profileId: string) => unwrap<LaunchHandle>(window.reimagined.launch.start(profileId)),
+    stop: () => unwrap<void>(window.reimagined.launch.stop()),
+    get: () => unwrap<LaunchHandle>(window.reimagined.launch.get())
+  },
+  modpacks: {
+    search: (opts: { query?: string; mcVersion?: string; loader?: 'fabric' | 'forge' | 'any'; offset?: number; limit?: number }) =>
+      unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.modpacks.search(opts)),
+    install: (projectId: string, versionId: string, name?: string) =>
+      unwrap<{ profileId: string; name: string; installed: number; skipped: string[] }>(
+        window.reimagined.modpacks.install(projectId, versionId, name)
+      )
+  },
+
+  /** Detached game console window (separate, draggable, minimizable). */
+  console: {
+    open: () => unwrap<void>(window.reimagined.console.open()),
+    close: () => unwrap<void>(window.reimagined.console.close()),
+    minimize: () => unwrap<void>(window.reimagined.console.minimize()),
+    toggleMaximize: () => unwrap<void>(window.reimagined.console.toggleMaximize()),
+    getState: () => unwrap<ConsoleState>(window.reimagined.console.getState())
+  },
+
+  system: {
+    getMemory: () => unwrap<number>(window.reimagined.system.getMemory()),
+    cleanReset: () => unwrap<void>(window.reimagined.system.cleanReset())
+  },
+  
+
+  skin: {
+    /* Only the account face icon remains: loading a skin texture as a data URL. */
+    texture: (url: string) => unwrap<{ dataUrl: string; width: number; height: number }>(window.reimagined.skin.texture(url))
+  },
+  
+  update: {
+    check: () => unwrap<UpdateInfo>(window.reimagined.update.check()),
+    getInfo: () => unwrap<UpdateInfo>(window.reimagined.update.getInfo()),
+    download: () => unwrap<{ progress: number; path: string }>(window.reimagined.update.download()),
+    install: () => unwrap<void>(window.reimagined.update.install())
+  },
+  
+  future: {
+    modpackExport: (profileId: string) => unwrap<never>(window.reimagined.future.modpackExport(profileId)),
+    modpackImport: (zipPath: string) => unwrap<never>(window.reimagined.future.modpackImport(zipPath)),
+    cloudSync: () => unwrap<never>(window.reimagined.future.cloudSync())
+  },
+
+  /** Profile share / import (Part 1/2). */
+  share: {
+    prepare: (profileId: string) => unwrap<ShareSnapshot>(window.reimagined.share.prepare(profileId)),
+    create: (profileId: string) =>
+      unwrap<{ code: string; expiresAt: string; snapshot: ShareSnapshot }>(window.reimagined.share.create(profileId)),
+    resolve: (code: string) => unwrap<ShareSnapshot>(window.reimagined.share.resolve(code)),
+    importCode: (code: string) =>
+      unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importCode(code)),
+    exportZip: (profileId: string) =>
+      unwrap<{ canceled: true } | { canceled: false; path: string; name: string }>(
+        window.reimagined.share.exportZip(profileId)
+      ),
+    readZip: (zipPath: string) => unwrap<ShareSnapshot>(window.reimagined.share.readZip(zipPath)),
+    importZip: (zipPath: string) =>
+      unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importZip(zipPath)),
+    pickZip: () => unwrap<string | null>(window.reimagined.share.pickZip())
+  },
+  onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),
+  onMaximized: (cb: (v: boolean) => void) => window.reimagined.onMaximized(cb)
+}
+
+/** Initial state the detached console window asks for when it opens. */
+export interface ConsoleState {
+  running: boolean
+  handle: LaunchHandle
+  progress: { stage: string; message: string; percent: number | null } | null
+  logs: { at: string; stream: 'stdout' | 'stderr' | 'system'; text: string }[]
+}
+
+/** Convenience: turn any error into a friendly message. */
+export function friendlyError(err: unknown): string {
+  if (err instanceof ApiError) {
+    return err.hint ? `${err.message} ${err.hint}` : err.message
+  }
+  return err instanceof Error ? err.message : String(err)
+}

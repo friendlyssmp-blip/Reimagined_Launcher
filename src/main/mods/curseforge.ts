@@ -1,0 +1,287 @@
+/**
+ * CurseForge API v3 client.
+ *
+ * CurseForge requires an API key (`x-api-key` header). The launcher stays
+ * fully functional without it — the Mods section just shows the setup card.
+ * Once the key is configured in Settings, browsing/installing runs against
+ * the real API (gameId 432 = Minecraft, classId 6 = Mods).
+ *
+ * Results are mapped onto the same `ModrinthSearchResult` shape the UI
+ * already knows how to render, so both providers share one row component.
+ */
+import { settingsManager } from '../settings/settings-manager'
+import { LauncherError } from '../core/errors'
+import type { ModrinthSearchResult, LoaderType, ProjectDetail, ProjectVersionInfo } from '@shared/types'
+
+const CF_API = 'https://api.curseforge.com/v1'
+const GAME_ID = 432 // Minecraft
+const USER_AGENT = 'ReimaginedLauncher/1.0.0 (Minecraft launcher)'
+
+/** CurseForge class IDs for Minecraft content types. */
+const CLASS_IDS: Record<string, number> = {
+  mod: 6, // Mods
+  resourcepack: 12, // Resource Packs
+  shader: 6552, // Shader Packs
+  datapack: 6 // Data packs are filed under Mods on CurseForge
+}
+const MOD_CLASS_ID = CLASS_IDS.mod
+
+/** CurseForge modLoaderType enum (subset we support). */
+const MOD_LOADER: Record<string, number> = { forge: 1, fabric: 4 }
+
+interface CfFile {
+  id: number
+  displayName: string
+  fileName: string
+  fileLength: number
+  downloadUrl?: string
+  fileDate?: string
+  gameVersions: string[]
+  modLoader?: number[]
+  releaseType?: number
+}
+
+interface CfSearchHit {
+  id: number
+  slug: string
+  name: string
+  summary: string
+  logo?: { url?: string }
+  downloadsCount: number
+  categories?: { name: string }[]
+  latestFilesIndexes?: { gameVersion?: string; modLoader?: number }[]
+}
+
+interface CfProject {
+  id: number
+  slug: string
+  name: string
+  summary: string
+  downloadCount: number
+  logo?: { url?: string }
+  screenshots?: { url: string; title?: string; description?: string }[]
+  authors?: { name: string }[]
+  categories?: { name: string; iconUrl?: string }[]
+  dateModified?: string
+  links?: { websiteUrl?: string }
+}
+
+/** Map a CurseForge modLoaderType enum back to a loader name. */
+const LOADER_BY_ID: Record<number, string> = { 0: 'any', 1: 'forge', 2: 'cauldron', 3: 'liteloader', 4: 'fabric', 5: 'quilt', 6: 'neoforge' }
+
+function requireKey(): string {
+  // CurseForge browsing was removed from the launcher before the public
+  // release — the launcher is Modrinth-only and never stores an API key.
+  throw new LauncherError(
+    'CF_REMOVED',
+    'CurseForge is not supported in this version.',
+    'Reimagined now browses and installs content exclusively from Modrinth.'
+  )
+}
+
+async function cfGet<T>(path: string, params: Record<string, string | number | undefined>): Promise<T> {
+  const key = requireKey()
+  const qs = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== '') qs.set(k, String(v))
+  })
+  const res = await fetch(`${CF_API}${path}?${qs.toString()}`, {
+    headers: { 'x-api-key': key, Accept: 'application/json', 'User-Agent': USER_AGENT }
+  })
+  if (!res.ok) {
+    if (res.status === 403 || res.status === 401) {
+      throw new LauncherError(
+        'CF_BAD_KEY',
+        'CurseForge rejected the API key.',
+        'Check the key in Settings → Minecraft — it must be an active CurseForge API v3 key.'
+      )
+    }
+    throw new LauncherError('CF_ERROR', `CurseForge request failed (HTTP ${res.status}).`, 'Try again in a moment.')
+  }
+  const body = (await res.json()) as { data?: T }
+  return body.data as T
+}
+
+class CurseForgeClient {
+  /** Search the platform for a content type (mods by default). */
+  async searchMods(opts: {
+    query: string
+    mcVersion?: string
+    limit?: number
+    sort?: 'downloads' | 'newest' | 'recent' | 'name'
+    projectType?: string
+  }): Promise<ModrinthSearchResult[]> {
+    const params: Record<string, string | number> = {
+      gameId: GAME_ID,
+      classId: CLASS_IDS[opts.projectType ?? 'mod'] ?? MOD_CLASS_ID,
+      index: 0,
+      sortField: opts.sort === 'newest' ? 1 : opts.sort === 'recent' ? 3 : opts.sort === 'name' ? 5 : 2,
+      sortOrder: 'desc',
+      pageSize: opts.limit ?? 24
+    }
+    if (opts.query.trim()) params.searchFilter = opts.query.trim()
+    if (opts.mcVersion) params.gameVersion = opts.mcVersion
+
+    const hits = await cfGet<CfSearchHit[]>('/mods/search', params)
+    return hits.map((h) => ({
+      projectId: String(h.id),
+      slug: h.slug,
+      title: h.name,
+      description: h.summary,
+      iconUrl: h.logo?.url,
+      downloads: h.downloadsCount,
+      followCount: 0, // not exposed on search hits
+      categories: (h.categories ?? []).map((c) => c.name),
+      versions: (h.latestFilesIndexes ?? []).map((l) => l.gameVersion ?? '').filter(Boolean).slice(0, 12),
+      latestVersion: h.latestFilesIndexes?.find((l) => l.gameVersion)?.gameVersion ?? ''
+    }))
+  }
+
+  /** Full project info for the shared detail page (Part 5). */
+  async getProjectFull(projectId: string, projectType?: string): Promise<ProjectDetail> {
+    const p = await cfGet<CfProject>(`/mods/${projectId}`, {})
+    const versionList = await this.listVersions(projectId, projectType)
+    const mcPath =
+      projectType === 'resourcepack'
+        ? 'texture-packs'
+        : projectType === 'shader'
+          ? 'shaders'
+          : 'mc-mods'
+    return {
+      provider: 'curseforge',
+      projectId: String(p.id),
+      slug: p.slug,
+      title: p.name,
+      author: p.authors?.[0]?.name ?? 'Unknown',
+      iconUrl: p.logo?.url,
+      // The v1 API exposes no full body — the summary is the best we have.
+      description: p.summary || '',
+      descriptionFormat: 'text',
+      downloads: p.downloadCount ?? 0,
+      followers: 0, // not exposed by the CurseForge API
+      categories: (p.categories ?? []).map((c) => c.name),
+      updatedAt: p.dateModified ?? '',
+      gallery: (p.screenshots ?? [])
+        .filter((s) => s?.url)
+        .map((s) => ({ url: s.url, title: s.title ?? s.description ?? undefined })),
+      versions: versionList,
+      url: p.links?.websiteUrl ?? `https://www.curseforge.com/minecraft/${mcPath}/${p.slug}`
+    }
+  }
+
+  /** Every version of a project, newest first, with compatibility info. */
+  async listVersions(projectId: string, _projectType?: string): Promise<ProjectVersionInfo[]> {
+    const files = await cfGet<CfFile[]>(
+      `/mods/${projectId}/files`,
+      { pageSize: 50, sortField: 1, sortOrder: 'desc' }
+    )
+    return (files ?? []).map((f) => ({
+      id: String(f.id),
+      versionNumber: f.displayName,
+      datePublished: f.fileDate ?? '',
+      gameVersions: f.gameVersions ?? [],
+      loaders: (f.modLoader ?? [])
+        .map((l) => LOADER_BY_ID[l])
+        .filter((l): l is string => Boolean(l) && (l === 'forge' || l === 'fabric')),
+      filename: f.fileName,
+      size: f.fileLength,
+      fileUrl: f.downloadUrl
+    }))
+  }
+
+  /**
+   * Release notes for a single file (used by the detail page's Changelog tab).
+   * CurseForge exposes no bulk endpoint, so changelogs are fetched per file.
+   */
+  async fileChangelog(projectId: string, fileId: string): Promise<string> {
+    const id = Number(fileId)
+    if (!Number.isFinite(id)) return ''
+    // cfGet already unwraps body.data, which is the changelog string itself.
+    return (await cfGet<string>(`/mods/${projectId}/files/${id}/changelog`, {})).trim()
+  }
+
+  /** A specific file by id (used by Change Version on installed content). */
+  async fileById(
+    projectId: string,
+    fileId: string
+  ): Promise<{
+    fileId: number
+    filename: string
+    url: string
+    size: number
+    version: string
+    gameVersions: string[]
+    loaders: string[]
+  } | null> {
+    const id = Number(fileId)
+    if (!Number.isFinite(id)) return null
+    const pick = await cfGet<CfFile>(`/mods/${projectId}/files/${id}`, {})
+    let url = pick.downloadUrl ?? ''
+    if (!url) {
+      try {
+        const dl = await cfGet<{ downloadUrl: string }>(`/mods/${projectId}/files/${id}/download-url`, {})
+        url = dl.downloadUrl
+      } catch {
+        url = ''
+      }
+    }
+    if (!url) return null
+    return {
+      fileId: id,
+      filename: pick.fileName,
+      url,
+      size: pick.fileLength,
+      version: pick.gameVersions?.[0] ?? '',
+      gameVersions: pick.gameVersions ?? [],
+      loaders: (pick.modLoader ?? [])
+        .map((l) => LOADER_BY_ID[l])
+        .filter((l): l is string => Boolean(l) && (l === 'forge' || l === 'fabric'))
+    }
+  }
+
+  /** Latest file for a mod matching the profile's MC version + loader. */
+  async latestFile(
+    projectId: string,
+    mcVersion: string,
+    loader: LoaderType
+  ): Promise<{ fileId: number; filename: string; url: string; size: number; version: string } | null> {
+    const params: Record<string, string | number> = {
+      pageSize: 20,
+      sortField: 1, // date created
+      sortOrder: 'desc'
+    }
+    if (mcVersion) params.gameVersion = mcVersion
+    if (loader !== 'vanilla') params.modLoaderType = MOD_LOADER[loader]
+
+    const files = await cfGet<CfFile[]>(`/mods/${projectId}/files`, params)
+    if (!files || files.length === 0) return null
+
+    // Prefer the newest *release* file, fall back to any.
+    const pick = files.find((f) => (f.releaseType ?? 1) === 1) ?? files[0]
+    let url = pick.downloadUrl ?? ''
+    if (!url) {
+      // Some responses omit downloadUrl — resolve it through the API.
+      try {
+        const dl = await cfGet<{ downloadUrl: string }>(`/mods/${projectId}/files/${pick.id}/download-url`, {})
+        url = dl.downloadUrl
+      } catch {
+        url = ''
+      }
+    }
+    if (!url) throw new LauncherError('CF_NO_URL', 'CurseForge did not provide a download link for this file.')
+    return {
+      fileId: pick.id,
+      filename: pick.fileName,
+      url,
+      size: pick.fileLength,
+      version: pick.gameVersions?.find((v) => v === mcVersion) ?? pick.gameVersions?.[0] ?? ''
+    }
+  }
+}
+
+export const curseforge = new CurseForgeClient()
+
+/** CurseForge is not supported in this version of the launcher. */
+export function curseforgeConfigured(): boolean {
+  return false
+}

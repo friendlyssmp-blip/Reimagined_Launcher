@@ -1,0 +1,422 @@
+/**
+ * The launch pipeline.
+ *
+ * resolve → prepare (client/libraries/assets/log4j) → build JVM+game args →
+ * spawn java → stream output → track session → record playtime.
+ *
+ * Fabric and Forge versions are prepared transparently by the loaders and
+ * produce installer-grade version JSONs that flow through the same path as
+ * vanilla.
+ */
+import { spawn, type ChildProcess } from 'node:child_process'
+import path from 'node:path'
+import fs from 'node:fs'
+import { paths, appVersion } from '../paths'
+import { logger } from '../logs/logger'
+import { eventBus } from '../core/event-bus'
+import { Errors, LauncherError } from '../core/errors'
+import { settingsManager } from '../settings/settings-manager'
+import { microsoftAuth } from '../auth/microsoft-auth'
+import { accountStore } from '../auth/account-store'
+import { profileManager } from '../profiles/profile-manager'
+import { versionManager, targetOs, archMatchesCurrent } from './version-manager'
+import { installFabric, latestFabricLoader } from './loaders/fabric'
+import { installForge, recommendedForgeVersion } from './loaders/forge'
+import { pickJava, type JavaRuntime } from './java'
+import { dateStamp } from '../utils/format'
+import type { Profile, LaunchProgress, LaunchLogLine, LaunchHandle, LaunchStage, Account } from '@shared/types'
+
+const CLASSPATH_SEP = process.platform === 'win32' ? ';' : ':'
+
+interface ArgRule {
+  action: 'allow' | 'disallow'
+  os?: { name?: string; arch?: string }
+  features?: Record<string, boolean>
+}
+
+type ArgEntry =
+  | string
+  | { rules?: ArgRule[]; value: string | string[] }
+
+type VersionJson = Record<string, any> & {
+  id: string
+  mainClass: string
+  type: string
+  minecraftArguments?: string
+  arguments?: {
+    game?: ArgEntry[]
+    jvm?: ArgEntry[]
+  }
+  javaVersion?: { majorVersion: number }
+  assetIndex?: { id: string; url?: string; sha1?: string; size?: number; totalSize?: number; objects?: Record<string, unknown> }
+}
+
+class Launcher {
+  private child: ChildProcess | null = null
+  private profile: Profile | null = null
+  private startedAt = 0
+  private sessionLog: fs.WriteStream | null = null
+
+  isRunning(): boolean {
+    return !!this.child && this.child.exitCode === null
+  }
+
+  get handle(): LaunchHandle {
+    return {
+      profileId: this.profile?.id ?? '',
+      running: this.isRunning(),
+      pid: this.child?.pid,
+      startedAt: this.startedAt ? new Date(this.startedAt).toISOString() : undefined
+    }
+  }
+
+  async launch(profileId: string): Promise<LaunchHandle> {
+    const profile = await profileManager.get(profileId)
+    if (!profile) throw Errors.launchFailed('The selected profile no longer exists.')
+    if (this.isRunning()) {
+      throw new LauncherError('ALREADY_RUNNING', 'A game is already running.', 'Stop it first from the console.')
+    }
+
+    const account = accountStore.get()
+    if (!account) throw Errors.notLoggedIn()
+    const refreshed = await microsoftAuth.refreshIfNeeded()
+    const acc = refreshed ?? account
+    if (!acc.profile) throw Errors.launchFailed('Your Microsoft account has no Minecraft profile.')
+
+    this.profile = profile
+    this.startedAt = Date.now()
+
+    try {
+      const mc = profile.minecraftVersion
+      let versionId = mc
+      let loaderLabel = 'vanilla'
+
+      if (profile.loader.type === 'fabric') {
+        // Safety net: make sure the Fabric API mod is present so Fabric mods
+        // work on a fresh instance (first-launch experience must just work).
+        if (!profile.mods.some((m) => m.id === 'fabric-api')) {
+          const { ensureFabricApi } = await import('../mods/fabric-api')
+          await ensureFabricApi(profile)
+        }
+        // Seed the bundled Reimagined FPS Boost mod the same way.
+        if (!profile.mods.some((m) => m.id === 'reimagined-fps-boost')) {
+          const { ensureFpsBoost } = await import('../mods/fps-boost')
+          await ensureFpsBoost(profile)
+        }
+        this.emitProgress('installing-loader', `Resolving Fabric for ${mc}…`)
+        const loaderVersion = profile.loader.version ?? (await latestFabricLoader(mc))
+        const fabric = await installFabric(mc, loaderVersion)
+        versionId = fabric.versionId
+        loaderLabel = `fabric ${fabric.loaderVersion}`
+      } else if (profile.loader.type === 'forge') {
+        this.emitProgress('installing-loader', `Resolving Forge for ${mc}…`)
+        const loaderVersion = profile.loader.version ?? (await recommendedForgeVersion(mc))
+        if (!loaderVersion) {
+          throw new LauncherError('FORGE_MISSING', `No Forge build was found for Minecraft ${mc}.`, 'Choose another version or loader.')
+        }
+        const forge = await installForge(mc, loaderVersion)
+        versionId = forge.versionId
+        loaderLabel = `forge ${forge.forgeVersion}`
+      }
+
+      this.emitProgress('downloading', `Preparing ${mc} (${loaderLabel})…`, 0)
+      // Resolve `inheritsFrom` chains (Forge installer JSONs inherit the base
+      // version's client jar / asset index / base libraries).
+      const vj = (await versionManager.ensureResolvedVersionJson(versionId)) as VersionJson
+      const { classpath, nativesDir } = await versionManager.ensureLibraries(versionId, (kind) => this.emitProgress('downloading', `Preparing ${kind}...`, 0))
+      const clientJar = await versionManager.ensureClient(versionId)
+      if (!vj.assetIndex) throw Errors.launchFailed(`Version ${versionId} has no asset index.`)
+      const assetsDir = await versionManager.ensureAssets(
+        vj.assetIndex.id,
+        vj.assetIndex as { id: string; url: string }
+      )
+      const log4jConfig = await versionManager.ensureLog4jConfig(versionId)
+
+      const requiredMajor = vj.javaVersion?.majorVersion ?? 8
+      const java = pickJava(requiredMajor)
+      if (!java) throw Errors.missingJava(requiredMajor)
+
+      const gameDir = path.join(paths.games, profile.gameDir)
+      fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true })
+      // FPS Boost is ON by default for EVERY profile, Vanilla included — the
+      // Reimagined performance layer reads this config (the Fabric mod only
+      // carries the in-game knobs; the JVM flags below apply regardless).
+      this.seedFpsBoostConfig(gameDir)
+
+      const args = this.buildArgs({
+        vj,
+        versionId,
+        classpath: [...classpath, clientJar],
+        nativesDir,
+        assetsDir,
+        log4jConfig,
+        profile,
+        account: acc
+      })
+
+      this.emitProgress('launching', `Launching ${profile.name}…`, 100)
+      this.spawn(java, args, gameDir, profile)
+    } catch (err) {
+      logger.exception('Launch pipeline failed', err)
+      const message = err instanceof Error ? err.message : String(err)
+      this.emitLog('system', `Launch failed: ${message}`)
+      eventBus.emit('launch:status', { profileId, running: false, error: message })
+      this.profile = null
+      this.startedAt = 0
+      throw err instanceof LauncherError ? err : Errors.launchFailed(message)
+    }
+
+    return this.handle
+  }
+
+  /* ---------------------------------- args ---------------------------------- */
+
+  private buildArgs(v: {
+    vj: VersionJson
+    versionId: string
+    classpath: string[]
+    nativesDir: string
+    assetsDir: string
+    log4jConfig: string | null
+    profile: Profile
+    account: Account
+  }): string[] {
+    const { vj, versionId, classpath, nativesDir, assetsDir, log4jConfig, profile, account } = v
+    const mcProfile = account.profile!
+    // assetIndex is verified to exist before buildArgs is called (launch() guards it).
+    const assetIndexId = vj.assetIndex?.id ?? ''
+    const gameDir = path.join(paths.games, profile.gameDir)
+    const jvm: string[] = []
+    const game: string[] = []
+
+    if (log4jConfig) jvm.push(`-Dlog4j.configurationFile=${log4jConfig}`)
+
+    if (vj.arguments?.jvm?.length) {
+      for (const entry of vj.arguments.jvm) {
+        const vals = this.resolveArg(entry)
+        if (vals) jvm.push(...vals)
+      }
+    } else {
+      jvm.push('-XX:+UseG1GC', '-XX:-OmitStackTraceInFastThrow', '-Djava.net.preferIPv4Stack=true')
+    }
+
+    jvm.push(`-Xmx${profile.memory}M`, '-Xms256M', `-Djava.library.path=${nativesDir}`)
+    jvm.push('-Dminecraft.launcher.brand=reimagined', `-Dminecraft.launcher.version=${appVersion}`)
+
+    // Reimagined native performance layer (v1): G1GC tuning + hardware preset
+    // hand-off. The in-game client reads -Dreimagined.preset to tune how
+    // aggressively its own optimizations apply (0=potato 1=balanced 2=high).
+    const preset = settingsManager.get().preset ?? 'balanced'
+    const presetId = preset === 'potato' ? 0 : preset === 'high' ? 2 : 1
+    // G1NewSizePercent/G1MaxNewSizePercent are experimental — they crash the
+    // JVM unless UnlockExperimentalVMOptions precedes them (order matters).
+    jvm.push('-XX:+UseG1GC', '-XX:MaxGCPauseMillis=50', '-XX:+UnlockExperimentalVMOptions', '-XX:G1NewSizePercent=30', '-XX:G1MaxNewSizePercent=60')
+    jvm.push(`-Dreimagined.preset=${presetId}`)
+    // Extra always-safe GC flags applied to every profile (Vanilla included):
+    // parallel reference processing + string deduplication cut allocation
+    // stalls without any behavior change.
+    jvm.push('-XX:+ParallelRefProcEnabled', '-XX:+UseStringDeduplication')
+    jvm.push('-cp', classpath.join(CLASSPATH_SEP))
+    if (profile.extraJvmArgs.trim()) jvm.push(...this.splitArgs(profile.extraJvmArgs))
+
+    const replace = (s: string): string =>
+      s
+        .replaceAll('${auth_player_name}', mcProfile.name)
+        .replaceAll('${auth_uuid}', mcProfile.id.replaceAll('-', ''))
+        .replaceAll('${auth_access_token}', account.tokens.accessToken)
+        .replaceAll('${user_type}', 'msa')
+        .replaceAll('${version_name}', versionId)
+        .replaceAll('${game_directory}', gameDir)
+        .replaceAll('${assets_root}', assetsDir)
+        .replaceAll('${assets_index_name}', assetIndexId)
+        .replaceAll('${version_type}', vj.type)
+        .replaceAll('${resolution_width}', String(profile.resolution.width))
+        .replaceAll('${resolution_height}', String(profile.resolution.height))
+
+    if (vj.arguments?.game?.length) {
+      for (const entry of vj.arguments.game) {
+        const vals = this.resolveArg(entry)
+        if (vals) game.push(...vals.map(replace))
+      }
+    } else if (vj.minecraftArguments) {
+      game.push(...vj.minecraftArguments.split(' ').map(replace))
+    }
+
+    // Safety net: guarantee identity args exist even for unusual version JSONs.
+    const joined = game.join(' ')
+    if (!joined.includes('--username')) game.push('--username', mcProfile.name)
+    if (!joined.includes('--uuid')) game.push('--uuid', mcProfile.id.replaceAll('-', ''))
+    if (!joined.includes('--accessToken')) game.push('--accessToken', account.tokens.accessToken)
+    if (!joined.includes('--userType')) game.push('--userType', 'msa')
+    if (!joined.includes('--version')) game.push('--version', versionId)
+    if (!joined.includes('--gameDir')) game.push('--gameDir', gameDir)
+    if (!joined.includes('--assetsDir')) game.push('--assetsDir', assetsDir)
+    if (!joined.includes('--assetIndex')) game.push('--assetIndex', assetIndexId)
+    if (!joined.includes('--versionType')) game.push('--versionType', vj.type)
+
+    if (profile.resolution.fullscreen) {
+      game.push('--fullscreen')
+    } else {
+      game.push('--width', String(profile.resolution.width), '--height', String(profile.resolution.height))
+    }
+    if (profile.extraGameArgs.trim()) game.push(...this.splitArgs(profile.extraGameArgs))
+
+    return [...jvm, vj.mainClass, ...game]
+  }
+
+  /** Evaluate a rule-based argument entry for this environment. */
+  private resolveArg(entry: ArgEntry): string[] | null {
+    if (typeof entry === 'string') return [entry]
+    if (entry.rules?.length) {
+      let allowed = false
+      for (const rule of entry.rules) {
+        let ok = true
+        if (rule.os) {
+          if (rule.os.name && rule.os.name !== targetOs) ok = false
+          if (rule.os.arch && !archMatchesCurrent(rule.os.arch)) ok = false
+        }
+        if (rule.features && Object.keys(rule.features).length > 0) ok = false
+        if (ok) allowed = rule.action === 'allow'
+      }
+      if (!allowed) return null
+    }
+    return Array.isArray(entry.value) ? entry.value : [entry.value]
+  }
+
+  private splitArgs(raw: string): string[] {
+    return raw.trim().split(/\s+/).filter(Boolean)
+  }
+
+  /* ---------------------------------- process ---------------------------------- */
+
+  private spawn(java: JavaRuntime, args: string[], gameDir: string, profile: Profile): void {
+    const child = spawn(java.path, args, {
+      cwd: gameDir,
+      windowsHide: false,
+      env: { ...process.env }
+    })
+    this.child = child
+    this.openSessionLog(profile)
+
+    const started = `Game launched for "${profile.name}" (pid ${child.pid}, Java ${java.major})`
+    logger.info(started)
+    this.emitLog('system', started)
+    eventBus.emit('launch:status', { profileId: profile.id, running: true, pid: child.pid })
+
+    child.stdout?.on('data', (d: Buffer) => this.onOutput('stdout', d))
+    child.stderr?.on('data', (d: Buffer) => this.onOutput('stderr', d))
+
+    child.on('error', (err) => {
+      logger.exception('Game process error', err)
+      this.emitLog('stderr', `Process error: ${err.message}`)
+    })
+
+    child.on('close', (code, signal) => void this.onExit(code, signal))
+  }
+
+  private onOutput(stream: 'stdout' | 'stderr', chunk: Buffer): void {
+    const text = chunk.toString('utf-8')
+    this.sessionLog?.write(text)
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue
+      this.emitLog(stream, line)
+    }
+  }
+
+  private openSessionLog(profile: Profile): void {
+    const file = path.join(paths.logs, `game-${profile.id}-${dateStamp()}-${Date.now()}.log`)
+    try {
+      this.sessionLog = fs.createWriteStream(file)
+      this.emitLog('system', `Session log: ${file}`)
+    } catch {
+      this.sessionLog = null
+    }
+  }
+
+  private async onExit(code: number | null, signal: string | null): Promise<void> {
+    const profile = this.profile
+    const duration = Math.max(0, (Date.now() - this.startedAt) / 1000)
+
+    this.sessionLog?.end()
+    this.sessionLog = null
+    this.child = null
+
+    logger.info(`Game exited (code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}) after ${Math.round(duration)}s`)
+    this.emitLog('system', `Game exited with code ${code ?? 'n/a'}`)
+
+    if (profile) {
+      await profileManager.recordLaunch(profile.id, duration, true)
+      if (settingsManager.get().closeOnLaunch) {
+        const { showMainWindow } = await import('../window')
+        showMainWindow()
+      }
+    }
+
+    eventBus.emit('launch:status', { profileId: profile?.id ?? '', running: false, code, signal })
+    eventBus.emit('launch:exit', { code, signal, duration, profileId: profile?.id })
+    this.profile = null
+    this.startedAt = 0
+  }
+
+  /** Kill the process tree (Minecraft spawns many threads + subprocesses). */
+  async stop(): Promise<void> {
+    const child = this.child
+    if (!child || child.exitCode !== null) return
+    logger.info('Stopping game process')
+    this.emitLog('system', 'Stopping game…')
+    if (process.platform === 'win32') {
+      await new Promise<void>((resolve) => {
+        const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
+        killer.on('close', () => resolve())
+        killer.on('error', () => {
+          child.kill('SIGTERM')
+          resolve()
+        })
+      })
+    } else {
+      child.kill('SIGTERM')
+    }
+  }
+
+  /* ---------------------------------- events ---------------------------------- */
+
+  /** Write the Reimagined performance config — enabled by default. */
+  private seedFpsBoostConfig(gameDir: string): void {
+    try {
+      const dir = path.join(gameDir, 'config')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(
+        path.join(dir, 'reimagined-fps-boost.json'),
+        JSON.stringify(
+          {
+            enabled: true,
+            reduceParticles: true,
+            simplifyClouds: true,
+            limitEntityAnimations: true,
+            smartRenderDistance: true,
+            reduceVisualEffects: false,
+            showFps: false,
+            smartRdCap: 16,
+            entityAnimDistance: 48
+          },
+          null,
+          2
+        )
+      )
+    } catch (err) {
+      logger.warn(`Could not write FPS Boost config: ${(err as Error).message}`)
+    }
+  }
+
+  private emitProgress(stage: LaunchStage, message: string, percent?: number | null, detail?: string): void {
+    const p: LaunchProgress = { stage, message, percent: percent ?? null, detail }
+    eventBus.emit('launch:progress', p)
+  }
+
+  private emitLog(stream: LaunchLogLine['stream'], text: string): void {
+    const line: LaunchLogLine = { at: new Date().toISOString(), stream, text }
+    eventBus.emit('launch:log', line)
+  }
+}
+
+export const launcher = new Launcher()

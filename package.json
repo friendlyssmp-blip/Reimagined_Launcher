@@ -1,0 +1,37 @@
+{
+  "name": "reimagined-launcher",
+  "productName": "Reimagined",
+  "version": "1.0.0",
+  "description": "Reimagined — Minecraft, rebuilt around the player. A premium Minecraft launcher and modding platform.",
+  "main": "./out/main/index.js",
+  "author": "Reimagined",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
+    "smoke": "electron-vite build && electron . --smoke-test",
+    "bench": "electron-vite build && electron . --bench",
+    "bench:baseline": "electron-vite build && electron . --bench --bench-baseline",
+    "package": "electron-vite build && electron-builder --win",
+    "package:dir": "electron-vite build && electron-builder --win --dir",
+    "release:clean": "node scripts/clean-release.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  }
+}
