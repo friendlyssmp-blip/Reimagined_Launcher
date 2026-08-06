@@ -5,7 +5,7 @@ Mantiene la esencia vanilla del juego mientras mejora el rendimiento — todo co
 
 | | |
 |---|---|
-| **Versión actual** | v1.0.3 |
+| **Versión actual** | v1.0.4 |
 | **Plataforma** | Windows x64 (instalador NSIS) |
 | **Idiomas** | Español / English |
 | **Licencia** | Código abierto (ver repositorio) |
@@ -25,22 +25,23 @@ Mantiene la esencia vanilla del juego mientras mejora el rendimiento — todo co
 ## 📥 Instalar
 
 1. Descarga el instalador desde la carpeta `dist/` del repo:
-   `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.3.exe`
+   `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.4.exe`
 2. **Verifica el checksum** (más abajo) antes de ejecutarlo.
-3. Ejecuta el instalador. Si Windows muestra "editor desconocido": **Más información → Ejecutar de todos modos** (es normal: el instalador no está firmado digitalmente).
+3. Ejecuta el instalador — es **autocontenido**: al abrirlo busca actualizaciones en el repositorio oficial (**Searching for updates**), descarga la versión más reciente si existe (**Downloading**) y te muestra un asistente con la identidad visual de Reimagined. Al terminar, el launcher se abre en su última versión.
+4. Si Windows muestra "editor desconocido": **Más información → Ejecutar de todos modos** (es normal: el instalador no está firmado digitalmente).
 
 📖 **Guía completa paso a paso (en español):** → [`TUTORIAL.md`](TUTORIAL.md)
 
 ### 🔐 Checksum oficial (SHA-256)
 
 ```
-43e2e26dae919d7d664514a4d4f1925e3d5cd90c2f0df404753a4be70decfff7  Reimagined-Setup-1.0.3.exe
+286d0f193a83495ccb3910f0ff6c28c855c8e323f076e7cde0bb12f9fa0f76a3  Reimagined-Setup-1.0.4.exe
 ```
 
 Verifica tu descarga en PowerShell:
 
 ```powershell
-Get-FileHash .\Reimagined-Setup-1.0.3.exe -Algorithm SHA256
+Get-FileHash .\Reimagined-Setup-1.0.4.exe -Algorithm SHA256
 ```
 
 Si el hash **no coincide**, el archivo fue modificado — **no lo ejecutes** y descarga de nuevo.
@@ -68,10 +69,13 @@ npm run bench     # benchmark de rendimiento del Reimagined Client
 ## 📦 Publicar una nueva versión
 
 1. Sube el número en `package.json` **y** en `update/latest.json`.
-2. `npm run build` y `npm run package`.
-3. `git add -A && git commit && git push` (el instalador en `dist/` se sube solo).
+2. `npm run build` y `npx electron-builder --win dir` (genera `dist/win-unpacked/`).
+3. Compila el instalador de marca con el script incluido:
+   `makensis -DVERSION=X.Y.Z .installer-tools/installer.nsi` → genera `dist/Reimagined-Setup-X.Y.Z.exe`.
+4. Actualiza `dist/SHA256SUMS.txt` con el hash nuevo del instalador.
+5. `git add -A && git commit && git push` (el instalador en `dist/` se sube solo).
 
-Los launchers instalados detectarán la update automáticamente y se actualizarán con un clic.
+Los launchers instalados detectarán la update automáticamente y se actualizarán con un clic (descarga el instalador nuevo y lo ejecuta en silencio).
 
 ## 📄 Documentación
 

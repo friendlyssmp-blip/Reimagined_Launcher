@@ -1,7 +1,7 @@
 # Reimagined Launcher - Guia de Descarga e Instalacion Segura
 
 > Idioma: Espanol - Duracion: ~3 minutos
-> Version del instalador: v1.0.3
+> Version del instalador: v1.0.4
 
 ---
 
@@ -16,8 +16,8 @@ https://github.com/friendlyssmp-blip/Reimagined_Launcher
 El instalador real esta en la carpeta **`dist/`** del repo:
 
 - **Link directo:**
-  `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.3.exe`
-- **O en GitHub:** abre el repo - carpeta `dist` - `Reimagined-Setup-1.0.1.exe` - boton Download.
+  `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.4.exe`
+- **O en GitHub:** abre el repo - carpeta `dist` - `Reimagined-Setup-1.0.4.exe` - boton Download.
 
 > Regla de oro: si alguien te pasa el .exe por Discord/WhatsApp/enlace raro, **verifica el checksum** (paso 2) antes de ejecutarlo. Solo confia en el hash publicado en el repositorio.
 
@@ -30,13 +30,13 @@ Esto garantiza que el archivo es **exactamente** el publicado y que nadie lo ha 
 **En PowerShell** (Win + R - escribe `powershell` - Enter):
 
 ```powershell
-Get-FileHash "C:\Users\TU_USUARIO\Downloads\Reimagined-Setup-1.0.3.exe" -Algorithm SHA256
+Get-FileHash "C:\Users\TU_USUARIO\Downloads\Reimagined-Setup-1.0.4.exe" -Algorithm SHA256
 ```
 
 Debe devolver **exactamente**:
 
 ```
-43e2e26dae919d7d664514a4d4f1925e3d5cd90c2f0df404753a4be70decfff7
+286d0f193a83495ccb3910f0ff6c28c855c8e323f076e7cde0bb12f9fa0f76a3
 ```
 
 - Si **coincide** - el archivo es autentico, puedes instalarlo tranquilo.
@@ -64,10 +64,11 @@ Al ejecutar el instalador, Windows mostrara:
 
 ## 4. Instalar
 
-1. Doble clic en `Reimagined-Setup-1.0.3.exe`
-2. Elige la carpeta de instalacion (deja la que propone)
-3. **Instalar** - espera a que termine (~1 minuto)
-4. Abre el acceso directo del Escritorio / Menu Inicio
+1. Doble clic en `Reimagined-Setup-1.0.4.exe`
+2. El instalador primero **busca actualizaciones** en el repositorio oficial ("Searching for updates") y, si existe una versión más reciente, la **descarga automáticamente** ("Downloading") — así siempre instalas la última versión.
+3. Elige la carpeta de instalación (deja la que propone)
+4. **Instalar** - espera a que termine (~1 minuto)
+5. El launcher se abre solo al terminar. A partir de ahora usa el acceso directo del Escritorio / Menú Inicio
 
 > **Donde guarda tus datos:** el launcher guarda perfiles, cuentas y mods en `C:\Users\TU_USUARIO\AppData\Roaming\Reimagined\` - **no** en la carpeta de instalacion. Desinstalar o actualizar el launcher **no borra** tus perfiles ni mods.
 

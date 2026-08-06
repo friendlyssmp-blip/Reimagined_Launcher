@@ -1,5 +1,5 @@
 {
-  "version": "1.0.3",
-  "notes": "Reimagined Performance Engine (RPE): automatic hardware detection (CPU, GPU, RAM, storage, display, Java), smart optimization profiles, tier-tuned JVM flags and FPS Boost config, real per-session performance profiler with self-learning, clear recommendations, and optional one-click performance mods (user choice).",
-  "installer": "dist/Reimagined-Setup-1.0.3.exe"
+  "version": "1.0.4",
+  "notes": "New branded setup with an integrated update flow: before installing, the wizard checks the official repository (Searching for updates), downloads the newest version automatically (Downloading) and installs it — so you always get the latest release. Also fixes the Reimagined Performance Engine hardware detection on systems with a single GPU.",
+  "installer": "dist/Reimagined-Setup-1.0.4.exe"
 }

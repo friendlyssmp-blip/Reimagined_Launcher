@@ -69,6 +69,13 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** PowerShell returns a bare object when a query yields a single row — normalize to a list. */
+function asArray(v: unknown): Record<string, unknown>[] {
+  if (Array.isArray(v)) return v as Record<string, unknown>[]
+  if (v && typeof v === 'object') return [v as Record<string, unknown>]
+  return []
+}
+
 function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
@@ -115,11 +122,11 @@ export async function detectHardware(force = false): Promise<HardwareProfile | n
     }
 
     const wmi = await psOnce()
-    const cpuList = (wmi.cpu as Record<string, unknown>[] | undefined) ?? []
-    const gpuList = (wmi.gpu as Record<string, unknown>[] | undefined) ?? []
-    const ramList = (wmi.ram as Record<string, unknown>[] | undefined) ?? []
-    const diskList = (wmi.disk as Record<string, unknown>[] | undefined) ?? []
-    const osInfo = (wmi.os as Record<string, unknown> | undefined) ?? {}
+    const cpuList = asArray(wmi.cpu)
+    const gpuList = asArray(wmi.gpu)
+    const ramList = asArray(wmi.ram)
+    const diskList = asArray(wmi.disk)
+    const osInfo = asArray(wmi.os)[0] ?? {}
 
     // CPU — prefer the WMI core count; fall back to os.cpus().
     const cpus = os.cpus()
