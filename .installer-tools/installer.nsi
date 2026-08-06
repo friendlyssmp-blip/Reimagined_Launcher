@@ -100,10 +100,21 @@ Var sla
 Var lb
 Var ltb
 Var slb
+Var assetDir
 
 Function .onInit
-  ; extract branded assets to $PLUGINSDIR
-  SetOutPath "$PLUGINSDIR"
+  ; --------------------------------------------------------------
+  ; InitPluginsDir equivalent: NSIS does not initialize $PLUGINSDIR
+  ; until the first plugin is invoked, so extracting straight into it
+  ; from .onInit could write to an empty path (g.bmp -> drive root)
+  ; and fail with "Error opening file for writing". Create a real
+  ; temp directory first.
+  ; --------------------------------------------------------------
+  GetTempFileName $assetDir
+  Delete "$assetDir"
+  CreateDirectory "$assetDir"
+  SetOutPath "$assetDir"
+  SetOverwrite on
   File "assets\bg.bmp"
   File "assets\bg-welcome.bmp"
   StrCpy $updatedFlag "0"
@@ -148,7 +159,7 @@ FunctionEnd
 ; -- reads latest.json into $json (CR/LF stripped) --
 Function ReadJsonFile
   StrCpy $json ""
-  FileOpen $0 "$PLUGINSDIR\latest.json" r
+  FileOpen $0 "$assetDir\latest.json" r
   ${If} $0 == ""
     Return
   ${EndIf}
@@ -262,7 +273,7 @@ FunctionEnd
 ; ---------------- Branded page painter ----------------
 ; inputs: $0 = bg image, $1 = title, $2 = subtitle, $3 = status (may be "")
 Function DrawFrame
-  BgImage::SetBg "$PLUGINSDIR\$0"
+  BgImage::SetBg "$assetDir\$0"
   BgImage::AddText "$1" 30 28 420 36 "Segoe UI" 15 1 FFFFFF
   BgImage::AddText "$2" 30 78 420 52 "Segoe UI" 10 0 CFC9E8
   ${If} $3 != ""
@@ -339,9 +350,11 @@ Function UpdateCheckTick
     StrCpy $3 "Checking version information..."
     Call StatusRedraw
     System::Call "kernel32::GetTickCount() i .r0"
-    inetc::get /SILENT /TIMEOUT 20000 "${LATEST_URL}?cb=$0" "$PLUGINSDIR\latest.json"
+    ; curl with a hard --max-time: if the network stalls the check fails fast
+    ; and the bundled version is installed instead (never freeze the wizard)
+    nsExec::ExecToStack 'curl -s --max-time 12 -o "$assetDir\latest.json" "${LATEST_URL}?cb=$0"'
     Pop $1
-    ${If} $1 == "OK"
+    ${If} $1 == "0"
       Call ParseLatest
       ${If} $needsDownload == "1"
         StrCpy $3 "A new version was found: Reimagined v$latestVersion. Click Next to download it."
@@ -361,9 +374,11 @@ Function UpdateCheckPageLeave
   ${If} $checkDone != "1"
     ; user clicked Next before the check finished - run it right now
     System::Call "kernel32::GetTickCount() i .r0"
-    inetc::get /SILENT /TIMEOUT 20000 "${LATEST_URL}?cb=$0" "$PLUGINSDIR\latest.json"
+    ; curl with a hard --max-time: if the network stalls the check fails fast
+    ; and the bundled version is installed instead (never freeze the wizard)
+    nsExec::ExecToStack 'curl -s --max-time 12 -o "$assetDir\latest.json" "${LATEST_URL}?cb=$0"'
     Pop $1
-    ${If} $1 == "OK"
+    ${If} $1 == "0"
       Call ParseLatest
     ${EndIf}
     StrCpy $checkDone "1"
@@ -494,6 +509,8 @@ SectionEnd
 
 ; after a silent update (from the launcher's own Update button) reopen the app
 Function .onInstSuccess
+  ; brand assets + downloaded update file live in our own temp dir — remove them
+  RMDir /r "$assetDir"
   ${If} ${Silent}
   ${AndIf} $updatedFlag == "1"
     ExecShell "open" "$INSTDIR\${APPEXE}"

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.4",
-  "notes": "New branded setup with an integrated update flow: before installing, the wizard checks the official repository (Searching for updates), downloads the newest version automatically (Downloading) and installs it — so you always get the latest release. Also fixes the Reimagined Performance Engine hardware detection on systems with a single GPU.",
-  "installer": "dist/Reimagined-Setup-1.0.4.exe"
+  "version": "1.0.5",
+  "notes": "Fixes the installer crash 'Error opening file for writing: bg.bmp' (brand assets are now extracted to a valid temp directory) and makes the update check never freeze the wizard (hard curl timeout - the bundled version installs if the network stalls).",
+  "installer": "dist/Reimagined-Setup-1.0.5.exe"
 }
