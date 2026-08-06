@@ -1,0 +1,4 @@
+{
+  "version": "1.0.2",
+  "notes": "Compact Search button inside the Mods/Modpacks search bars + new folder-based update system (detects the update/ folder in the repository)."
+}

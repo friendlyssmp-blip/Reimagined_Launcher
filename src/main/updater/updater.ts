@@ -1,14 +1,17 @@
 /**
- * GitHub release updater.
+ * GitHub folder-based updater.
  *
- * Checks the configured GitHub repository (`owner/repo` in Settings → Updates)
- * for the latest release, downloads its .zip asset with live progress, applies
- * it over the project directory (user data and dependencies are preserved),
- * rebuilds the app and relaunches.
+ * The launcher watches the `update/` folder in the official repository: a
+ * small `update/latest.json` file there declares the newest available version.
+ * When it is newer than the installed version (tracked in
+ * data/updates/applied-version.json, falling back to the launcher's own
+ * version), the launcher downloads the repository as a .zip directly from
+ * GitHub's public codeload endpoint — no releases, no tokens, no setup — and
+ * applies it over the project directory (user data and dependencies are
+ * preserved), rebuilds the app and relaunches.
  *
- * The flow is renderer-driven: the UI checks on startup (silently) and shows
- * an "Update available" notification in the sidebar below Account; the user
- * then downloads and installs from the Update dialog.
+ * Flow: push changes to the repo → bump update/latest.json → every launcher
+ * sees "Update available" → one click downloads and applies the new code.
  */
 import path from 'node:path'
 import fs from 'node:fs'
@@ -25,9 +28,13 @@ const CACHE_MAX_AGE = 30 * 60_000 // re-check GitHub at most every 30 min
 
 /**
  * THE official Reimagined Launcher repository — hardcoded. The launcher only
- * ever checks releases from here; there is no user-facing repo setting.
+ * ever checks updates from here; there is no user-facing repo setting.
  */
 const OFFICIAL_REPO = 'friendlyssmp-blip/Reimagined_Launcher'
+/** The trigger file inside the repo's `update/` folder: {"version": "1.0.2"}. */
+const LATEST_JSON = `https://raw.githubusercontent.com/${OFFICIAL_REPO}/main/update/latest.json`
+/** Whole-repository archive — always the latest committed state of `main`. */
+const CODELOAD_ZIP = `https://codeload.github.com/${OFFICIAL_REPO}/zip/refs/heads/main`
 
 /** AbortController-based timeout (works on every supported Node/Electron). */
 function timeoutSignal(ms: number): AbortSignal {
@@ -45,6 +52,9 @@ function downloadFile(): string {
 function stagingDir(): string {
   return path.join(paths.updates, 'staging')
 }
+function markerFile(): string {
+  return path.join(paths.updates, 'applied-version.json')
+}
 
 /** `1.2.3` vs `1.2.10` numeric comparison (leading `v` tolerated). */
 function compareVersions(a: string, b: string): number {
@@ -58,49 +68,57 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
+/** The version currently applied to this installation (marker, else local). */
+async function readInstalledVersion(): Promise<string> {
+  const marker = await readJson<{ version?: string } | null>(markerFile(), null)
+  const v = marker?.version || appVersion
+  return v || '0.0.0'
+}
+
 export const updater = {
   isEnabled(): boolean {
     return true
   },
 
-  /** Fetch the latest release info from GitHub (cached for 30 min). */
+  /** Fetch `update/latest.json` from GitHub (cached for 30 min). */
   async check(force = false): Promise<UpdateInfo> {
-    const r = OFFICIAL_REPO
     const base: UpdateInfo = { hasUpdate: false, currentVersion: appVersion, latestVersion: appVersion }
     try {
       if (!force) {
         const cached = await readJson<{ at: number; info: UpdateInfo } | null>(cacheFile(), null)
         if (cached && cached.info && Date.now() - cached.at < CACHE_MAX_AGE) return cached.info
       }
-      const res = await fetch(`https://api.github.com/repos/${r}/releases/latest`, {
-        headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0', Accept: 'application/vnd.github+json' },
+      const res = await fetch(LATEST_JSON, {
+        headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0', Accept: 'application/json' },
         signal: timeoutSignal(12_000)
       })
-      if (!res.ok) {
-        if (res.status === 404) throw new Error(`No releases found for "${r}". Publish a release first.`)
-        throw new Error(`GitHub returned HTTP ${res.status}.`)
+      // No `update/latest.json` in the repo yet — there is nothing to update.
+      if (res.status === 404) {
+        logger.warn('Update check: no update/latest.json in the repository yet — nothing to update.')
+        const info: UpdateInfo = { ...base }
+        try {
+          await writeJson(cacheFile(), { at: Date.now(), info })
+        } catch {
+          /* cache is best-effort */
+        }
+        return info
       }
-      const data = (await res.json()) as {
-        tag_name?: string
-        name?: string
-        body?: string
-        html_url: string
-        published_at?: string
-        assets?: { name: string; browser_download_url: string; size: number }[]
-      }
-      const latestVersion = (data.tag_name ?? data.name ?? '').replace(/^v/i, '')
-      const hasUpdate = latestVersion !== '' && compareVersions(latestVersion, appVersion) > 0
-      const assets = data.assets ?? []
-      const zipAsset = assets.find((a) => a.name.toLowerCase().endsWith('.zip')) ?? assets[0]
+      if (!res.ok) throw new Error(`GitHub returned HTTP ${res.status}.`)
+
+      const data = (await res.json()) as { version?: string; notes?: string }
+      const latestVersion = String(data.version ?? '').replace(/^v/i, '')
+      const currentVersion = await readInstalledVersion()
+      const hasUpdate = latestVersion !== '' && compareVersions(latestVersion, currentVersion) > 0
+
       const info: UpdateInfo = {
         hasUpdate,
-        currentVersion: appVersion,
-        latestVersion: latestVersion || appVersion,
-        notes: data.body ?? '',
-        url: data.html_url,
-        assetUrl: zipAsset?.browser_download_url,
-        assetName: zipAsset?.name,
-        publishedAt: data.published_at
+        currentVersion,
+        latestVersion: latestVersion || currentVersion,
+        notes: data.notes ?? '',
+        url: `https://github.com/${OFFICIAL_REPO}`,
+        assetUrl: CODELOAD_ZIP,
+        assetName: 'Reimagined_Launcher-main.zip',
+        publishedAt: new Date().toISOString()
       }
       try {
         await writeJson(cacheFile(), { at: Date.now(), info })
@@ -109,7 +127,7 @@ export const updater = {
       }
       return info
     } catch (err) {
-      logger.warn(`Update check failed for "${r}": ${(err as Error).message}`)
+      logger.warn(`Update check failed: ${(err as Error).message}`)
       throw err
     }
   },
@@ -121,15 +139,13 @@ export const updater = {
     return { hasUpdate: false, currentVersion: appVersion, latestVersion: appVersion }
   },
 
-  /** Download the release asset to data/updates/ with live progress events. */
+  /** Download the repository zip (codeload) with live progress events. */
   async download(): Promise<{ progress: number; path: string }> {
-    const info = await this.getInfo()
-    if (!info.assetUrl) throw new Error('This release has no downloadable asset to install.')
     mkdirp(paths.updates)
     const dest = downloadFile()
     if (exists(dest)) fs.rmSync(dest, { force: true })
 
-    const res = await fetch(info.assetUrl, {
+    const res = await fetch(CODELOAD_ZIP, {
       headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0' },
       signal: timeoutSignal(600_000)
     })
@@ -161,7 +177,7 @@ export const updater = {
     await new Promise<void>((resolve, reject) =>
       file.end((err: Error | null | undefined) => (err ? reject(err) : resolve()))
     )
-    logger.info(`Update downloaded: ${info.assetName ?? info.latestVersion} (${Math.round(received / 1024 / 1024)} MB)`)
+    logger.info(`Update package downloaded (${Math.round(received / 1024 / 1024)} MB)`)
     return { progress: 100, path: dest }
   },
 
@@ -183,11 +199,15 @@ export const updater = {
     const buf = await fsp.readFile(dest)
     const files = zipExtractAll(buf, staging)
     if (files.length === 0) throw new Error('The update archive could not be read — is it a valid .zip of the project?')
+
+    // GitHub codeload zips wrap everything in a single `<repo>-<branch>/`
+    // folder — extract its contents as the source root.
+    const srcRoot = await findSourceRoot(staging)
     eventBus.emit('update:progress', { phase: 'apply', percent: 40 })
 
     const root = app.getAppPath()
     const skip = new Set(['data', 'node_modules', '.git', '.fpsboost-build', 'out'])
-    await copyTree(staging, root, skip)
+    await copyTree(srcRoot, root, skip)
 
     // New package.json may pull in new dependencies — install them so the
     // rebuild can never fail with "module not found".
@@ -199,7 +219,13 @@ export const updater = {
     logger.info('Update applied — rebuilding the app…')
     await rebuild()
 
-    // Invalidate the check cache so the next startup/check reports the truth.
+    // Only after a successful install: mark this version as applied and
+    // invalidate the check cache so the next startup reports the truth.
+    try {
+      await writeJson(markerFile(), { version: info.latestVersion })
+    } catch {
+      /* best-effort */
+    }
     try {
       await remove(cacheFile())
     } catch {
@@ -213,6 +239,15 @@ export const updater = {
       app.exit(0)
     }, 700)
   }
+}
+
+/** If the staging dir contains a single top-level folder, use it as the root. */
+async function findSourceRoot(staging: string): Promise<string> {
+  const entries = await fsp.readdir(staging, { withFileTypes: true })
+  if (entries.length === 1 && entries[0].isDirectory()) {
+    return path.join(staging, entries[0].name)
+  }
+  return staging
 }
 
 /** Install dependencies with the project's package manager (npm). */
