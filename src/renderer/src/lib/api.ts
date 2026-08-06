@@ -183,7 +183,7 @@ export const api = {
   },
   
   update: {
-    check: () => unwrap<UpdateInfo>(window.reimagined.update.check()),
+    check: (force = false) => unwrap<UpdateInfo>(window.reimagined.update.check(force)),
     getInfo: () => unwrap<UpdateInfo>(window.reimagined.update.getInfo()),
     download: () => unwrap<{ progress: number; path: string }>(window.reimagined.update.download()),
     install: () => unwrap<void>(window.reimagined.update.install())

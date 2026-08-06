@@ -164,11 +164,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notify('info', 'Signed out')
   }, [notify, refreshAccount])
 
-  /** GitHub update check (official repo only) — silent on startup, toast when found. */
+  /** GitHub update check (official repo only) — silent on startup, toast when found.
+   *
+   * `force` bypasses the 30-minute cache: the manual "Check for updates"
+   * button always passes force so users never see a stale "up to date".
+   */
   const checkForUpdates = useCallback(
-    async (silent = true): Promise<UpdateInfo | null> => {
+    async (silent = true, force = false): Promise<UpdateInfo | null> => {
       try {
-        const info = await api.update.check()
+        const info = await api.update.check(force)
         setUpdateInfo(info)
         if (info.hasUpdate && info.latestVersion !== notifiedVersionRef.current) {
           notifiedVersionRef.current = info.latestVersion
@@ -355,12 +359,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return off
   }, [ready, notify, refreshAccount, refreshProfiles, setModals])
 
-  // Silent startup update check against the official repository.
+  // Silent startup update check against the official repository (forced, so
+  // a fresh launch always sees the truth — no stale 30-min cache result).
   useEffect(() => {
     if (!ready) return
     if (!settings?.autoCheckUpdates) return
-    const t = setTimeout(() => void checkForUpdates(true), 4000)
+    const t = setTimeout(() => void checkForUpdates(true, true), 4000)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, settings?.autoCheckUpdates])
+
+  // Re-check every 30 min while the launcher stays open, so a running
+  // launcher notices a new release without needing a restart.
+  useEffect(() => {
+    if (!ready) return
+    if (!settings?.autoCheckUpdates) return
+    const iv = setInterval(() => void checkForUpdates(true, true), 30 * 60_000)
+    return () => clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, settings?.autoCheckUpdates])
 

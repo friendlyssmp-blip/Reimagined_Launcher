@@ -413,9 +413,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   /* ---------------------------------- updates ---------------------------------- */
 
   /* Real GitHub release updater (Settings → Updates → repo owner/repo). */
-  on(IPC.updateCheck, async () => {
+  on(IPC.updateCheck, async (force?: boolean) => {
     const { updater } = await import('./updater/updater')
-    return updater.check(false)
+    // force=true bypasses the 30-minute cache so the manual "Check for
+    // updates" button (and the startup/periodic checks) always see the
+    // truth from GitHub — never a stale "up to date".
+    return updater.check(Boolean(force))
   })
 
   on(IPC.updateGetInfo, async () => {

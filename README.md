@@ -5,7 +5,7 @@ Mantiene la esencia vanilla del juego mientras mejora el rendimiento — todo co
 
 | | |
 |---|---|
-| **Versión actual** | v1.0.5 |
+| **Versión actual** | v1.0.6 |
 | **Plataforma** | Windows x64 (instalador NSIS) |
 | **Idiomas** | Español / English |
 | **Licencia** | Código abierto (ver repositorio) |
@@ -25,7 +25,7 @@ Mantiene la esencia vanilla del juego mientras mejora el rendimiento — todo co
 ## 📥 Instalar
 
 1. Descarga el instalador desde la carpeta `dist/` del repo:
-   `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.5.exe`
+   `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.6.exe`
 2. **Verifica el checksum** (más abajo) antes de ejecutarlo.
 3. Ejecuta el instalador — es **autocontenido**: al abrirlo busca actualizaciones en el repositorio oficial (**Searching for updates**), descarga la versión más reciente si existe (**Downloading**) y te muestra un asistente con la identidad visual de Reimagined. Al terminar, el launcher se abre en su última versión.
 4. Si Windows muestra "editor desconocido": **Más información → Ejecutar de todos modos** (es normal: el instalador no está firmado digitalmente).
@@ -35,13 +35,13 @@ Mantiene la esencia vanilla del juego mientras mejora el rendimiento — todo co
 ### 🔐 Checksum oficial (SHA-256)
 
 ```
-8ca1ce7102d054b7a6cff7b9df5975af48ea4d0baae5d91cef439832dbbdb4d5  Reimagined-Setup-1.0.5.exe
+6a3675255dd1274419147009dba9c17f0a528f4167fcafbb37daea717b1ac27d  Reimagined-Setup-1.0.6.exe
 ```
 
 Verifica tu descarga en PowerShell:
 
 ```powershell
-Get-FileHash .\Reimagined-Setup-1.0.5.exe -Algorithm SHA256
+Get-FileHash .\Reimagined-Setup-1.0.6.exe -Algorithm SHA256
 ```
 
 Si el hash **no coincide**, el archivo fue modificado — **no lo ejecutes** y descarga de nuevo.

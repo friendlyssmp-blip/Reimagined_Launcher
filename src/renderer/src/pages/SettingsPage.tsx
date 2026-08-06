@@ -35,7 +35,7 @@ const sections = [
 type SectionId = (typeof sections)[number]['id']
 
 export function SettingsPage() {
-  const { settings, updateSettings, notify, info, account, logout, setModals } = useApp()
+  const { settings, updateSettings, notify, info, account, logout, setModals, checkForUpdates } = useApp()
   const [section, setSection] = useState<SectionId>('general')
 
   return (
@@ -207,15 +207,11 @@ export function SettingsPage() {
               <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Button
                   onClick={async () => {
-                    try {
-                      const r = await api.update.check()
-                      notify(
-                        r.hasUpdate ? 'info' : 'success',
-                        r.hasUpdate ? 'Update available' : 'You are up to date',
-                        r.hasUpdate ? `v${r.latestVersion} is ready` : `v${r.currentVersion} is the latest release`
-                      )
-                    } catch (err) {
-                      notify('error', 'Update check failed', friendlyError(err))
+                    // force=true: always hit GitHub (never a stale cached
+                    // "up to date") and refresh the sidebar update button.
+                    const r = await checkForUpdates(false, true)
+                    if (r && !r.hasUpdate) {
+                      notify('success', 'You are up to date', `v${r.currentVersion} is the latest release`)
                     }
                   }}
                 >

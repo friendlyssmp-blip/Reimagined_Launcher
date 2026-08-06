@@ -1,5 +1,5 @@
 {
-  "version": "1.0.5",
-  "notes": "Fixes the installer crash 'Error opening file for writing: bg.bmp' (brand assets are now extracted to a valid temp directory) and makes the update check never freeze the wizard (hard curl timeout - the bundled version installs if the network stalls).",
-  "installer": "dist/Reimagined-Setup-1.0.5.exe"
+  "version": "1.0.6",
+  "notes": "Update system fix: the launcher now re-checks GitHub every 30 minutes while open and the 'Check for updates' button always performs a real check (bypassing the 30-minute cache) — so a new release always shows up, even if the launcher was open when it was published.",
+  "installer": "dist/Reimagined-Setup-1.0.6.exe"
 }

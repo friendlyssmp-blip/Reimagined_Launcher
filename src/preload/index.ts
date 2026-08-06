@@ -148,7 +148,7 @@ const api = {
   },
   
   update: {
-    check: (): Promise<unknown> => ipcRenderer.invoke(IPC.updateCheck),
+    check: (force = false): Promise<unknown> => ipcRenderer.invoke(IPC.updateCheck, force),
     getInfo: (): Promise<unknown> => ipcRenderer.invoke(IPC.updateGetInfo),
     download: (): Promise<unknown> => ipcRenderer.invoke(IPC.updateDownload),
     install: (): Promise<unknown> => ipcRenderer.invoke(IPC.updateInstall)

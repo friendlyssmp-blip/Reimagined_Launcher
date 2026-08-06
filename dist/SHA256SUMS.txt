@@ -1,1 +1,1 @@
-8ca1ce7102d054b7a6cff7b9df5975af48ea4d0baae5d91cef439832dbbdb4d5  Reimagined-Setup-1.0.5.exe
+6a3675255dd1274419147009dba9c17f0a528f4167fcafbb37daea717b1ac27d  Reimagined-Setup-1.0.6.exe
