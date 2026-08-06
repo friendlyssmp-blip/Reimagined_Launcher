@@ -18,9 +18,13 @@ const FPS_BOOST_ID = 'reimagined-fps-boost'
 const FPS_BOOST_VERSION = '1.0.0'
 const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.0.jar'
 
-/** Path of the mod jar bundled with the launcher (dev: project data dir). */
+/** Path of the mod jar bundled with the launcher.
+ * Dev: project `data/bundled`. Packaged: shipped inside the installer via
+ * electron-builder extraResources → process.resourcesPath/bundled. */
 function bundledJar(): string {
-  return path.join(paths.data, 'bundled', 'fps-boost', FPS_BOOST_FILENAME)
+  const devPath = path.join(paths.data, 'bundled', 'fps-boost', FPS_BOOST_FILENAME)
+  if (fs.existsSync(devPath)) return devPath
+  return path.join(process.resourcesPath, 'bundled', 'fps-boost', FPS_BOOST_FILENAME)
 }
 
 /**

@@ -45,3 +45,4 @@ $RECYCLE.BIN/
 .vscode/
 .idea/
 *.swp
+build/rcedit-x64.exe

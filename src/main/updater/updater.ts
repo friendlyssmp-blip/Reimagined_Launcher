@@ -186,6 +186,11 @@ export const updater = {
    * (preserving data/, node_modules/, .git/, out/) → rebuild → relaunch.
    */
   async install(): Promise<void> {
+    // A packaged (installed) app lives inside a read-only asar with no Node
+    // toolchain — the source-overlay update only applies to dev/source runs.
+    if (app.isPackaged) {
+      throw new Error('This launcher was installed with the installer. Updates are applied by downloading the new installer from the GitHub Releases page and running it.')
+    }
     const dest = downloadFile()
     if (!exists(dest)) throw new Error('No update downloaded yet — click "Download" first.')
 

@@ -6,17 +6,32 @@ directories:
   buildResources: build
   output: dist
 
+# Applies the icon/version to the packaged exe via build/rcedit-x64.exe
+# (winCodeSign is skipped — its extraction needs symlink privileges).
+afterPack: scripts/patch-icon.js
+
 files:
   - out/**
   - package.json
 
 asar: true
 
+# The bundled Reimagined Client jar must ship inside the installer so Fabric
+# profiles get the FPS Boost mod in packaged (AppData) installs too.
+extraResources:
+  - from: data/bundled
+    to: bundled
+    filter:
+      - "**/*.jar"
+
 win:
   target:
     - target: nsis
       arch: [x64]
   artifactName: ${productName}-Setup-${version}.${ext}
+  # Skip the winCodeSign/signing toolchain (fails on non-admin Windows during
+  # extraction) — the icon is applied by the afterPack hook instead.
+  signAndEditExecutable: false
 
 nsis:
   oneClick: false
