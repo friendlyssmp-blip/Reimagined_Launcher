@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { SkinHeadPreview } from './SkinHead'
 import { BrandLogo } from './BrandLogo'
 import {
   IconHome,
   IconPlay,
-  IconPuzzle,
   IconArchive,
   IconGrid,
   IconDownload,
@@ -33,7 +31,8 @@ const navSections: NavSection[] = [
   {
     label: 'Games',
     items: [
-      { id: 'mods', label: 'Mods', icon: IconPuzzle },
+      /* Mods is intentionally NOT here — mods belong to a profile (loader),
+       * so the only way in is clicking a profile/instance card. */
       { id: 'modpacks', label: 'Modpacks', icon: IconArchive },
       { id: 'profiles', label: 'Instances', icon: IconGrid }
     ]
@@ -54,7 +53,7 @@ const navSections: NavSection[] = [
 ]
 
 export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page) => void }) {
-  const { account, running, stopLaunch, setModals, settings, updateInfo } = useApp()
+  const { running, stopLaunch, setModals, updateInfo } = useApp()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('reimagined:sidebar-collapsed') === '1')
 
   const toggleCollapse = () => {
@@ -104,18 +103,8 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Running — stop</span>
           </div>
         )}
-        <div
-          className="status-pill"
-          onClick={() => (account.status === 'offline' ? setModals({ login: true }) : onNavigate('account'))}
-          title={account.profile ? `${account.profile.name} — click to open Account` : 'Not signed in'}
-        >
-          <span className={`status-dot ${account.status === 'online' ? 'online' : ''}`} />
-          {account.profile?.skins?.[0]?.url ? <SkinHeadPreview url={account.profile?.skins?.[0]?.url} size={26} /> : <IconUser style={{ width: 17, height: 17, flex: '0 0 auto' }} />}
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {account.profile ? account.profile.name : account.status === 'expired' ? 'Re-login' : 'Sign in'}
-          </span>
-          {!collapsed && <span className="badge" style={{ fontSize: 10, flex: '0 0 auto' }}>{settings.memory}MB</span>}
-        </div>
+        {/* The account card (face + name) that used to sit above Logs is gone —
+         * account lives in the System → Account page and the top bar now. */}
         <button className="nav-item" onClick={() => onNavigate('logs')} title="Logs">
           <IconLog />
           <span className="nav-label">Logs</span>

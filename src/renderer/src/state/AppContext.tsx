@@ -16,7 +16,8 @@ import type {
   LaunchProgress,
   ThemeId,
   LaunchHandle,
-  UpdateInfo
+  UpdateInfo,
+  CrashReport
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -41,7 +42,10 @@ export interface ModalState {
   duplicate: { profile: Profile } | null
   share: { profile: Profile } | null
   importShare: boolean
-  update: boolean
+  /** true = user opened it · 'auto' = auto-update flow is already running. */
+  update: boolean | 'auto'
+  /** Crash Assistant — a game crash report detected after a launch. */
+  crash: CrashReport | null
   confirm: {
     title: string
     message: string
@@ -111,6 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     share: null,
     importShare: false,
     update: false,
+    crash: null,
     confirm: null
   })
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
@@ -352,6 +357,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'mods:changed':
           void refreshProfiles()
           break
+        case 'crash:detected':
+          // Crash Assistant — a real crash report was found after the game
+          // closed. Surface it immediately with analysis and suggestions.
+          setModals({ crash: e.payload as CrashReport })
+          break
         default:
           break
       }
@@ -360,24 +370,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [ready, notify, refreshAccount, refreshProfiles, setModals])
 
   // Silent startup update check against the official repository (forced, so
-  // a fresh launch always sees the truth — no stale 30-min cache result).
+  // a fresh launch always sees the truth — no stale cache result). When
+  // "auto-install updates" is ON (the default), the newest release downloads
+  // and installs automatically on this start; otherwise the sidebar Update
+  // button appears so the user can decide.
   useEffect(() => {
     if (!ready) return
     if (!settings?.autoCheckUpdates) return
-    const t = setTimeout(() => void checkForUpdates(true, true), 4000)
+    const t = setTimeout(() => {
+      void checkForUpdates(true, true).then((info) => {
+        if (info?.hasUpdate && settings?.autoInstallUpdates) {
+          setModals({ update: 'auto' })
+        }
+      })
+    }, 4000)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, settings?.autoCheckUpdates])
+  }, [ready, settings?.autoCheckUpdates, settings?.autoInstallUpdates])
 
-  // Re-check every 30 min while the launcher stays open, so a running
-  // launcher notices a new release without needing a restart.
+  // Re-check while the launcher stays open (configurable, default 15 s) so a
+  // running launcher notices a new release within seconds — the sidebar
+  // Update button appears the moment one is published.
   useEffect(() => {
     if (!ready) return
     if (!settings?.autoCheckUpdates) return
-    const iv = setInterval(() => void checkForUpdates(true, true), 30 * 60_000)
+    const sec = Math.max(15, Math.min(900, settings?.updateCheckIntervalSec ?? 15))
+    const iv = setInterval(() => void checkForUpdates(true, true), sec * 1000)
     return () => clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, settings?.autoCheckUpdates])
+  }, [ready, settings?.autoCheckUpdates, settings?.updateCheckIntervalSec])
 
   // Keep active profile valid.
   useEffect(() => {

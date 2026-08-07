@@ -13,13 +13,47 @@ import { api, friendlyError } from '../lib/api'
 
 type Phase = 'idle' | 'downloading' | 'downloaded' | 'installing' | 'done'
 
-export function UpdateModal() {
+export function UpdateModal({ auto = false }: { auto?: boolean }) {
   const { setModals, updateInfo } = useApp()
   const [phase, setPhase] = useState<Phase>('idle')
   const [percent, setPercent] = useState(0)
   const [phaseText, setPhaseText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  /* Auto-update mode ("Auto-update updates" = ON, the default): the newest
+   * release downloads and installs by itself on launcher start — the user
+   * just watches it happen. On failure it falls back to the manual buttons. */
+  useEffect(() => {
+    if (!auto) return
+    let cancelled = false
+    void (async () => {
+      try {
+        setBusy(true)
+        setPhase('downloading')
+        setPhaseText('Downloading update…')
+        await api.update.download()
+        if (cancelled) return
+        setPhase('downloaded')
+        setPhaseText('Installing update…')
+        setPhase('installing')
+        await api.update.install()
+        if (!cancelled) {
+          setBusy(false)
+          setPhase('done')
+        }
+      } catch (err) {
+        if (cancelled) return
+        setError(friendlyError(err))
+        setPhase('idle')
+        setPhaseText('')
+        setBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [auto])
 
   /* Live progress events from the main process. */
   useEffect(() => {
@@ -76,6 +110,11 @@ export function UpdateModal() {
       <div className="modal modal-lg">
         <div className="modal-head">
           <h3>Update available</h3>
+          {auto && phase !== 'done' && (
+            <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-3)', fontWeight: 700, marginRight: 'auto', marginLeft: 10 }}>
+              auto-updating…
+            </span>
+          )}
           {!busy && (
             <button className="btn btn-icon" onClick={() => setModals({ update: false })} aria-label="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -146,7 +185,12 @@ export function UpdateModal() {
           )}
         </div>
         <div className="modal-foot">
-          {!busy && (
+          {!busy && auto && phase === 'idle' && (
+            <Button variant="ghost" onClick={() => setModals({ update: false })}>
+              Skip this update
+            </Button>
+          )}
+          {!busy && !auto && (
             <Button variant="ghost" onClick={() => setModals({ update: false })}>
               Remind me later
             </Button>

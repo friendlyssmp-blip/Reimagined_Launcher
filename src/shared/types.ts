@@ -58,6 +58,10 @@ export interface LauncherSettings {
 
   /** Check for new releases automatically on startup (official repo only). */
   autoCheckUpdates: boolean
+  /** Auto-download + install the newest release on the next launcher start. */
+  autoInstallUpdates: boolean
+  /** How often (seconds) the launcher re-checks GitHub while it is open. */
+  updateCheckIntervalSec: number
 }
 
 export interface RecentActivity {
@@ -297,6 +301,23 @@ export interface UpdateInfo {
   assetName?: string
   /** Publish date of the latest release. */
   publishedAt?: string
+}
+
+/* ---------------------------- Crash Assistant ---------------------------- */
+
+/** A game crash report detected after a launch (Crash Assistant). */
+export interface CrashReport {
+  profileId: string
+  profileName: string
+  /** Crash report file name inside the instance's crash-reports folder. */
+  file: string
+  /** Short human headline of the cause. */
+  cause: string
+  /** Raw crash report excerpt (trimmed, safe to display). */
+  snippet: string
+  /** Concrete, actionable suggestions. */
+  suggestions: string[]
+  at: string
 }
 
 export interface ModrinthFile {

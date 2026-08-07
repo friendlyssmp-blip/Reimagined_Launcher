@@ -3,12 +3,22 @@ import { useApp } from '../state/AppContext'
 import { Button, TextInput, Spinner, EmptyState, Badge, Toggle } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
-import { IconPuzzle, IconDownload, IconFolder, IconChevronDown } from '../components/icons'
+import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
 
 type SourceTab = 'installed' | 'modrinth'
 type SortKey = 'relevance' | 'downloads' | 'newest' | 'updated' | 'name'
 type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader'
+/** Installed panel sub-tabs — organized per content type (instance menu). */
+type InstTab = 'mods' | 'resourcepacks' | 'datapacks' | 'shaders' | 'worlds'
+
+const INST_TABS: { id: InstTab; label: string }[] = [
+  { id: 'mods', label: 'Mods' },
+  { id: 'resourcepacks', label: 'Resource Packs' },
+  { id: 'datapacks', label: 'Data Packs' },
+  { id: 'shaders', label: 'Shaders' },
+  { id: 'worlds', label: 'Worlds' }
+]
 
 const CONTENT_TYPES: { id: ContentType; label: string }[] = [
   { id: 'mod', label: 'Mods' },
@@ -34,6 +44,31 @@ function fmtDownloads(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return String(n)
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`
+  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(0)} KB`
+  return `${bytes} B`
+}
+
+/** Sub-folder each Installed sub-tab manages (worlds = saves/). */
+const FOLDER_FOR_INST: Record<InstTab, string | null> = {
+  mods: 'mods',
+  resourcepacks: 'resourcepacks',
+  datapacks: 'datapacks',
+  shaders: 'shaderpacks',
+  worlds: 'saves'
+}
+
+/** Project type each Installed sub-tab filters (worlds has no project type). */
+const typeForInst: Record<InstTab, ContentType | null> = {
+  mods: 'mod',
+  resourcepacks: 'resourcepack',
+  datapacks: 'datapack',
+  shaders: 'shader',
+  worlds: null
 }
 
 /** Modrinth page size — results append as the user scrolls (infinite scroll). */
@@ -69,6 +104,11 @@ export function ModsPage() {
   const [versionsBusy, setVersionsBusy] = useState(false)
   const [sort, setSort] = useState<SortKey>('downloads')
   const [updatingAll, setUpdatingAll] = useState(false)
+  // Installed panel organization: Mods / Resource Packs / Data Packs /
+  // Shaders / Worlds — everything lives under its own clean tab.
+  const [instTab, setInstTab] = useState<InstTab>('mods')
+  const [worlds, setWorlds] = useState<{ name: string; folder: string; sizeBytes: number; lastModified: string | null }[]>([])
+  const [worldsLoading, setWorldsLoading] = useState(false)
 
   const modrinthIndex = sort === 'updated' ? 'updated' : sort === 'newest' ? 'newest' : sort === 'name' ? 'relevance' : sort === 'downloads' ? 'downloads' : 'relevance'
 
@@ -84,12 +124,19 @@ export function ModsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfile, tab])
 
+  /* Stale-response guard: with auto-search firing on every keystroke, a slow
+   * earlier response must never overwrite a newer one. First-page searches
+   * bump the sequence; append loads keep the current one and only the latest
+   * first-page search may render. */
+  const searchSeq = useRef(0)
+
   /** Search Modrinth (profile-scoped: version + loader locked at the API
    *  level — incompatible results can never appear). Supports pagination. */
   const doSearch = useCallback(
     async (q?: string, startOffset = 0, append = false) => {
       if (!activeProfile) return
       const term = q ?? query
+      const mySeq = append ? searchSeq.current : ++searchSeq.current
       if (append) setLoadingMore(true)
       else setSearching(true)
       try {
@@ -101,6 +148,7 @@ export function ModsPage() {
           offset: startOffset,
           limit: PAGE_SIZE
         })
+        if (!append && mySeq !== searchSeq.current) return // stale — a newer search superseded this one
         setTotalHits(r.totalHits)
         const page = r.items.map((x) => ({ ...x, source: 'modrinth' as const }))
         setResults((prev) => (append ? [...prev, ...page] : page))
@@ -121,6 +169,18 @@ export function ModsPage() {
     if (tab === 'modrinth') void doSearch(undefined, 0, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, sort, contentType, category, profileId])
+
+  // AUTO-SEARCH: as soon as the user stops typing (350 ms) the results update
+  // by themselves — no Enter key needed. Typing "simple" and pausing shows
+  // every result containing "simple" automatically. Debounced on QUERY only
+  // (the tab/sort/category effect above handles those changes) so switching
+  // tabs never triggers a duplicate search.
+  useEffect(() => {
+    if (tab !== 'modrinth') return
+    const t = setTimeout(() => void doSearch(undefined, 0, false), 350)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   /** Append the next page when the sentinel enters the viewport. */
   const loadMore = useCallback(() => {
@@ -282,17 +342,56 @@ export function ModsPage() {
     setDetailIndex(-1)
   }
 
-  const openFolder = async () => {
+  /** Open the folder of the ACTIVE Installed sub-tab (mods/, saves/, …). */
+  const openInstTabFolder = async () => {
     if (!activeProfile) return
     try {
-      await api.content.openFolder(activeProfile.id)
+      await api.content.openFolder(activeProfile.id, FOLDER_FOR_INST[instTab] ?? undefined)
     } catch (err) {
       notify('error', 'Could not open folder', friendlyError(err))
     }
   }
 
+  /** Copy a world into the instance's backups/ folder (never touches the original). */
+  const backupWorld = async (w: { folder: string; name: string }) => {
+    if (!activeProfile) return
+    await runGuarded('Back up world', async () => {
+      await api.content.backupWorld(activeProfile.id, w.folder)
+      notify('success', 'World backed up', `“${w.name}” was copied into the instance's backups folder.`)
+    })
+  }
+
   const visible = results
-  const isInstalled = (projectId: string): boolean => installed.some((m) => m.id === projectId)
+  /** Installed items shown in the active sub-tab (by project type). */
+  const instItems = installed.filter((m) => (m.projectType ?? 'mod') === (typeForInst[instTab] ?? 'mod'))
+  /* Installed check matches by real project id OR slug — so the Fabric API
+   * (stored under the 'fabric-api' slug on older profiles) shows as
+   * "Installed" in Modrinth results and can never be double-installed. */
+  const isInstalled = (r: ProviderResult | string): boolean => {
+    if (typeof r === 'string') return installed.some((m) => m.id === r)
+    return installed.some((m) => m.id === r.projectId || m.slug === r.slug)
+  }
+
+  /* Worlds are live filesystem data — load them when the Worlds sub-tab opens. */
+  useEffect(() => {
+    if (tab !== 'installed' || instTab !== 'worlds' || !activeProfile) return
+    let cancelled = false
+    setWorldsLoading(true)
+    api.content
+      .worlds(activeProfile.id)
+      .then((w) => {
+        if (!cancelled) setWorlds(w)
+      })
+      .catch(() => {
+        if (!cancelled) setWorlds([])
+      })
+      .finally(() => {
+        if (!cancelled) setWorldsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [tab, instTab, activeProfile])
 
   /** Keep the installed list in sync after detail-page actions (Part 5). */
   const handleInstalledChange = (mod: ProfileMod | null) => {
@@ -323,7 +422,7 @@ export function ModsPage() {
             {r.title}
           </span>
           <Badge variant="accent">Modrinth</Badge>
-          {isInstalled(r.projectId) && <Badge variant="success">Installed</Badge>}
+          {isInstalled(r) && <Badge variant="success">Installed</Badge>}
         </div>
         <div className="mod-desc">{r.description}</div>
         <div className="mod-tags">
@@ -342,13 +441,122 @@ export function ModsPage() {
         </Button>
         <Button
           size="sm"
-          variant={isInstalled(r.projectId) ? 'ghost' : 'primary'}
-          disabled={installingId === r.projectId || isInstalled(r.projectId)}
+          variant={isInstalled(r) ? 'ghost' : 'primary'}
+          disabled={installingId === r.projectId || isInstalled(r)}
           onClick={() => installMod(r)}
         >
-          {installingId === r.projectId ? <Spinner /> : isInstalled(r.projectId) ? 'Installed' : 'Install'}
+          {installingId === r.projectId ? <Spinner /> : isInstalled(r) ? 'Installed' : 'Install'}
         </Button>
       </div>
+    </div>
+  )
+
+  /** One installed item row — used by every Installed sub-tab (mods, packs,
+   *  shaders). Update shows as a compact ARROW: click to jump to the newest
+   *  version. Disable/Enable, Change Version and Remove are always available. */
+  const renderInstalledRow = (m: ProfileMod) => (
+    <div key={m.slug} className={'installed-row' + (m.disabled ? ' disabled' : '')}>
+      {m.iconUrl ? (
+        <img src={m.iconUrl} style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover', opacity: m.disabled ? 0.45 : 1 }} alt="" />
+      ) : (
+        <div style={{
+          width: 38,
+          height: 38,
+          borderRadius: 9,
+          background: 'var(--bg-4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-3)',
+          fontSize: 14,
+          fontWeight: 700
+        }}>
+          {m.title.charAt(0)}
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            className="link"
+            style={{ textDecoration: m.disabled ? 'none' : undefined, opacity: m.disabled ? 0.55 : 1 }}
+            onClick={() => {
+              if (m.source === 'curseforge') {
+                notify('error', 'CurseForge not supported', 'This mod was installed from CurseForge in an earlier version — it can only be removed, or re-installed from Modrinth.')
+                return
+              }
+              openDetail({ provider: 'modrinth', projectId: m.id, projectType: (m.projectType ?? 'mod') as ContentType })
+            }}
+            title={m.source === 'curseforge' ? 'CurseForge is no longer supported' : 'Open full details'}
+          >
+            {m.title}
+          </span>
+          {m.disabled && <Badge variant="warn">Off</Badge>}
+          {m.source === 'local' && <Badge>Manual</Badge>}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+          v{m.versionNumber} · {m.source === 'curseforge' ? 'CurseForge' : m.source === 'modrinth' ? 'Modrinth' : 'Manual'}
+        </div>
+        {versionsOpen === m.slug && (
+          <div className="version-picker" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>Change version:</span>
+              {versionsBusy && <Spinner />}
+            </div>
+            {versionsFor[m.slug]?.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {versionsFor[m.slug].slice(0, 10).map((v) => (
+                  <button
+                    key={v.id}
+                    className={'version-opt' + (v.id === m.versionId ? ' current' : '')}
+                    onClick={() => changeVersion(m.slug, v.id)}
+                    disabled={v.id === m.versionId}
+                  >
+                    {v.versionNumber}
+                    <span style={{ color: 'var(--text-3)', fontSize: 10.5 }}>
+                      {v.gameVersions[0] ?? ''}{v.loaders[0] ? ' · ' + v.loaders[0] : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: 11.5, color: 'var(--text-3)' }}>No other compatible versions found.</p>
+            )}
+          </div>
+        )}
+      </div>
+      {m.updateAvailable && (
+        <button
+          className="update-arrow-btn"
+          onClick={() => void updateMod(m.slug)}
+          title={`Update to ${m.updateAvailable.versionNumber} (click to update)`}
+        >
+          <IconRefresh style={{ width: 13, height: 13 }} />
+        </button>
+      )}
+      {m.source !== 'local' && (
+        <Toggle
+          checked={!m.disabled}
+          onChange={(v) => void setEnabled(m, v)}
+          label=""
+        />
+      )}
+      {m.source !== 'local' && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation()
+            setVersionsOpen((cur) => (cur === m.slug ? null : m.slug))
+            void loadVersions(m.slug) // cached internally — no duplicate fetches
+          }}
+          title="Change version"
+        >
+          <IconChevronDown style={{ width: 13, height: 13 }} /> Versions
+        </Button>
+      )}
+      <Button size="sm" variant="danger" onClick={() => removeMod(m.slug)}>
+        Remove
+      </Button>
     </div>
   )
 
@@ -360,11 +568,11 @@ export function ModsPage() {
           <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${contentType === 'mod' ? 'Modrinth' : 'Modrinth packs'}…`}
+            placeholder={`Search ${contentType === 'mod' ? 'Modrinth' : 'Modrinth packs'}… (results update as you type)`}
             onKeyDown={(e) => e.key === 'Enter' && doSearch(undefined, 0, false)}
             autoFocus
           />
-          <Button onClick={() => doSearch(undefined, 0, false)} disabled={searching}>
+          <Button size="sm" variant="ghost" onClick={() => doSearch(undefined, 0, false)} disabled={searching}>
             {searching ? <Spinner /> : 'Search'}
           </Button>
         </div>
@@ -529,39 +737,107 @@ export function ModsPage() {
         </div>
       )}
 
-      {/* Part 7 — Installed panel: Open Folder + Update All + full mod list */}
+      {/* Part 7 — Installed panel: organized sub-tabs (Mods / Resource Packs /
+          Data Packs / Shaders / Worlds) + Open Folder + Update All. */}
       {tab === 'installed' && (
         <Fragment>
+          <div className="inst-tabs">
+            {INST_TABS.map((t) => (
+              <button
+                key={t.id}
+                className={'inst-tab' + (instTab === t.id ? ' active' : '')}
+                onClick={() => setInstTab(t.id)}
+              >
+                {t.label}
+                {t.id === 'mods' && installed.some((m) => (m.projectType ?? 'mod') === 'mod') && (
+                  <span className="inst-count">{installed.filter((m) => (m.projectType ?? 'mod') === 'mod').length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Button variant="ghost" onClick={openFolder}>
+            <Button variant="ghost" onClick={openInstTabFolder}>
               <IconFolder style={{ width: 14, height: 14 }} /> Open Folder
             </Button>
-            <Button variant="primary" disabled={updatingAll || !installed.some((m) => m.updateAvailable)} onClick={updateAll}>
-              {updatingAll ? <><Spinner /> Updating…</> : `Update All (${installed.filter((m) => m.updateAvailable).length})`}
-            </Button>
+            {instTab !== 'worlds' && (
+              <Button variant="primary" disabled={updatingAll || !installed.some((m) => m.updateAvailable)} onClick={updateAll}>
+                {updatingAll ? <><Spinner /> Updating…</> : `Update All (${installed.filter((m) => m.updateAvailable).length})`}
+              </Button>
+            )}
             <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 'auto' }}>
-              {manualFiles.length > 0 && `${manualFiles.length} manual file(s) detected`}
+              {instTab === 'mods' && manualFiles.length > 0 && `${manualFiles.length} manual file(s) detected`}
             </span>
           </div>
 
-          {installed.length === 0 && manualFiles.length === 0 ? (
+          {instTab === 'worlds' ? (
+            worldsLoading ? (
+              <div className="row" style={{ justifyContent: 'center', padding: '28px 0' }}><Spinner /></div>
+            ) : worlds.length === 0 ? (
+              <EmptyState
+                icon={<IconArchive style={{ width: 38, height: 38 }} />}
+                title="No worlds yet"
+                sub="Worlds appear here after you play this instance once. Each world stays inside this profile — open the saves folder to manage the files."
+              />
+            ) : (
+              <div>
+                {worlds.map((w) => (
+                  <div key={w.folder} className="installed-row">
+                    <div style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 9,
+                      background: 'linear-gradient(135deg, var(--bg-4), var(--bg-3))',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 16,
+                      flexShrink: 0
+                    }} title="World">🌍</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{w.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        {fmtSize(w.sizeBytes)}{w.lastModified ? ` · played ${new Date(w.lastModified).toLocaleDateString()}` : ''}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void api.content.openFolder(activeProfile.id, 'saves/' + w.folder).catch((err) => notify('error', 'Could not open folder', friendlyError(err)))}
+                      title="Open this world's folder"
+                    >
+                      <IconFolder style={{ width: 13, height: 13 }} /> Open
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => void backupWorld(w)} title="Copy this world into the instance's backups folder">
+                      Back up
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : instItems.length === 0 && manualFiles.length === 0 ? (
             <EmptyState
               icon={<IconPuzzle style={{ width: 40, height: 40 }} />}
-              title="Nothing installed yet"
-              sub="Browse Modrinth to install mods into this profile, or drop .jar files in via Open Folder."
+              title={`No ${INST_TABS.find((t) => t.id === instTab)?.label.toLowerCase() ?? 'items'} installed yet`}
+              sub={`Browse Modrinth to install ${instTab === 'mods' ? 'mods' : 'content'} into this profile, or drop files in via Open Folder.`}
               action={
-                <Button variant="primary" onClick={() => setTab('modrinth')}>
-                  Browse Modrinth
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
+                    setTab('modrinth')
+                  }}
+                >
+                  Browse {INST_TABS.find((t) => t.id === instTab)?.label ?? 'Modrinth'}
                 </Button>
               }
             />
           ) : (
             <div>
-              {installed.map((m) => (
-                <div key={m.slug} className={'installed-row' + (m.disabled ? ' disabled' : '')}>
-                  {m.iconUrl ? (
-                    <img src={m.iconUrl} style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover', opacity: m.disabled ? 0.45 : 1 }} alt="" />
-                  ) : (
+              {instItems.map((m) => renderInstalledRow(m))}
+              {instTab === 'mods' &&
+                manualFiles.map((f) => (
+                  <div key={f} className="installed-row">
                     <div style={{
                       width: 38,
                       height: 38,
@@ -574,117 +850,19 @@ export function ModsPage() {
                       fontSize: 14,
                       fontWeight: 700
                     }}>
-                      {m.title.charAt(0)}
+                      {f.charAt(0)}
                     </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span
-                        className="link"
-                        style={{ textDecoration: m.disabled ? 'none' : undefined, opacity: m.disabled ? 0.55 : 1 }}
-                        onClick={() => {
-                          if (m.source === 'curseforge') {
-                            notify('error', 'CurseForge not supported', 'This mod was installed from CurseForge in an earlier version — it can only be removed, or re-installed from Modrinth.')
-                            return
-                          }
-                          openDetail({ provider: 'modrinth', projectId: m.id, projectType: (m.projectType ?? 'mod') as ContentType })
-                        }}
-                        title={m.source === 'curseforge' ? 'CurseForge is no longer supported' : 'Open details'}
-                      >
-                        {m.title}
-                      </span>
-                      {m.disabled && <Badge variant="warn">Off</Badge>}
-                      {m.source === 'local' && <Badge>Manual</Badge>}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                      v{m.versionNumber} · {m.source === 'curseforge' ? 'CurseForge' : m.source === 'modrinth' ? 'Modrinth' : 'Manual'}
-                    </div>
-                    {versionsOpen === m.slug && (
-                      <div className="version-picker" onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>Change version:</span>
-                          {versionsBusy && <Spinner />}
-                        </div>
-                        {versionsFor[m.slug]?.length ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {versionsFor[m.slug].slice(0, 10).map((v) => (
-                              <button
-                                key={v.id}
-                                className={'version-opt' + (v.id === m.versionId ? ' current' : '')}
-                                onClick={() => changeVersion(m.slug, v.id)}
-                                disabled={v.id === m.versionId}
-                              >
-                                {v.versionNumber}
-                                <span style={{ color: 'var(--text-3)', fontSize: 10.5 }}>
-                                  {v.gameVersions[0] ?? ''}{v.loaders[0] ? ' · ' + v.loaders[0] : ''}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p style={{ fontSize: 11.5, color: 'var(--text-3)' }}>No other compatible versions found.</p>
-                        )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{f.replace(/\.jar$/i, '')}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                        Manual — dropped into the mods folder
                       </div>
-                    )}
-                  </div>
-                  {m.updateAvailable && (
-                    <Button size="sm" variant="primary" onClick={() => updateMod(m.slug)} title={`Update to ${m.updateAvailable.versionNumber}`}>
-                      Update
-                    </Button>
-                  )}
-                  {m.source !== 'local' && (
-                    <Toggle
-                      checked={!m.disabled}
-                      onChange={(v) => void setEnabled(m, v)}
-                      label=""
-                    />
-                  )}
-                  {m.source !== 'local' && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setVersionsOpen((cur) => (cur === m.slug ? null : m.slug))
-                        void loadVersions(m.slug) // cached internally — no duplicate fetches
-                      }}
-                      title="Change version"
-                    >
-                      <IconChevronDown style={{ width: 13, height: 13 }} /> Versions
-                    </Button>
-                  )}
-                  <Button size="sm" variant="danger" onClick={() => removeMod(m.slug)}>
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              {manualFiles.map((f) => (
-                <div key={f} className="installed-row">
-                  <div style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 9,
-                    background: 'var(--bg-4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--text-3)',
-                    fontSize: 14,
-                    fontWeight: 700
-                  }}>
-                    {f.charAt(0)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{f.replace(/\.jar$/i, '')}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                      Manual — dropped into the mods folder
                     </div>
+                    <Button size="sm" variant="danger" onClick={() => removeManual(f)}>
+                      Remove
+                    </Button>
                   </div>
-                  <Button size="sm" variant="danger" onClick={() => removeManual(f)}>
-                    Remove
-                  </Button>
-                </div>
-              ))}
+                ))}
             </div>
           )}
         </Fragment>

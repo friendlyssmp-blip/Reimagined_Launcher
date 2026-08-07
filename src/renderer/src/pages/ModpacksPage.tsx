@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Button, Badge, TextInput, Spinner, EmptyState, ProfileGlyph } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
@@ -36,7 +36,12 @@ export function ModpacksPage() {
       .catch(() => {})
   }, [])
 
+  /* Stale-response guard for the automatic search — only the newest
+   * first-page search may render; append loads keep the current sequence. */
+  const searchSeq = useRef(0)
+
   const doSearch = async (startOffset = 0, append = false) => {
+    const mySeq = append ? searchSeq.current : ++searchSeq.current
     if (append) setLoadingMore(true)
     else setSearching(true)
     try {
@@ -47,6 +52,7 @@ export function ModpacksPage() {
         offset: startOffset,
         limit: PAGE_SIZE
       })
+      if (!append && mySeq !== searchSeq.current) return // stale response
       setTotalHits(r.totalHits)
       setResults((prev) => (append ? [...prev, ...r.items] : r.items))
       setOffset(startOffset + r.items.length)
@@ -62,6 +68,16 @@ export function ModpacksPage() {
     if (tab === 'browse') void doSearch(0, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, mcFilter, loaderFilter])
+
+  /* AUTO-SEARCH: results update as soon as typing pauses (350 ms) — no Enter
+   * needed. Debounced on QUERY only (tab/filter changes search via the effect
+   * above) so switching tabs never triggers a duplicate search. */
+  useEffect(() => {
+    if (tab !== 'browse') return
+    const t = setTimeout(() => void doSearch(0, false), 350)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   const openDetail = async (r: ModrinthSearchResult) => {
     if (expanded?.projectId === r.projectId) {
@@ -146,11 +162,11 @@ export function ModpacksPage() {
               <TextInput
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search Modrinth modpacks…"
+                placeholder="Search Modrinth modpacks… (results update as you type)"
                 onKeyDown={(e) => e.key === 'Enter' && doSearch(0, false)}
                 autoFocus
               />
-              <Button onClick={() => doSearch(0, false)} disabled={searching}>
+              <Button size="sm" variant="ghost" onClick={() => doSearch(0, false)} disabled={searching}>
                 {searching ? <Spinner /> : 'Search'}
               </Button>
             </div>

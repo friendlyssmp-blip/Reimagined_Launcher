@@ -144,6 +144,7 @@ export type AppEventType =
   | 'profile:progress'
   | 'mods:changed'
   | 'update:progress'
+  | 'crash:detected'
   | 'system:info'
 
 export interface AppEvent {

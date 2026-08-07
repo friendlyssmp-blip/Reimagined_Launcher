@@ -35,7 +35,7 @@ const sections = [
 type SectionId = (typeof sections)[number]['id']
 
 export function SettingsPage() {
-  const { settings, updateSettings, notify, info, account, logout, setModals, checkForUpdates } = useApp()
+  const { settings, updateSettings, notify, info, account, logout, setModals, updateInfo } = useApp()
   const [section, setSection] = useState<SectionId>('general')
 
   return (
@@ -200,37 +200,55 @@ export function SettingsPage() {
             <div className="panel">
               <div className="panel-title">Updates</div>
               <p className="panel-sub">
-                The launcher checks the official Reimagined GitHub repository for new releases — no
-                configuration needed. You only ever see Check, Download and Install.
+                The launcher checks the official Reimagined GitHub repository on its own — no button needed.
+                New releases are detected while the launcher is open and, when auto-update is on, the newest
+                version installs automatically on the next start.
               </p>
               <Toggle checked={settings.autoCheckUpdates ?? true} onChange={(v) => updateSettings({ autoCheckUpdates: v })} label="Check for updates automatically" />
-              <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Button
-                  onClick={async () => {
-                    // force=true: always hit GitHub (never a stale cached
-                    // "up to date") and refresh the sidebar update button.
-                    const r = await checkForUpdates(false, true)
-                    if (r && !r.hasUpdate) {
-                      notify('success', 'You are up to date', `v${r.currentVersion} is the latest release`)
-                    }
-                  }}
+              <Toggle checked={settings.autoInstallUpdates ?? true} onChange={(v) => updateSettings({ autoInstallUpdates: v })} label="Auto-install updates on start" />
+              <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: -4, lineHeight: 1.45 }}>
+                When on, every time the launcher opens it downloads and installs the newest release by itself.
+                When off, you just get the Update button in the sidebar.
+              </p>
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Re-check frequency while the launcher is open</div>
+                <select
+                  className="select sort-select"
+                  style={{ maxWidth: 240 }}
+                  value={settings.updateCheckIntervalSec ?? 15}
+                  onChange={(e) => updateSettings({ updateCheckIntervalSec: Number(e.target.value) })}
+                  title="How often the launcher asks GitHub for new releases"
                 >
-                  Check for updates
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={async () => {
-                    try {
-                      const r = await api.update.getInfo()
-                      if (r?.url) window.open(r.url, '_blank')
-                      else notify('info', 'No release page', 'Run a check first, or open the release page manually.')
-                    } catch {
-                      notify('info', 'No release page', 'Open the release page manually to see releases.')
-                    }
-                  }}
-                >
-                  Open release page
-                </Button>
+                  {[
+                    [15, 'Every 15 seconds'],
+                    [30, 'Every 30 seconds'],
+                    [60, 'Every minute'],
+                    [120, 'Every 2 minutes'],
+                    [300, 'Every 5 minutes'],
+                    [600, 'Every 10 minutes'],
+                    [900, 'Every 15 minutes']
+                  ].map(([sec, label]) => (
+                    <option key={sec} value={sec}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="divider" style={{ margin: '16px 0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                  Installed: <b>v{info?.version ?? '?'}</b>
+                  {updateInfo?.hasUpdate ? (
+                    <>
+                      {' '}→ latest: <b style={{ color: 'var(--accent-3)' }}>v{updateInfo.latestVersion}</b>
+                    </>
+                  ) : (
+                    <span className="muted"> — you are up to date</span>
+                  )}
+                </span>
+                {updateInfo?.hasUpdate && (
+                  <Button variant="primary" size="sm" onClick={() => setModals({ update: true })}>
+                    Update now
+                  </Button>
+                )}
               </div>
             </div>
           )}

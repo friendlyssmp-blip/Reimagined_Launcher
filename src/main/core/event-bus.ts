@@ -55,6 +55,7 @@ class EventBus {
       'profile:progress': true,
       'mods:changed': true,
       'update:progress': true,
+      'crash:detected': true,
       'system:info': true
     }
   }

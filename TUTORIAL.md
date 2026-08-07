@@ -1,7 +1,7 @@
 # Reimagined Launcher - Guia de Descarga e Instalacion Segura
 
 > Idioma: Espanol - Duracion: ~3 minutos
-> Version del instalador: v1.0.6
+> Version del instalador: v1.0.7
 
 ---
 
@@ -16,8 +16,8 @@ https://github.com/friendlyssmp-blip/Reimagined_Launcher
 El instalador real esta en la carpeta **`dist/`** del repo:
 
 - **Link directo:**
-  `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.6.exe`
-- **O en GitHub:** abre el repo - carpeta `dist` - `Reimagined-Setup-1.0.6.exe` - boton Download.
+  `https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.7.exe`
+- **O en GitHub:** abre el repo - carpeta `dist` - `Reimagined-Setup-1.0.7.exe` - boton Download.
 
 > Regla de oro: si alguien te pasa el .exe por Discord/WhatsApp/enlace raro, **verifica el checksum** (paso 2) antes de ejecutarlo. Solo confia en el hash publicado en el repositorio.
 
@@ -30,13 +30,13 @@ Esto garantiza que el archivo es **exactamente** el publicado y que nadie lo ha 
 **En PowerShell** (Win + R - escribe `powershell` - Enter):
 
 ```powershell
-Get-FileHash "C:\Users\TU_USUARIO\Downloads\Reimagined-Setup-1.0.6.exe" -Algorithm SHA256
+Get-FileHash "C:\Users\TU_USUARIO\Downloads\Reimagined-Setup-1.0.7.exe" -Algorithm SHA256
 ```
 
 Debe devolver **exactamente**:
 
 ```
-6a3675255dd1274419147009dba9c17f0a528f4167fcafbb37daea717b1ac27d
+3f9801306db307c81626075658a507d05ec0251d27e4bdaa60f9262f95af72db
 ```
 
 - Si **coincide** - el archivo es autentico, puedes instalarlo tranquilo.
@@ -64,7 +64,7 @@ Al ejecutar el instalador, Windows mostrara:
 
 ## 4. Instalar
 
-1. Doble clic en `Reimagined-Setup-1.0.6.exe`
+1. Doble clic en `Reimagined-Setup-1.0.7.exe`
 2. El instalador primero **busca actualizaciones** en el repositorio oficial ("Searching for updates") y, si existe una versión más reciente, la **descarga automáticamente** ("Downloading") — así siempre instalas la última versión.
 3. Elige la carpeta de instalación (deja la que propone)
 4. **Instalar** - espera a que termine (~1 minuto)

@@ -95,7 +95,7 @@ class Launcher {
       if (profile.loader.type === 'fabric') {
         // Safety net: make sure the Fabric API mod is present so Fabric mods
         // work on a fresh instance (first-launch experience must just work).
-        if (!profile.mods.some((m) => m.id === 'fabric-api')) {
+        if (!profile.mods.some((m) => m.id === 'fabric-api' || m.slug === 'fabric-api')) {
           const { ensureFabricApi } = await import('../mods/fabric-api')
           await ensureFabricApi(profile)
         }
@@ -360,6 +360,22 @@ class Launcher {
 
     eventBus.emit('launch:status', { profileId: profile?.id ?? '', running: false, code, signal })
     eventBus.emit('launch:exit', { code, signal, duration, profileId: profile?.id })
+
+    // Crash Assistant: a non-zero exit may mean the game crashed — if a fresh
+    // crash report exists, surface it with analysis and suggestions.
+    if (profile && code !== 0) {
+      try {
+        const { detectCrashReport } = await import('../game/crash-assistant')
+        const report = await detectCrashReport(profile)
+        if (report) {
+          logger.warn(`Crash detected for "${profile.name}": ${report.cause}`)
+          eventBus.emit('crash:detected', report)
+        }
+      } catch {
+        /* Crash Assistant is strictly best-effort — never breaks the exit flow */
+      }
+    }
+
     this.profile = null
     this.startedAt = 0
   }

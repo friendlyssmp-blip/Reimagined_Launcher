@@ -26,6 +26,27 @@ interface FabricApiVersion {
   files: { url: string; filename: string; size?: number }[]
 }
 
+/** The Modrinth project record — gives us the REAL project id + logo. */
+interface FabricApiProject {
+  id: string
+  slug: string
+  icon_url?: string | null
+  title: string
+}
+
+/**
+ * Resolve the Fabric API project's real Modrinth identity (project id +
+ * icon). The stored entry uses the real Modrinth project id so search results
+ * match it exactly ("Installed") and the logo shows up in the UI.
+ */
+async function fabricApiProject(): Promise<FabricApiProject | null> {
+  try {
+    return await getJson<FabricApiProject>(`${MODRINTH}/project/${FABRIC_API}`, { timeoutMs: 15_000 })
+  } catch {
+    return null
+  }
+}
+
 /** Latest Fabric API version matching a Minecraft version (newest first). */
 async function latestForMc(mcVersion: string): Promise<FabricApiVersion | null> {
   const params = new URLSearchParams({
@@ -59,7 +80,7 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
     return
   }
 
-  const existing = profile.mods.find((m) => m.id === FABRIC_API)
+  const existing = profile.mods.find((m) => m.id === FABRIC_API || m.slug === FABRIC_API)
   if (existing && existing.versionId === latest.id) {
     // Already up to date — nothing to do.
     return
@@ -68,6 +89,12 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
   const file = latest.files[0]
   const modsDir = path.join(paths.games, profile.gameDir, 'mods')
   const dest = path.join(modsDir, file.filename)
+
+  // Real Modrinth identity — the entry is keyed by the REAL project id so
+  // Modrinth search shows it as installed (no double installs) and the
+  // official Fabric API logo displays everywhere.
+  const project = await fabricApiProject()
+  const realId = project?.id || FABRIC_API
 
   try {
     const { mkdirp } = await import('../utils/fs')
@@ -86,14 +113,14 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
     })
 
     const mod: ProfileMod = {
-      id: FABRIC_API,
+      id: realId,
       slug: FABRIC_API,
-      title: 'Fabric API',
+      title: project?.title || 'Fabric API',
       filename: file.filename,
       versionId: latest.id,
       versionNumber: latest.version_number,
       downloads: 0,
-      iconUrl: undefined,
+      iconUrl: project?.icon_url ?? undefined,
       source: 'modrinth',
       projectType: 'mod',
       installedAt: new Date().toISOString(),
@@ -110,7 +137,8 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
   }
 }
 
-/** True when the profile is Fabric but has no tracked Fabric API yet. */
+/** True when the profile is Fabric but has no tracked Fabric API yet.
+ *  Matches by slug so older profiles (keyed by 'fabric-api') count too. */
 export function needsFabricApi(profile: Profile): boolean {
-  return profile.loader.type === 'fabric' && !profile.mods.some((m) => m.id === FABRIC_API)
+  return profile.loader.type === 'fabric' && !profile.mods.some((m) => m.id === FABRIC_API || m.slug === FABRIC_API)
 }

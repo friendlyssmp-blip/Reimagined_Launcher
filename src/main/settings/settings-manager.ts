@@ -36,7 +36,12 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // Menu music is OFF by default — opt-in from Settings → Audio.
   audioMusic: false,
   audioPack: 'aurora',
-  autoCheckUpdates: true
+  autoCheckUpdates: true,
+  // Auto-update is ON by default: the newest release installs on the next
+  // launcher start, so users are always current without clicking anything.
+  autoInstallUpdates: true,
+  // Re-check GitHub every 15 s while the launcher is open (15 s – 15 min).
+  updateCheckIntervalSec: 15
 }
 
 class SettingsManager {

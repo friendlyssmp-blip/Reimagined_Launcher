@@ -11,6 +11,7 @@ import { DuplicateModal } from './components/DuplicateModal'
 import { ShareModal } from './components/ShareModal'
 import { ImportModal } from './components/ImportModal'
 import { UpdateModal } from './components/UpdateModal'
+import { CrashModal } from './components/CrashModal'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProgressOverlay } from './components/ProgressOverlay'
@@ -167,7 +168,8 @@ function Shell() {
       {modals.duplicate && <DuplicateModal profile={modals.duplicate.profile} />}
       {modals.share && <ShareModal profile={modals.share.profile} />}
       {modals.importShare && <ImportModal />}
-      {modals.update && <UpdateModal />}
+      {modals.update && <UpdateModal auto={modals.update === 'auto'} />}
+      {modals.crash && <CrashModal />}
       {modals.confirm && <ConfirmDialog {...modals.confirm} />}
       <Toasts />
       {splash && (

@@ -95,7 +95,11 @@ class ModManager {
     const mc = profile.minecraftVersion
     const loader: LoaderType = profile.loader.type
 
-    if (profile.mods.some((m) => m.id === projectId)) {
+    // Already-installed check matches by real project id OR slug — so the
+    // Fabric API (stored under 'fabric-api' on older profiles) can never be
+    // installed twice from a Modrinth search result.
+    const project = await modrinth.getProject(projectId)
+    if (profile.mods.some((m) => m.id === projectId || m.slug === project.slug)) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 
@@ -126,7 +130,6 @@ class ModManager {
       label: file.filename
     })
 
-    const project = await modrinth.getProject(projectId)
     const mod: ProfileMod = {
       id: projectId,
       slug: project.slug,
@@ -164,7 +167,19 @@ class ModManager {
     const loader: LoaderType = profile.loader.type
     const isMod = projectType === 'mod'
 
-    if (profile.mods.some((m) => m.id === projectId)) {
+    // Already-installed guard — matches by real project id AND by resolved
+    // slug, so the Fabric API (keyed by 'fabric-api' on older profiles) can
+    // never be installed twice from a detail page either.
+    let projectSlug: string | null = null
+    if (provider === 'modrinth') {
+      try {
+        const p = await modrinth.getProject(projectId)
+        projectSlug = p.slug
+      } catch {
+        /* best-effort — the id check below still applies */
+      }
+    }
+    if (profile.mods.some((m) => m.id === projectId || (projectSlug && m.slug === projectSlug))) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 

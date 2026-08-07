@@ -157,10 +157,22 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   on(IPC.openInstanceFolder, async (payload: { profileId: string; sub?: string }) => {
     const { instanceSubPath, instanceRoot } = await import('./game/content')
-    const target = payload?.sub
+    let target = payload?.sub
       ? await instanceSubPath(payload.profileId, payload.sub)
       : await instanceRoot(payload.profileId)
-    if (!target) throw new Error('The instance folder does not exist yet. Launch the profile once to create it.')
+    if (!target) {
+      const root = await instanceRoot(payload.profileId)
+      if (!root) throw new Error('The instance folder does not exist yet. Launch the profile once to create it.')
+      // Sub-folders (mods/, saves/, …) are created on demand so "Open Folder"
+      // always works, even on a brand-new profile that has never launched.
+      if (payload?.sub) {
+        const { mkdirp } = await import('./utils/fs')
+        mkdirp(path.join(root, payload.sub))
+        target = path.join(root, payload.sub)
+      } else {
+        target = root
+      }
+    }
     await shell.openPath(target)
   })
 
