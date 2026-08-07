@@ -1,5 +1,5 @@
 {
-  "version": "1.0.7",
-  "notes": "Auto-update v1.0.7: auto-install is now ON by default (the newest release installs on the next launch), the launcher re-checks GitHub every 15 s while open (configurable 15 s – 15 min in Settings → Updates), the Check-for-updates button is gone (no longer needed), the player card above Logs in the sidebar is removed, Mods is only reachable from an instance, search is automatic as you type, Fabric API installs from Modrinth with its real logo and can't be double-installed, the Installed panel is organized into Mods / Resource Packs / Data Packs / Shaders / Worlds sub-tabs, mod updates show as a one-click arrow, and a new Crash Assistant analyzes game crashes with suggestions.",
-  "installer": "dist/Reimagined-Setup-1.0.7.exe"
+  "version": "1.0.8",
+  "notes": "Settings → Updates cleanup: the 'Check for updates automatically' toggle is gone — update checking is now always on with no way to disable it, and the 'Auto-install updates on start' toggle no longer overlaps its description text.",
+  "installer": "dist/Reimagined-Setup-1.0.8.exe"
 }

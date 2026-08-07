@@ -370,13 +370,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [ready, notify, refreshAccount, refreshProfiles, setModals])
 
   // Silent startup update check against the official repository (forced, so
-  // a fresh launch always sees the truth — no stale cache result). When
-  // "auto-install updates" is ON (the default), the newest release downloads
-  // and installs automatically on this start; otherwise the sidebar Update
-  // button appears so the user can decide.
+  // a fresh launch always sees the truth — no stale cache result). Checks are
+  // ALWAYS on (no user toggle — removed in Settings). When "auto-install
+  // updates" is ON (the default), the newest release downloads and installs
+  // automatically on this start; otherwise the sidebar Update button appears
+  // so the user can decide.
   useEffect(() => {
     if (!ready) return
-    if (!settings?.autoCheckUpdates) return
     const t = setTimeout(() => {
       void checkForUpdates(true, true).then((info) => {
         if (info?.hasUpdate && settings?.autoInstallUpdates) {
@@ -386,19 +386,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, 4000)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, settings?.autoCheckUpdates, settings?.autoInstallUpdates])
+  }, [ready, settings?.autoInstallUpdates])
 
   // Re-check while the launcher stays open (configurable, default 15 s) so a
   // running launcher notices a new release within seconds — the sidebar
-  // Update button appears the moment one is published.
+  // Update button appears the moment one is published. Always on.
   useEffect(() => {
     if (!ready) return
-    if (!settings?.autoCheckUpdates) return
     const sec = Math.max(15, Math.min(900, settings?.updateCheckIntervalSec ?? 15))
     const iv = setInterval(() => void checkForUpdates(true, true), sec * 1000)
     return () => clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, settings?.autoCheckUpdates, settings?.updateCheckIntervalSec])
+  }, [ready, settings?.updateCheckIntervalSec])
 
   // Keep active profile valid.
   useEffect(() => {

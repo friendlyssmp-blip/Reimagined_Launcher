@@ -200,16 +200,21 @@ export function SettingsPage() {
             <div className="panel">
               <div className="panel-title">Updates</div>
               <p className="panel-sub">
-                The launcher checks the official Reimagined GitHub repository on its own — no button needed.
-                New releases are detected while the launcher is open and, when auto-update is on, the newest
-                version installs automatically on the next start.
+                The launcher <b>always</b> checks the official Reimagined GitHub repository on its own — no
+                toggle needed, updates are detected while the launcher is open and the newest version installs
+                automatically on the next start.
               </p>
-              <Toggle checked={settings.autoCheckUpdates ?? true} onChange={(v) => updateSettings({ autoCheckUpdates: v })} label="Check for updates automatically" />
-              <Toggle checked={settings.autoInstallUpdates ?? true} onChange={(v) => updateSettings({ autoInstallUpdates: v })} label="Auto-install updates on start" />
-              <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: -4, lineHeight: 1.45 }}>
-                When on, every time the launcher opens it downloads and installs the newest release by itself.
-                When off, you just get the Update button in the sidebar.
-              </p>
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Toggle
+                  checked={settings.autoInstallUpdates ?? true}
+                  onChange={(v) => updateSettings({ autoInstallUpdates: v })}
+                  label="Auto-install updates on start"
+                />
+                <p style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5, margin: 0, paddingLeft: 50, maxWidth: 520 }}>
+                  When on, every time the launcher opens it downloads and installs the newest release by itself.
+                  When off, you just get the Update button in the sidebar.
+                </p>
+              </div>
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Re-check frequency while the launcher is open</div>
                 <select
