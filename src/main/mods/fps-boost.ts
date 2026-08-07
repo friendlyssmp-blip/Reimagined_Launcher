@@ -15,8 +15,8 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-const FPS_BOOST_VERSION = '1.0.3'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.3.jar'
+const FPS_BOOST_VERSION = '1.0.4'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.4.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

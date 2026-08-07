@@ -148,3 +148,32 @@
   image glyph can never appear.
 - Gallery screenshots use real lazy loading (IntersectionObserver): off-screen
   images are not fetched until they scroll near the viewport.
+
+## v1.0.18 — FPS Boost 1.0.4: Flat Sky + shader compatibility, client-only for multiplayer/LAN
+
+### Flat Sky no longer splits the sky with shaders
+- Root cause: the Flat Sky optimization ("Reduce Visual Effects") cancelled
+  vanilla sky sub-passes (sun disc, stars/sun/moon) from inside Iris's
+  rendering pipeline. With an active shader pack that tore the sky apart —
+  flat blue top over the shader's own horizon.
+- Fix: new runtime `ShaderCompat` detector (bundled mod v1.0.4) resolves Iris
+  reflectively across every known API layout (`IrisApi` and both IrisConfig
+  variants) and checks whether a shader pack is ACTIVE at render time (1 s
+  TTL). When a pack is on, Flat Sky and the cloud-simplification pass stand
+  down so the shader owns the sky completely — every other FPS optimization
+  (particles, entity animation, smart render distance, chunk threading,
+  frame cap, overlay) keeps running.
+- Shader changes apply LIVE: enabling/disabling/switching a pack or reloading
+  resources takes effect within ~1 s, no Minecraft restart.
+- No shader pack -> Flat Sky works exactly as before.
+- The in-game toggle is now labelled "Flat Sky (shader-safe)" (EN) /
+  "Cielo plano (compatible shaders)" (ES).
+
+### Verified 100% client-side (multiplayer + LAN)
+- The bundled mod declares `"environment": "client"` in fabric.mod.json, so
+  Fabric never loads it on a dedicated server and there is zero server-side
+  code (no ServerModInitializer, no MinecraftServer refs). Every optimization
+  targets client-only render/tick classes.
+- Result: install it on your client, join any vanilla/Fabric/LAN/multiplayer
+  server — the FPS Boost stays active locally; the server, host and other
+  players need nothing. No gameplay-changing hooks, so no server-side risk.

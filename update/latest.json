@@ -1,5 +1,5 @@
 {
-  "version": "1.0.17",
-  "notes": "v1.0.17 — Reliable project images. Root cause found: the launcher's security policy blocked in-page fetches to Modrinth's CDN, so covers/icons of mods, resource packs, shaders and datapacks sometimes failed to load with no fallback. Fix: a new main-process image proxy downloads every image with browser headers + retries + a bounded cache, and ModIcon/ProjectImage show a clean placeholder while loading or if an image genuinely can't load — a broken image can never appear again. Gallery screenshots also load lazily (only when you scroll to them).",
-  "installer": "dist/Reimagined-Setup-1.0.17.exe"
+  "version": "1.0.18",
+  "notes": "v1.0.18 — FPS Boost 1.0.4. FIXED: Flat Sky no longer splits the sky when shaders are on (before, the upper sky turned flat blue over the shader's own horizon). The FPS Boost now detects at render time when an Iris shader pack is active and lets the shader own the sky completely — Flat Sky and cloud simplification stand down automatically, everything else (particles, entity animation, smart render distance, chunk threading, frame cap) keeps working. Shader changes apply live, no restart. Without shaders, Flat Sky works exactly as before. Also verified: the FPS Boost is 100% client-side — join any vanilla/Fabric/LAN/multiplayer server and it stays active on your client; the server, host and other players need nothing.",
+  "installer": "dist/Reimagined-Setup-1.0.18.exe"
 }
