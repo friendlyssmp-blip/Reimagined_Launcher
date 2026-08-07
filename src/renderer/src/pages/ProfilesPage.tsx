@@ -13,7 +13,7 @@ interface CtxMenu {
 }
 
 export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
-  const { profiles, setModals, launchProfile, stopLaunch, running, notify, setActiveProfile } = useApp()
+  const { profiles, setModals, launchProfile, stopLaunch, runningProfiles, notify, setActiveProfile } = useApp()
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
 
   // Close the context menu on outside click / Escape.
@@ -118,7 +118,11 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
         />
       ) : (
         <div className="profile-grid">
-          {profiles.map((p) => (
+          {profiles.map((p) => {
+            // Multi-instance (v1.0.15): each card tracks ITS OWN profile's
+            // running state — Instance A running never makes B show Stop.
+            const running = !!runningProfiles[p.id]
+            return (
             <div
               key={p.id}
               className="card profile-card card-hover"
@@ -158,7 +162,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
                   variant={running ? 'danger' : 'play'}
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (running) void stopLaunch()
+                    if (running) void stopLaunch(p.id)
                     else void launchProfile(p.id)
                   }}
                 >
@@ -188,7 +192,8 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
                 </Button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

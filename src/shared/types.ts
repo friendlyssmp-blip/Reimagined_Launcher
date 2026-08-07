@@ -455,6 +455,12 @@ export interface PerfSessionMetrics {
   heapMB: number
   frames: number
   durationSec: number
+  /** v1.0.15 in-game profiler (PROF lines) — real frame-time statistics. */
+  p1Fps?: number
+  p01Fps?: number
+  maxFrameMs?: number
+  avgTickMs?: number
+  gcMs?: number
 }
 
 /** A user-facing, actionable suggestion from the RPE. */

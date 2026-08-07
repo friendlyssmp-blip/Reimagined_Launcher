@@ -18,6 +18,10 @@ import type { Profile, ProfileMod } from '@shared/types'
 
 const MODRINTH = 'https://api.modrinth.com/v2'
 const FABRIC_API = 'fabric-api'
+/** Legacy Fabric API (Modrinth project) — the modern Fabric API only exists
+ *  for Minecraft 1.14+. Older versions (1.8–1.13) use the Legacy Fabric
+ *  ecosystem, a separate project with its own version line. */
+const LEGACY_FABRIC_API = 'legacy-fabric-api'
 
 interface FabricApiVersion {
   id: string
@@ -35,26 +39,42 @@ interface FabricApiProject {
 }
 
 /**
+ * v1.0.15: old Minecraft versions must NEVER get the newest standard Fabric
+ * API — that would be incompatible by definition. 1.14+ uses the standard
+ * `fabric-api` project; anything older (1.8.x–1.13.x, e.g. 1.13.2) resolves
+ * against the Legacy Fabric ecosystem's `legacy-fabric-api` project instead.
+ * The stored entry keeps the display slug `fabric-api` so existing detection
+ * (and the auto-install safety net) keeps matching.
+ */
+export function fabricProjectFor(mcVersion: string): { project: string; slug: string; label: string } {
+  const isLegacy = /^1\.(\d+)/.test(mcVersion) && Number(mcVersion.match(/^1\.(\d+)/)![1]) < 14
+  if (isLegacy) {
+    return { project: LEGACY_FABRIC_API, slug: FABRIC_API, label: 'Legacy Fabric API' }
+  }
+  return { project: FABRIC_API, slug: FABRIC_API, label: 'Fabric API' }
+}
+
+/**
  * Resolve the Fabric API project's real Modrinth identity (project id +
  * icon). The stored entry uses the real Modrinth project id so search results
  * match it exactly ("Installed") and the logo shows up in the UI.
  */
-async function fabricApiProject(): Promise<FabricApiProject | null> {
+async function fabricApiProject(project: string): Promise<FabricApiProject | null> {
   try {
-    return await getJson<FabricApiProject>(`${MODRINTH}/project/${FABRIC_API}`, { timeoutMs: 15_000 })
+    return await getJson<FabricApiProject>(`${MODRINTH}/project/${project}`, { timeoutMs: 15_000 })
   } catch {
     return null
   }
 }
 
 /** Latest Fabric API version matching a Minecraft version (newest first). */
-async function latestForMc(mcVersion: string): Promise<FabricApiVersion | null> {
+async function latestForMc(project: string, mcVersion: string): Promise<FabricApiVersion | null> {
   const params = new URLSearchParams({
     game_versions: JSON.stringify([mcVersion]),
     loaders: JSON.stringify(['fabric'])
   })
   const versions = await getJson<FabricApiVersion[]>(
-    `${MODRINTH}/project/${FABRIC_API}/version?${params.toString()}`,
+    `${MODRINTH}/project/${project}/version?${params.toString()}`,
     { timeoutMs: 15_000 }
   )
   return versions[0] ?? null
@@ -68,15 +88,16 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
   if (profile.loader.type !== 'fabric') return
 
   const mc = profile.minecraftVersion
+  const target = fabricProjectFor(mc)
   let latest: FabricApiVersion | null = null
   try {
-    latest = await latestForMc(mc)
+    latest = await latestForMc(target.project, mc)
   } catch (err) {
-    logger.warn(`Fabric API lookup failed for ${mc}: ${(err as Error).message}`)
+    logger.warn(`${target.label} lookup failed for ${mc}: ${(err as Error).message}`)
     return
   }
   if (!latest || latest.files.length === 0) {
-    logger.warn(`No Fabric API version found for Minecraft ${mc}`)
+    logger.warn(`No ${target.label} version found for Minecraft ${mc}`)
     return
   }
 
@@ -93,29 +114,30 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
   // Real Modrinth identity — the entry is keyed by the REAL project id so
   // Modrinth search shows it as installed (no double installs) and the
   // official Fabric API logo displays everywhere.
-  const project = await fabricApiProject()
-  const realId = project?.id || FABRIC_API
+  const project = await fabricApiProject(target.project)
+  const realId = project?.id || target.project
 
   try {
     const { mkdirp } = await import('../utils/fs')
     mkdirp(modsDir)
 
-    // Replace any older Fabric API jar.
+    // Replace any older Fabric API jar (including a previous standard API
+    // when switching to the legacy project for an old MC version).
     if (existing && existing.filename && existing.filename !== file.filename) {
       await remove(path.join(modsDir, existing.filename)).catch(() => {})
     }
     if (exists(dest)) await remove(dest)
 
-    logger.info(`Installing Fabric API ${latest.version_number} for Minecraft ${mc}`)
+    logger.info(`Installing ${target.label} ${latest.version_number} for Minecraft ${mc}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: `Fabric API (${latest.version_number})`
+      label: `${target.label} (${latest.version_number})`
     })
 
     const mod: ProfileMod = {
       id: realId,
       slug: FABRIC_API,
-      title: project?.title || 'Fabric API',
+      title: project?.title || target.label,
       filename: file.filename,
       versionId: latest.id,
       versionNumber: latest.version_number,
@@ -131,9 +153,9 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
       ? profile.mods.map((m) => (m.id === FABRIC_API ? mod : m))
       : [...profile.mods, mod]
     await profileManager.update(profile.id, { mods })
-    logger.info(`Fabric API ${latest.version_number} ready for "${profile.name}" (${mc})`)
+    logger.info(`${target.label} ${latest.version_number} ready for "${profile.name}" (${mc})`)
   } catch (err) {
-    logger.warn(`Fabric API install failed for "${profile.name}": ${(err as Error).message}`)
+    logger.warn(`${target.label} install failed for "${profile.name}": ${(err as Error).message}`)
   }
 }
 

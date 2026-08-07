@@ -131,7 +131,7 @@ export function consoleWindowRef(): BrowserWindow | null {
 
 /** Initial state for a freshly opened console window. */
 export function getConsoleState() {
-  const times = launcher.getLaunchTimes()
+  const times = launcher.getLaunchTimes(launcher.handle.profileId)
   if (times.startedAt > 0) launchStartedAt = times.startedAt
   if (times.windowOpenedAt > 0) windowOpenedAt = times.windowOpenedAt
   return {

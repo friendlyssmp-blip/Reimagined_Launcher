@@ -271,11 +271,24 @@ export async function recordSessionFromLog(profileId: string, profileName: strin
   try {
     if (!fs.existsSync(logPath)) return
     const text = fs.readFileSync(logPath, 'utf-8')
+    // Backward-compatible: the 30s PERF line (avg/low/heap/frames) still
+    // parses; the v1.0.15 10s PROF line adds the real frame-time statistics
+    // (1%/0.1% lows, max frame ms, tick ms, GC ms) that identify stutter
+    // instead of guessing at it.
     const re = /PERF avg=([\d.]+) low=([\d.]+) heapMB=([\d.]+) frames=(\d+)/g
-    const windows: { avg: number; low: number; heap: number; frames: number }[] = []
+    const profRe = /PROF avg=([\d.]+) low=([\d.]+) p1=([\d.]+) p01=([\d.]+) maxMs=([\d.]+) tickMs=([\d.]+) gcMs=(\d+) frames=(\d+) heapMB=([\d.]+)/g
+    const windows: { avg: number; low: number; heap: number; frames: number; p1?: number; p01?: number; maxMs?: number; tickMs?: number; gcMs?: number }[] = []
     let m: RegExpExecArray | null
-    while ((m = re.exec(text)) !== null) {
-      windows.push({ avg: Number(m[1]), low: Number(m[2]), heap: Number(m[3]), frames: Number(m[4]) })
+    while ((m = profRe.exec(text)) !== null) {
+      windows.push({
+        avg: Number(m[1]), low: Number(m[2]), heap: Number(m[10]), frames: Number(m[8]),
+        p1: Number(m[3]), p01: Number(m[4]), maxMs: Number(m[5]), tickMs: Number(m[6]), gcMs: Number(m[7])
+      })
+    }
+    if (windows.length === 0) {
+      while ((m = re.exec(text)) !== null) {
+        windows.push({ avg: Number(m[1]), low: Number(m[2]), heap: Number(m[3]), frames: Number(m[4]) })
+      }
     }
     if (windows.length === 0) return
     // Skip the first window (boot + world load are not representative).
@@ -284,7 +297,7 @@ export async function recordSessionFromLog(profileId: string, profileName: strin
     const lowFps = Math.min(...clean.map((w) => w.low))
     const heapMB = clean.reduce((s, w) => s + w.heap, 0) / clean.length
     const frames = clean.reduce((s, w) => s + w.frames, 0)
-
+    const rich = clean.filter((w) => w.p1 !== undefined)
     const session: PerfSessionMetrics = {
       at: new Date().toISOString(),
       profileId,
@@ -293,7 +306,17 @@ export async function recordSessionFromLog(profileId: string, profileName: strin
       lowFps: Math.round(lowFps * 10) / 10,
       heapMB: Math.round(heapMB),
       frames,
-      durationSec: 0
+      durationSec: 0,
+      // v1.0.15 profiler fields (when PROF lines were present).
+      ...(rich.length > 0
+        ? {
+            p1Fps: Math.round((rich.reduce((s, w) => s + (w.p1 ?? 0), 0) / rich.length) * 10) / 10,
+            p01Fps: Math.round((rich.reduce((s, w) => s + (w.p01 ?? 0), 0) / rich.length) * 10) / 10,
+            maxFrameMs: Math.round(Math.max(...rich.map((w) => w.maxMs ?? 0)) * 10) / 10,
+            avgTickMs: Math.round((rich.reduce((s, w) => s + (w.tickMs ?? 0), 0) / rich.length) * 10) / 10,
+            gcMs: Math.round(rich.reduce((s, w) => s + (w.gcMs ?? 0), 0))
+          }
+        : {})
     }
 
     const sessions = await loadSessions()

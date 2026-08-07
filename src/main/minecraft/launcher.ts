@@ -1,12 +1,13 @@
 /**
- * The launch pipeline.
+ * The launch pipeline — now multi-instance capable (v1.0.15).
+ *
+ * Every profile gets its OWN independent process session (child PID, logs,
+ * window watch, crash detection, Stop). Multiple Minecraft instances can run
+ * simultaneously: Instance A → Running, Instance B → Running. The Stop button
+ * only stops the session bound to that specific profile.
  *
  * resolve → prepare (client/libraries/assets/log4j) → build JVM+game args →
  * spawn java → stream output → track session → record playtime.
- *
- * Fabric and Forge versions are prepared transparently by the loaders and
- * produce installer-grade version JSONs that flow through the same path as
- * vanilla.
  */
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
@@ -52,40 +53,82 @@ type VersionJson = Record<string, any> & {
   assetIndex?: { id: string; url?: string; sha1?: string; size?: number; totalSize?: number; objects?: Record<string, unknown> }
 }
 
-class Launcher {
-  private child: ChildProcess | null = null
-  private profile: Profile | null = null
-  private startedAt = 0
-  private sessionLog: fs.WriteStream | null = null
-  private sessionLogPath: string | null = null
+/** One running (or recently exited) game process, fully independent per profile. */
+interface GameSession {
+  profile: Profile
+  child: ChildProcess
+  startedAt: number
+  sessionLog: fs.WriteStream | null
+  sessionLogPath: string | null
   /** Poller that detects when the game's actual window appears (real signal). */
-  private windowPoller: ReturnType<typeof setInterval> | null = null
+  windowPoller: ReturnType<typeof setInterval> | null
   /** Epoch ms when the game window was confirmed open (0 = not yet). */
-  private windowOpenedAt = 0
+  windowOpenedAt: number
+}
 
-  isRunning(): boolean {
-    return !!this.child && this.child.exitCode === null
+class Launcher {
+  /** profileId → session. This is the single source of truth for launch state. */
+  private sessions = new Map<string, GameSession>()
+
+  /**
+   * True when a game is running. With no argument: ANY profile running.
+   * With a profileId: only that profile's own session counts — so a running
+   * Instance A never turns Instance B's Play button into Stop.
+   */
+  isRunning(profileId?: string): boolean {
+    if (profileId) {
+      const s = this.sessions.get(profileId)
+      return !!s && s.child.exitCode === null
+    }
+    for (const s of this.sessions.values()) {
+      if (s.child.exitCode === null) return true
+    }
+    return false
   }
 
+  /** Handles for every session (running or recently finished). */
+  get handles(): LaunchHandle[] {
+    const out: LaunchHandle[] = []
+    for (const [profileId, s] of this.sessions) {
+      out.push({
+        profileId,
+        running: s.child.exitCode === null,
+        pid: s.child.pid,
+        startedAt: s.startedAt ? new Date(s.startedAt).toISOString() : undefined
+      })
+    }
+    return out
+  }
+
+  /** The most recently started session — kept for legacy single-handle callers. */
   get handle(): LaunchHandle {
+    let last: GameSession | null = null
+    for (const s of this.sessions.values()) {
+      if (!last || s.startedAt > last.startedAt) last = s
+    }
+    if (!last) return { profileId: '', running: false }
     return {
-      profileId: this.profile?.id ?? '',
-      running: this.isRunning(),
-      pid: this.child?.pid,
-      startedAt: this.startedAt ? new Date(this.startedAt).toISOString() : undefined
+      profileId: last.profile.id,
+      running: last.child.exitCode === null,
+      pid: last.child.pid,
+      startedAt: last.startedAt ? new Date(last.startedAt).toISOString() : undefined
     }
   }
 
-  /** Launch-timing info for the game console's chronometer. */
-  getLaunchTimes(): { startedAt: number; windowOpenedAt: number } {
-    return { startedAt: this.startedAt, windowOpenedAt: this.windowOpenedAt }
+  /** Launch-timing info for the game console's chronometer (per profile). */
+  getLaunchTimes(profileId: string): { startedAt: number; windowOpenedAt: number } {
+    const s = this.sessions.get(profileId)
+    if (!s) return { startedAt: 0, windowOpenedAt: 0 }
+    return { startedAt: s.startedAt, windowOpenedAt: s.windowOpenedAt }
   }
 
   async launch(profileId: string): Promise<LaunchHandle> {
     const profile = await profileManager.get(profileId)
     if (!profile) throw Errors.launchFailed('The selected profile no longer exists.')
-    if (this.isRunning()) {
-      throw new LauncherError('ALREADY_RUNNING', 'A game is already running.', 'Stop it first from the console.')
+    // Only THIS profile is blocked when already running — other instances are
+    // free to launch in parallel.
+    if (this.isRunning(profileId)) {
+      throw new LauncherError('ALREADY_RUNNING', `\"${profile.name}\" is already running.`, 'Stop it first, or launch another profile — multiple instances are supported.')
     }
 
     const account = accountStore.get()
@@ -94,10 +137,16 @@ class Launcher {
     const acc = refreshed ?? account
     if (!acc.profile) throw Errors.launchFailed('Your Microsoft account has no Minecraft profile.')
 
-    this.profile = profile
-    this.startedAt = Date.now()
-    this.windowOpenedAt = 0
-    this.stopWindowWatch()
+    const session: GameSession = {
+      profile,
+      child: null as unknown as ChildProcess,
+      startedAt: Date.now(),
+      sessionLog: null,
+      sessionLogPath: null,
+      windowPoller: null,
+      windowOpenedAt: 0
+    }
+    this.sessions.set(profileId, session)
 
     try {
       const mc = profile.minecraftVersion
@@ -111,7 +160,8 @@ class Launcher {
           const { ensureFabricApi } = await import('../mods/fabric-api')
           await ensureFabricApi(profile)
         }
-        // Seed the bundled Reimagined FPS Boost mod the same way.
+        // Seed the bundled Reimagined FPS Boost mod the same way (only when a
+        // compatible Minecraft version — the mod targets 26.2.x).
         if (!profile.mods.some((m) => m.id === 'reimagined-fps-boost')) {
           const { ensureFpsBoost } = await import('../mods/fps-boost')
           await ensureFpsBoost(profile)
@@ -157,23 +207,13 @@ class Launcher {
       // values come from the RPE for the current hardware tier.
       await this.seedFpsBoostConfig(gameDir)
 
-      // Shader Guard (anti-crash, v1.0.12):
-      // 1. Refuse shader sessions on hardware that genuinely cannot run them
-      //    (VRAM too low / old Intel iGPU) — fail BEFORE the game starts,
-      //    with a clear explanation instead of a crash.
-      // 2. Auto-recovery: if the previous session crashed with shaders armed,
-      //    disable shaders now and tell the user why (breaks the crash loop).
-      // 3. VRAM-aware render distance when shaders are enabled.
+      // Shader Guard (anti-crash, v1.0.12): a safety net, not a gate (v1.0.14).
+      // Borderline hardware is warned but the launch proceeds; only a real
+      // failure triggers the runtime fallback / auto-recovery.
       if (profileUsesShaders(profile)) {
         const guard = await import('../anti-crash/shader-guard')
         const guardHw = await (await import('../perf/engine')).detectHardware(false)
         const support = guard.assessShaderSupport(guardHw)
-        // v1.0.14: the assessment is a WARNING, never a gate. Shaders launch
-        // and play normally in the vast majority of cases; borderline hardware
-        // is warned (Settings → Stability shows the verdict) but the launch
-        // always proceeds — the runtime error-boundary/auto-recovery is the
-        // safety net, not an upfront block. (assessShaderSupport no longer
-        // produces 'unsupported'; this is a defensive no-op.)
         if (support.level === 'unsupported') {
           logger.warn('Shader Guard: borderline hardware detected — proceeding anyway (' + support.reasons.join(' ') + ')')
         }
@@ -210,14 +250,13 @@ class Launcher {
       })
 
       this.emitProgress('launching', `Launching ${profile.name}…`, 100)
-      this.spawn(java, args, gameDir, profile)
+      this.spawn(java, args, gameDir, profile, session)
     } catch (err) {
       logger.exception('Launch pipeline failed', err)
       const message = err instanceof Error ? err.message : String(err)
       this.emitLog('system', `Launch failed: ${message}`)
       eventBus.emit('launch:status', { profileId, running: false, error: message })
-      this.profile = null
-      this.startedAt = 0
+      this.sessions.delete(profileId)
       throw err instanceof LauncherError ? err : Errors.launchFailed(message)
     }
 
@@ -346,71 +385,67 @@ class Launcher {
 
   /* ---------------------------------- process ---------------------------------- */
 
-  private spawn(java: JavaRuntime, args: string[], gameDir: string, profile: Profile): void {
+  private spawn(java: JavaRuntime, args: string[], gameDir: string, profile: Profile, session: GameSession): void {
     const child = spawn(java.path, args, {
       cwd: gameDir,
       windowsHide: false,
       env: { ...process.env }
     })
-    this.child = child
-    this.openSessionLog(profile)
+    session.child = child
+    this.openSessionLog(profile, session)
 
     const started = `Game launched for "${profile.name}" (pid ${child.pid}, Java ${java.major})`
     logger.info(started)
     this.emitLog('system', started)
     eventBus.emit('launch:status', { profileId: profile.id, running: true, pid: child.pid })
-    this.startWindowWatch(child)
+    this.startWindowWatch(session)
 
-    child.stdout?.on('data', (d: Buffer) => this.onOutput('stdout', d))
-    child.stderr?.on('data', (d: Buffer) => this.onOutput('stderr', d))
+    child.stdout?.on('data', (d: Buffer) => this.onOutput('stdout', d, session))
+    child.stderr?.on('data', (d: Buffer) => this.onOutput('stderr', d, session))
 
     child.on('error', (err) => {
       // A spawn-level failure (bad Java path, missing DLL…) means the launch
-      // is over before any window appears. Always reset the UI state — the
-      // renderer must never stay stuck on "Launching…".
+      // is over before any window appears. Always reset the UI state for THIS
+      // profile — the renderer must never stay stuck on "Launching…".
       logger.exception('Game process error', err)
       this.emitLog('stderr', `Process error: ${err.message}`)
-      this.stopWindowWatch()
-      this.child = null
-      this.profile = null
-      this.startedAt = 0
-      this.windowOpenedAt = 0
+      this.stopWindowWatch(session)
+      this.sessions.delete(profile.id)
       eventBus.emit('launch:status', { profileId: profile.id, running: false, error: `Game process error: ${err.message}` })
     })
 
-    child.on('close', (code, signal) => void this.onExit(code, signal))
+    child.on('close', (code, signal) => void this.onExit(code, signal, session))
   }
 
-  private onOutput(stream: 'stdout' | 'stderr', chunk: Buffer): void {
+  private onOutput(stream: 'stdout' | 'stderr', chunk: Buffer, session: GameSession): void {
     const text = chunk.toString('utf-8')
-    this.sessionLog?.write(text)
+    session.sessionLog?.write(text)
     for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue
       this.emitLog(stream, line)
     }
   }
 
-  private openSessionLog(profile: Profile): void {
+  private openSessionLog(profile: Profile, session: GameSession): void {
     const file = path.join(paths.logs, `game-${profile.id}-${dateStamp()}-${Date.now()}.log`)
     try {
-      this.sessionLog = fs.createWriteStream(file)
-      this.sessionLogPath = file
+      session.sessionLog = fs.createWriteStream(file)
+      session.sessionLogPath = file
       this.emitLog('system', `Session log: ${file}`)
     } catch {
-      this.sessionLog = null
-      this.sessionLogPath = null
+      session.sessionLog = null
+      session.sessionLogPath = null
     }
   }
 
-  private async onExit(code: number | null, signal: string | null): Promise<void> {
-    const profile = this.profile
-    const duration = Math.max(0, (Date.now() - this.startedAt) / 1000)
+  private async onExit(code: number | null, signal: string | null, session: GameSession): Promise<void> {
+    const profile = session.profile
+    const duration = Math.max(0, (Date.now() - session.startedAt) / 1000)
 
-    this.sessionLog?.end()
-    this.sessionLog = null
-    this.child = null
-    this.stopWindowWatch()
-    this.windowOpenedAt = 0
+    session.sessionLog?.end()
+    session.sessionLog = null
+    this.stopWindowWatch(session)
+    session.windowOpenedAt = 0
 
     logger.info(`Game exited (code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}) after ${Math.round(duration)}s`)
     this.emitLog('system', `Game exited with code ${code ?? 'n/a'}`)
@@ -419,15 +454,19 @@ class Launcher {
     if (profile) {
       try {
         const { recordSessionFromLog } = await import('../perf/engine')
-        await recordSessionFromLog(profile.id, profile.name, this.sessionLogPath)
+        await recordSessionFromLog(profile.id, profile.name, session.sessionLogPath)
       } catch {
         /* profiler is best-effort */
       }
-      this.sessionLogPath = null
+      session.sessionLogPath = null
       await profileManager.recordLaunch(profile.id, duration, true)
       if (settingsManager.get().closeOnLaunch) {
-        const { showMainWindow } = await import('../window')
-        showMainWindow()
+        // Only restore focus when NO other instance is still running — the
+        // launcher is the only window to show otherwise.
+        if (!this.isRunning()) {
+          const { showMainWindow } = await import('../window')
+          showMainWindow()
+        }
       }
     }
 
@@ -465,7 +504,7 @@ class Launcher {
       }
     }
 
-    // Shader Guard exit bookkeeping:
+    // Shader Guard exit bookkeeping (per profile):
     //  - A CLEAN exit (code 0) clears the crash flag so recovery never
     //    triggers after a successful session; the render distance cap applied
     //    for the shader session is restored.
@@ -488,23 +527,23 @@ class Launcher {
       }
     }
 
-    this.profile = null
-    this.startedAt = 0
+    this.sessions.delete(profile?.id ?? '')
   }
 
   /**
    * Poll the spawned game process's main window handle (Windows). A non-zero
    * handle is the real "the game window is up" signal — the chronometer uses
-   * the measured elapsed seconds between Play and this moment.
+   * the measured elapsed seconds between Play and this moment. Per session.
    */
-  private startWindowWatch(child: ChildProcess): void {
-    if (process.platform !== 'win32' || !child.pid) return
-    this.stopWindowWatch()
+  private startWindowWatch(session: GameSession): void {
+    if (process.platform !== 'win32' || !session.child.pid) return
+    this.stopWindowWatch(session)
+    const child = session.child
     const pid = child.pid
     const started = Date.now()
-    this.windowPoller = setInterval(() => {
-      if (this.child !== child || child.exitCode !== null) {
-        this.stopWindowWatch()
+    session.windowPoller = setInterval(() => {
+      if (this.sessions.get(session.profile.id) !== session || child.exitCode !== null) {
+        this.stopWindowWatch(session)
         return
       }
       execFile(
@@ -512,59 +551,76 @@ class Launcher {
         ['-NoProfile', '-Command', `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowHandle`],
         { windowsHide: true, timeout: 4000 },
         (err, stdout) => {
-          if (this.windowPoller === null) return
+          if (session.windowPoller === null) return
           const handle = Number(String(stdout ?? '').trim())
           if (Number.isFinite(handle) && handle > 0) {
             const elapsedSec = Math.max(0, Math.round((Date.now() - started) / 1000))
-            this.windowOpenedAt = Date.now()
+            session.windowOpenedAt = Date.now()
             logger.info(`Minecraft window opened after ${elapsedSec}s (pid ${pid})`)
             eventBus.emit('launch:window-open', { elapsedSec })
-            this.stopWindowWatch()
+            this.stopWindowWatch(session)
           } else if (Date.now() - started > 180_000) {
             // Give up after 3 minutes — some configs never expose a handle.
-            this.stopWindowWatch()
+            this.stopWindowWatch(session)
           }
         }
       )
     }, 1000)
   }
 
-  private stopWindowWatch(): void {
-    if (this.windowPoller) {
-      clearInterval(this.windowPoller)
-      this.windowPoller = null
+  private stopWindowWatch(session: GameSession): void {
+    if (session.windowPoller) {
+      clearInterval(session.windowPoller)
+      session.windowPoller = null
     }
   }
 
-  /** Kill the process tree (Minecraft spawns many threads + subprocesses). */
-  async stop(): Promise<void> {
-    const child = this.child
-    if (!child || child.exitCode !== null) return
-    // A user-initiated stop must never look like a shader crash — mark it so
-    // onExit can tell a forced kill apart from a real crash.
-    const profile = this.profile
-    if (profile) {
-      try {
-        const { markIntentionalStop } = await import('../anti-crash/shader-guard')
-        markIntentionalStop(profile)
-      } catch {
-        /* best-effort */
+  /**
+   * Kill the process tree of ONE profile's session (Minecraft spawns many
+   * threads + subprocesses). Without a profileId, stops EVERY running
+   * instance (used on app shutdown / clean release reset).
+   */
+  async stop(profileId?: string): Promise<void> {
+    const targets: GameSession[] = profileId
+      ? this.sessions.has(profileId)
+        ? [this.sessions.get(profileId)!]
+        : []
+      : [...this.sessions.values()]
+
+    for (const session of targets) {
+      const child = session.child
+      if (!child || child.exitCode !== null) continue
+      // A user-initiated stop must never look like a shader crash — mark it so
+      // onExit can tell a forced kill apart from a real crash.
+      const profile = session.profile
+      if (profile) {
+        try {
+          const { markIntentionalStop } = await import('../anti-crash/shader-guard')
+          markIntentionalStop(profile)
+        } catch {
+          /* best-effort */
+        }
+      }
+      logger.info(`Stopping game process for "${profile?.name ?? profileId ?? '?'}"`)
+      this.emitLog('system', 'Stopping game…')
+      if (process.platform === 'win32') {
+        await new Promise<void>((resolve) => {
+          const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
+          killer.on('close', () => resolve())
+          killer.on('error', () => {
+            child.kill('SIGTERM')
+            resolve()
+          })
+        })
+      } else {
+        child.kill('SIGTERM')
       }
     }
-    logger.info('Stopping game process')
-    this.emitLog('system', 'Stopping game…')
-    if (process.platform === 'win32') {
-      await new Promise<void>((resolve) => {
-        const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
-        killer.on('close', () => resolve())
-        killer.on('error', () => {
-          child.kill('SIGTERM')
-          resolve()
-        })
-      })
-    } else {
-      child.kill('SIGTERM')
-    }
+  }
+
+  /** Stop every running instance (shutdown / reset). */
+  async stopAll(): Promise<void> {
+    await this.stop()
   }
 
   /* ---------------------------------- events ---------------------------------- */

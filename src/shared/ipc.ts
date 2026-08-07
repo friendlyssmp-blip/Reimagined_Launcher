@@ -76,6 +76,8 @@ export const IPC = {
   launchStart: 'launch:start',
   launchStop: 'launch:stop',
   launchGet: 'launch:get',
+  /** All live game sessions (multi-instance support). */
+  launchList: 'launch:list',
 
   // Detached game console window
   consoleOpen: 'console:open',

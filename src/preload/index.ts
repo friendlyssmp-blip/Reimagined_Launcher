@@ -105,8 +105,9 @@ const api = {
 
   launch: {
     start: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.launchStart, profileId),
-    stop: (): Promise<unknown> => ipcRenderer.invoke(IPC.launchStop),
-    get: (): Promise<unknown> => ipcRenderer.invoke(IPC.launchGet)
+    stop: (profileId?: string): Promise<unknown> => ipcRenderer.invoke(IPC.launchStop, profileId),
+    get: (): Promise<unknown> => ipcRenderer.invoke(IPC.launchGet),
+    list: (): Promise<unknown> => ipcRenderer.invoke(IPC.launchList)
   },
 
   modpacks: {

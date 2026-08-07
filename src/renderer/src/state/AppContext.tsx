@@ -75,6 +75,8 @@ interface AppContextValue {
   activeProfile: Profile | null
   launch: LaunchUiState
   running: boolean
+  /** profileId → running (multi-instance: each profile tracks its own state). */
+  runningProfiles: Record<string, boolean>
   toasts: Toast[]
   modals: ModalState
   profileOp: ProfileOp | null
@@ -84,7 +86,7 @@ interface AppContextValue {
   refreshAccount: () => Promise<void>
   logout: () => Promise<void>
   launchProfile: (profileId: string) => Promise<void>
-  stopLaunch: () => Promise<void>
+  stopLaunch: (profileId?: string) => Promise<void>
   notify: (kind: Toast['kind'], title: string, desc?: string) => void
   setModals: (patch: Partial<ModalState>) => void
   runGuarded: (label: string, fn: () => Promise<unknown>) => Promise<void>
@@ -106,6 +108,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem('reimagined:active') ?? null
   )
   const [launch, setLaunch] = useState<LaunchUiState>({ phase: 'idle', message: '', percent: null })
+  /** profileId → running (v1.0.15 multi-instance per-profile state). */
+  const [runningMap, setRunningProfiles] = useState<Record<string, boolean>>({})
+  /** The profileId of the most recent launch — fallback key for launch events. */
+  const launchProfileIdRef = useRef<string | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [modals, setModalsState] = useState<ModalState>({
     login: false,
@@ -208,6 +214,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const launchProfile = useCallback(
     async (profileId: string) => {
+      // v1.0.15 multi-instance: remember which profile this launch belongs to
+      // so status events are always keyed correctly.
+      launchProfileIdRef.current = profileId
       // Open the detached game console window BEFORE the pipeline runs so the
       // user sees download/install progress live (launch:start only resolves
       // after the game process spawns).
@@ -228,9 +237,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [notify, setModals, settings]
   )
 
-  const stopLaunch = useCallback(async () => {
+  // v1.0.15 multi-instance: Stop targets ONE profile's session (or all when
+  // no profile is given, e.g. the sidebar pill).
+  const stopLaunch = useCallback(async (profileId?: string) => {
     try {
-      await api.launch.stop()
+      await api.launch.stop(profileId)
     } catch {
       /* non-fatal */
     }
@@ -242,17 +253,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     ;(async () => {
       try {
-        const [i, s, acc, profs] = await Promise.all([
+        const [i, s, acc, profs, runs] = await Promise.all([
           api.getInfo(),
           api.settings.get(),
           api.auth.getAccount(),
-          api.profiles.list()
+          api.profiles.list(),
+          api.launch.list().catch(() => [] as LaunchHandle[])
         ])
         if (cancelled) return
         setInfo(i)
         setSettings(s)
         setAccount(acc)
         setProfiles(profs)
+        // Seed per-profile running state (e.g. another launcher window, or a
+        // game still running from before a renderer reload).
+        const seed: Record<string, boolean> = {}
+        for (const h of runs) if (h.profileId) seed[h.profileId] = h.running
+        setRunningProfiles(seed)
         document.documentElement.dataset.theme = s.theme
         setReady(true)
       } catch (err) {
@@ -325,7 +342,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           break
         }
         case 'launch:status': {
-          const p = e.payload as { running: boolean; error?: string; pid?: number; code?: number | null }
+          const p = e.payload as { running: boolean; error?: string; pid?: number; code?: number | null; profileId?: string }
+          // Multi-instance: track EVERY profile's own running state so one
+          // running game never turns another profile's Play button into Stop.
+          const pidKey = p.profileId ?? launchProfileIdRef.current
+          if (pidKey) {
+            setRunningProfiles((prev) => ({ ...prev, [pidKey]: p.running }))
+          }
           if (!p.running) {
             // The launch flow is over — whether the game exited, was stopped,
             // or the launch FAILED. Always go idle and clear the progress so
@@ -429,6 +452,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? profiles[0] ?? null
   const running = launch.phase === 'running' || launch.phase === 'launching'
+  const runningProfiles = runningMap
 
   if (!settings) {
     return <div className="boot-screen"><div className="boot-spinner" /></div>
@@ -444,6 +468,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeProfile,
     launch,
     running,
+    runningProfiles,
     toasts,
     modals,
     profileOp,

@@ -158,8 +158,9 @@ export const api = {
   },
   launch: {
     start: (profileId: string) => unwrap<LaunchHandle>(window.reimagined.launch.start(profileId)),
-    stop: () => unwrap<void>(window.reimagined.launch.stop()),
-    get: () => unwrap<LaunchHandle>(window.reimagined.launch.get())
+    stop: (profileId?: string) => unwrap<void>(window.reimagined.launch.stop(profileId)),
+    get: () => unwrap<LaunchHandle>(window.reimagined.launch.get()),
+    list: () => unwrap<LaunchHandle[]>(window.reimagined.launch.list())
   },
   modpacks: {
     search: (opts: { query?: string; mcVersion?: string; loader?: 'fabric' | 'forge' | 'any'; offset?: number; limit?: number }) =>

@@ -384,8 +384,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   /* ---------------------------------- launch ---------------------------------- */
 
   on(IPC.launchStart, (profileId) => launcher.launch(profileId))
-  on(IPC.launchStop, () => launcher.stop())
+  // v1.0.15 multi-instance: Stop targets ONE profile's session; without a
+  // profileId it stops every running instance (backward compatible).
+  on(IPC.launchStop, (profileId?: string) => launcher.stop(profileId))
   on(IPC.launchGet, () => launcher.handle)
+  on(IPC.launchList, () => launcher.handles)
 
   /* --------------------------- detached console window --------------------------- */
 
