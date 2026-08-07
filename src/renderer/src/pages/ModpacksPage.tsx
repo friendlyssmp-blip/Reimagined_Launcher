@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, TextInput, Spinner, EmptyState, ProfileGlyph, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { ModIcon } from '../components/ModIcon'
+import { ProjectImage } from '../components/ProjectImage'
 import { IconArchive, IconShare, IconDownload, IconPuzzle, IconX, IconCheck } from '../components/icons'
 import type { ModrinthSearchResult } from '@shared/types'
 
@@ -201,11 +202,7 @@ export function ModpacksPage() {
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                   <div className="mod-icon" style={{ width: 48, height: 48 }}>
-                    {results.find((r) => r.projectId === expanded.projectId)?.iconUrl ? (
-                      <img src={results.find((r) => r.projectId === expanded.projectId)?.iconUrl} alt="" />
-                    ) : (
-                      <IconPuzzle style={{ width: 20, height: 20 }} />
-                    )}
+                    <ModIcon src={results.find((r) => r.projectId === expanded.projectId)?.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{expanded.title}</div>
@@ -227,7 +224,7 @@ export function ModpacksPage() {
                 </div>
                 {expanded.gallery.length > 0 && (
                   <div className="detail-hero" style={{ marginBottom: 10 }}>
-                    <img src={expanded.gallery[0].url} alt="" />
+                    <ProjectImage src={expanded.gallery[0].url} alt="" />
                   </div>
                 )}
                 <div className="panel-title" style={{ fontSize: 12 }}>Description</div>

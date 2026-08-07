@@ -160,6 +160,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return cancelDownload(id)
   })
 
+  // Reliable image proxy (V2 fix): download in MAIN (no CSP) with retries +
+  // browser headers → data URL. Null when the image genuinely can't load.
+  on(IPC.contentImage, async (url?: string) => {
+    if (!url || typeof url !== 'string') return { dataUrl: null }
+    const { fetchImageDataUrl } = await import('./utils/image-proxy')
+    const dataUrl = await fetchImageDataUrl(url)
+    return { dataUrl }
+  })
+
   on(IPC.openInstanceFolder, async (payload: { profileId: string; sub?: string }) => {
     const { instanceSubPath, instanceRoot } = await import('./game/content')
     let target = payload?.sub

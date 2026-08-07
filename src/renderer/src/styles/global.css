@@ -3051,3 +3051,27 @@ select.select:hover {
   border-color: var(--accent-border);
   background-color: var(--bg-3);
 }
+
+/* ProjectImage placeholder (reliable image loading, V2) — fills the same
+   space the real image would so loading/error states never collapse layout. */
+.project-image-ph {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-4, #22222c), var(--bg-3, #191921));
+  color: var(--text-3);
+  font-size: 12px;
+  overflow: hidden;
+}
+.detail-hero .project-image-ph {
+  width: 100%;
+  max-height: 340px;
+  min-height: 180px;
+}
+.detail-gallery .project-image-ph {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}

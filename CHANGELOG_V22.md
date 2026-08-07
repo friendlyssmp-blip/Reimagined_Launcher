@@ -124,3 +124,27 @@
 - Queue reentrancy rewritten with AsyncLocalStorage (concurrent installs now correctly take separate slots — the 1-at-a-time default actually holds).
 - FPS Boost opt-out flag persists across sessions.
 - Loader namespaces (fabricmc, neoforged, forge) excluded from crash "responsible mods" noise.
+
+## v1.0.17 — Reliable project images (covers/icons fix)
+
+### Root cause
+- The launcher's Content-Security-Policy has `connect-src 'self'`, so the icon
+  component's in-page fetch() to Modrinth's CDN was ALWAYS blocked — it fell
+  back to a direct <img>, which fails intermittently with no fallback. That's
+  why covers/icons of mods, resource packs, shaders and datapacks sometimes
+  didn't load.
+
+### Fix
+- New main-process image proxy (`src/main/utils/image-proxy.ts`): downloads
+  images where there is no CSP, with browser-like headers (UA + Modrinth
+  Referer), a 15 s timeout and 3 retries with backoff, and returns a data URL.
+- Bounded caching on both sides: the proxy caps 150 entries plus a 40 MB total
+  byte budget; the renderer keeps a 200-entry session cache. Oversized images
+  are delivered once and never cached.
+- New `useProjectImage` hook + `ModIcon`/`ProjectImage` components: covers and
+  icons load reliably everywhere (search rows, installed rows, detail page
+  hero + gallery, modpack cards, settings performance mods) and show a styled
+  placeholder while loading or if the image genuinely can't load — a broken-
+  image glyph can never appear.
+- Gallery screenshots use real lazy loading (IntersectionObserver): off-screen
+  images are not fetched until they scroll near the viewport.

@@ -4,6 +4,7 @@ import { Button, Field, TextInput, Toggle, Slider, Select, Spinner } from '../co
 import { api, friendlyError } from '../lib/api'
 import { sound, SOUND_PACKS } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
+import { ModIcon } from '../components/ModIcon'
 import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconMoon, IconCrystal, IconLeaf } from '../components/icons'
 
 const IconBolt = ({ size = 16 }: { size?: number }) => (
@@ -918,7 +919,7 @@ o apply."
               ) : null}
               {mods.map((mo) => (
                 <div key={mo.slug} style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
-                  {mo.iconUrl ? <img src={mo.iconUrl} alt="" style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg-3)', flexShrink: 0 }} />}
+                  {mo.iconUrl ? <ModIcon src={mo.iconUrl} style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg-3)', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{mo.title}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>{mo.note}</div>

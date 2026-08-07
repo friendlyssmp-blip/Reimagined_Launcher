@@ -93,6 +93,7 @@ export const api = {
     backupWorld: (profileId: string, world: string) => unwrap<{ destination: string }>(window.reimagined.content.backupWorld(profileId, world)),
     detail: (payload: { provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }) =>
       unwrap<ProjectDetail>(window.reimagined.content.detail(payload)),
+    image: (url: string) => unwrap<{ dataUrl: string | null }>(window.reimagined.content.image(url)),
     versions: (payload: { provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }) =>
       unwrap<ProjectVersionInfo[]>(window.reimagined.content.versions(payload)),
     changelog: (projectId: string, versionId: string) =>

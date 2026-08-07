@@ -138,7 +138,10 @@ export const IPC = {
   // Reimagined FPS Boost — manual install/remove (V2), per profile
   fpsBoostStatus: 'fpsboost:status',
   fpsBoostInstall: 'fpsboost:install',
-  fpsBoostRemove: 'fpsboost:remove'
+  fpsBoostRemove: 'fpsboost:remove',
+
+  // Reliable image proxy (V2 fix) — main-process fetch → data URL
+  contentImage: 'content:image'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

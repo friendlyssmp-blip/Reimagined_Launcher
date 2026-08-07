@@ -1,84 +1,39 @@
 /**
- * ModIcon — remote mod/modpack icon with a bounded, evicting cache.
+ * ModIcon — reliable remote project icon (V2 fix).
  *
- * Browsed icons come from Modrinth's CDN. Instead of letting the browser
- * hold one decoded image per URL indefinitely, we fetch each icon once,
- * keep a blob object URL in a capped Map (LRU-ish by insertion order), and
- * revoke the URLs of evicted entries. The cap keeps memory flat even when
- * the user scrolls through thousands of results across sessions.
+ * Icons used to be fetched directly from Modrinth's CDN, but the renderer's
+ * CSP (`connect-src 'self'`) blocks in-page fetch() and the direct <img>
+ * fallback failed intermittently — that's why covers sometimes didn't load.
  *
- * Rendering is regression-proof: until the cached blob is ready (or if the
- * fetch ever fails), we show the plain <img src={originalUrl}> exactly like
- * before — an icon can never degrade into a placeholder.
+ * Icons now go through the MAIN-process proxy (retries + browser headers +
+ * bounded cache) and show a styled placeholder while loading or on failure —
+ * a broken-image glyph can never appear.
  */
-import { useEffect, useState } from 'react'
+import { useProjectImage } from '../lib/useProjectImage'
+import { IconPuzzle } from './icons'
 
-const MAX_ENTRIES = 160
-const cache = new Map<string, string>()
-const pending = new Map<string, Promise<string>>()
-/** URLs that failed once are never refetched — direct <img> is kept instead. */
-const failed = new Set<string>()
-
-function resolve(src: string): Promise<string> {
-  if (failed.has(src)) return Promise.reject(new Error('icon previously failed'))
-  const hit = cache.get(src)
-  if (hit) return Promise.resolve(hit)
-  const inflight = pending.get(src)
-  if (inflight) return inflight
-
-  const p = fetch(src)
-    .then((r) => {
-      if (!r.ok) throw new Error('icon fetch ' + r.status)
-      return r.blob()
-    })
-    .then((blob) => {
-      const url = URL.createObjectURL(blob)
-      cache.set(src, url)
-      // Evict oldest entries (Map preserves insertion order) and release
-      // their object URLs so memory stays bounded.
-      while (cache.size > MAX_ENTRIES) {
-        const oldest = cache.keys().next().value as string
-        const oldUrl = cache.get(oldest)
-        cache.delete(oldest)
-        if (oldUrl) URL.revokeObjectURL(oldUrl)
-      }
-      return url
-    })
-    .catch((err) => {
-      failed.add(src)
-      throw err
-    })
-    .finally(() => pending.delete(src))
-
-  pending.set(src, p)
-  return p
-}
-
-/**
- * Renders the icon. Uses the cached blob URL when available; falls back to
- * the original URL (instant, browser-cached) while loading or on failure.
- */
 export function ModIcon({ src, style, draggable = false }: { src?: string | null; style?: React.CSSProperties; draggable?: boolean }) {
-  const [url, setUrl] = useState<string | null>(null)
+  const state = useProjectImage(src)
 
-  useEffect(() => {
-    if (!src) {
-      setUrl(null)
-      return
-    }
-    let alive = true
-    resolve(src)
-      .then((u) => {
-        if (alive) setUrl(u)
-      })
-      .catch(() => {
-        /* keep the direct <img> below */
-      })
-    return () => {
-      alive = false
-    }
-  }, [src])
+  if (state.status === 'ready') {
+    return <img src={state.dataUrl} alt="" style={style} draggable={draggable} />
+  }
 
-  if (!src) return null
-  return <img src={url ?? src} alt="" style={style} draggable={draggable} />
+  // Loading / unavailable — a clean placeholder instead of a broken image.
+  return (
+    <div
+      style={{
+        ...style,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, var(--bg-4, #22222c), var(--bg-3, #191921))',
+        color: 'var(--text-3)',
+        borderRadius: style?.borderRadius ?? 9,
+        overflow: 'hidden'
+      }}
+    >
+      <IconPuzzle style={{ width: '38%', height: '38%', opacity: 0.6 }} />
+    </div>
+  )
 }

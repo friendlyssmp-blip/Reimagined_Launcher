@@ -47,7 +47,8 @@ const api = {
     versions: (payload: { provider: string; projectId: string; projectType?: string }): Promise<unknown> =>
       ipcRenderer.invoke(IPC.contentVersions, payload),
     changelog: (projectId: string, versionId: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.contentChangelog, { projectId, versionId })
+      ipcRenderer.invoke(IPC.contentChangelog, { projectId, versionId }),
+    image: (url: string): Promise<unknown> => ipcRenderer.invoke(IPC.contentImage, url)
   },
 
   auth: {

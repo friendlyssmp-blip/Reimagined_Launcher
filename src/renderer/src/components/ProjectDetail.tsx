@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner, EmptyState, Toggle, TabBar } from './ui'
 import { ModIcon } from './ModIcon'
 import { InstallConfirmModal, type InstallTarget } from './InstallConfirmModal'
+import { ProjectImage } from './ProjectImage'
 import { api, friendlyError } from '../lib/api'
 import {
   IconDownload,
@@ -505,7 +506,7 @@ export function ProjectDetail({
       {/* Big preview — the project's main gallery image, full-width hero. */}
       {detail.gallery?.[0]?.url && (
         <div className="detail-hero">
-          <img
+          <ProjectImage
             src={detail.gallery[0].url}
             alt={detail.gallery[0].title ?? detail.title}
             onClick={() => setTab('gallery')}
@@ -612,7 +613,7 @@ export function ProjectDetail({
               <div className="panel-title">Gallery ({detail.gallery.length})</div>
               <div className="detail-gallery">
                 {detail.gallery.map((g, i) => (
-                  <img key={i} src={g.url} alt={g.title ?? ''} loading="lazy" />
+                  <ProjectImage key={i} src={g.url} alt={g.title ?? ''} loading="lazy" />
                 ))}
               </div>
             </div>
