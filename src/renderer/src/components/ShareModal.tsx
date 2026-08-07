@@ -68,6 +68,20 @@ export function ShareModal({ profile }: { profile: Profile }) {
     }
   }
 
+  const copyLink = async () => {
+    if (!code) return
+    // v1.0.19: the link is a real reimagined:// deep link — opening it (or
+    // pasting it into a launcher that has the protocol registered) lands on
+    // Import with Code with this code ready to preview.
+    const link = `reimagined://share/${code}`
+    try {
+      await navigator.clipboard.writeText(link)
+      notify('success', 'Share link copied', 'Opening it on this launcher opens Import with the code ready. The code itself is the portable form — it resolves on the launcher that generated it.')
+    } catch {
+      notify('info', 'Share link', link)
+    }
+  }
+
   const doExportZip = async () => {
     setBusy('zip')
     try {
@@ -175,6 +189,7 @@ export function ShareModal({ profile }: { profile: Profile }) {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <code className="share-code">{code}</code>
                   <Button onClick={copy}>Copy Code</Button>
+                  <Button variant="ghost" onClick={copyLink}>Copy Link</Button>
                 </div>
                 <p style={{ color: 'var(--warning)', fontSize: 12, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <IconHourglass style={{ width: 13, height: 13, flex: '0 0 auto' }} />

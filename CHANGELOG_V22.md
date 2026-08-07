@@ -177,3 +177,46 @@
 - Result: install it on your client, join any vanilla/Fabric/LAN/multiplayer
   server — the FPS Boost stays active locally; the server, host and other
   players need nothing. No gameplay-changing hooks, so no server-side risk.
+
+## v1.0.19 — Settings persistence guard, Minecraft survives launcher updates, full Import/Share
+
+### Minecraft settings NEVER reset (config guard)
+- New `config-guard` module: a lightweight snapshot of the small user-owned
+  instance config (options.txt, servers.dat, top-level config/ files) is taken
+  BEFORE any operation that may touch an instance — profile version changes,
+  modpack overrides, and the per-launch options.txt writers (frame cap with a
+  24 h throttle, shader render-distance cap keeps its own backup). Backups live
+  in `data/backups/<instance>/` (newest 5 kept), and restore only copies back
+  the files that were affected. Worlds/saves/resourcepacks/shaders are never
+  touched by any of these paths. Verified by a new smoke check: backup →
+  clobber → restore brings options.txt back intact.
+
+### Launcher updates: Minecraft keeps running + auto-reopen (~3 s)
+- The game is now spawned DETACHED (its own process group), so Minecraft is
+  fully independent of the launcher process — a launcher update can never take
+  it down.
+- Before the launcher exits for an update (or a normal close), every running
+  game session (profileId + pid) is saved. On the next start, each PID is
+  validated against the OS (alive + a real Java process on Windows — no stale
+  or recycled PIDs) and monitoring is RE-CONNECTED: the profile shows
+  Playing, and when the game exits its playtime is recorded normally. No
+  duplicate launches, no "stopped" lies.
+- The relaunch helper now waits for BOTH the installer and the OLD launcher
+  process to exit, then waits ~3 s for Windows to release file handles, then
+  starts the updated launcher automatically (with retries). Update loops are
+  impossible: the installed version is read from the app itself, so a failed
+  update simply keeps the old version and re-offers the update.
+- `reimagined://` protocol registered: share links open the launcher.
+
+### Import / Share — full round trip, cancellable, exact versions
+- Imports restore the EXACT shared version of every item (version id passed to
+  the installer), resolving and de-duplicating dependencies — never silently
+  substituting a different version; already-installed dependencies are kept
+  and never duplicated.
+- Imports are now CANCELLABLE: a Cancel button stops after the current item,
+  the partially-created profile + files are removed, and the other profiles
+  stay untouched. Real per-item progress (phase + %) is shown in the modal.
+- Share packages are sanitized (no paths/separators/credentials can ever leak)
+  and oversized zips are rejected. Share modal now offers Copy Code + Copy
+  Link (`reimagined://share/<CODE>`), and a share link opened in the launcher
+  lands directly on Import with the code ready to preview.

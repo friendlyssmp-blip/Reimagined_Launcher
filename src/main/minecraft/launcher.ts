@@ -386,9 +386,14 @@ class Launcher {
   /* ---------------------------------- process ---------------------------------- */
 
   private spawn(java: JavaRuntime, args: string[], gameDir: string, profile: Profile, session: GameSession): void {
+    // v1.0.19: detached on Windows so the game runs in its own process group
+    // and is fully independent of the launcher's lifecycle — a launcher
+    // update/restart must NEVER take Minecraft down with it. The game's own
+    // console window still shows (windowsHide stays false).
     const child = spawn(java.path, args, {
       cwd: gameDir,
       windowsHide: false,
+      detached: process.platform === 'win32',
       env: { ...process.env }
     })
     session.child = child
@@ -623,6 +628,54 @@ class Launcher {
     await this.stop()
   }
 
+  /* --------------------------- reattach (v1.0.19) --------------------------- */
+
+  /**
+   * Reconnect monitoring to a game process that survived a launcher restart
+   * (Minecraft must survive launcher updates). The caller has already
+   * validated the PID is alive; here we register a lightweight session that
+   * watches the PID and reports exit + playtime without reattaching stdout.
+   */
+  async reattach(profileId: string, pid: number, startedAt: number): Promise<boolean> {
+    const profile = await profileManager.get(profileId)
+    if (!profile || this.sessions.has(profileId) || !Number.isFinite(pid) || pid <= 0) return false
+    const session: GameSession = {
+      profile,
+      child: { pid, exitCode: null } as unknown as ChildProcess,
+      startedAt: startedAt || Date.now(),
+      sessionLog: null,
+      sessionLogPath: null,
+      windowPoller: null,
+      windowOpenedAt: 0
+    }
+    this.sessions.set(profileId, session)
+    logger.info(`Reconnected to running Minecraft for "${profile.name}" (pid ${pid}) after a launcher restart`)
+    eventBus.emit('launch:status', { profileId, running: true, pid })
+    this.startReattachWatch(session)
+    return true
+  }
+
+  /** Poll a reattached PID; when it disappears, close the session like a normal exit. */
+  private startReattachWatch(session: GameSession): void {
+    const pid = session.child.pid
+    const started = session.startedAt
+    session.windowPoller = setInterval(() => {
+      if (this.sessions.get(session.profile.id) !== session) {
+        this.stopWindowWatch(session)
+        return
+      }
+      if (!pid || !pidAlive(pid)) {
+        this.stopWindowWatch(session)
+        const duration = Math.max(0, (Date.now() - started) / 1000)
+        this.sessions.delete(session.profile.id)
+        eventBus.emit('launch:status', { profileId: session.profile.id, running: false })
+        eventBus.emit('launch:exit', { code: null, signal: null, duration, profileId: session.profile.id })
+        void profileManager.recordLaunch(session.profile.id, duration, false).catch(() => {})
+        logger.info(`Reconnected game for "${session.profile.name}" exited after ${Math.round(duration)}s`)
+      }
+    }, 3000)
+  }
+
   /* ---------------------------------- events ---------------------------------- */
 
   /** Write the Reimagined performance config — RPE tier-tuned values. */
@@ -663,6 +716,17 @@ class Launcher {
   private emitLog(stream: LaunchLogLine['stream'], text: string): void {
     const line: LaunchLogLine = { at: new Date().toISOString(), stream, text }
     eventBus.emit('launch:log', line)
+  }
+}
+
+/** True when a process exists right now (Windows-safe: ESRCH = gone, EPERM = alive). */
+export function pidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== 'ESRCH'
   }
 }
 

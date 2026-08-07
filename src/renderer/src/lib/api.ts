@@ -256,6 +256,8 @@ export const api = {
     readZip: (zipPath: string) => unwrap<ShareSnapshot>(window.reimagined.share.readZip(zipPath)),
     importZip: (zipPath: string) =>
       unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importZip(zipPath)),
+    cancelImport: () => unwrap<void>(window.reimagined.share.cancelImport()),
+    pendingCode: () => unwrap<string | null>(window.reimagined.share.pendingCode()),
     pickZip: () => unwrap<string | null>(window.reimagined.share.pickZip())
   },
   onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),

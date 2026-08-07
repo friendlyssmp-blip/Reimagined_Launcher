@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, Button, Field, TextInput, Badge, Spinner } from './ui'
-import { api, friendlyError } from '../lib/api'
-import { IconArchive, IconGlobe, IconChevronLeft } from './icons'
+import { api, friendlyError, ApiError } from '../lib/api'
+import { IconArchive, IconGlobe, IconChevronLeft, IconX } from './icons'
 import type { ShareSnapshot } from '@shared/types'
 
 type Stage = 'choose' | 'zip' | 'code' | 'preview'
@@ -16,21 +16,52 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 /**
- * Import Profile (Part 1).
+ * Import Profile.
  *
  * Two entry paths — “Import from .zip” and “Import with Code” — both lead to
  * the same preview screen showing exactly what will be created, then run the
- * full install pipeline into a brand-new independent profile.
+ * full install pipeline into a brand-new independent profile with real,
+ * cancellable progress (v1.0.19). `initialCode` comes from a
+ * `reimagined://share/<CODE>` deep link.
  */
-export function ImportModal() {
+export function ImportModal({ initialCode }: { initialCode?: string | null }) {
   const { setModals, notify, refreshProfiles } = useApp()
   const [stage, setStage] = useState<Stage>('choose')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(initialCode ?? '')
   const [zipPath, setZipPath] = useState<string | null>(null)
   const [preview, setPreview] = useState<ShareSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
+  const [progress, setProgress] = useState<{ phase: string; percent: number | null } | null>(null)
+
+  /* Deep link: a reimagined://share/<CODE> arrived → jump straight to preview. */
+  useEffect(() => {
+    if (!initialCode) return
+    setCode(initialCode)
+    setStage('code')
+    setBusy(true)
+    api.share
+      .resolve(initialCode)
+      .then((snap) => {
+        setPreview(snap)
+        setStage('preview')
+      })
+      .catch((err) => setError(friendlyError(err)))
+      .finally(() => setBusy(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCode])
+
+  /* Live import progress from the main process (real per-item phases). */
+  useEffect(() => {
+    return api.onEvent((e) => {
+      if (e.type !== 'profile:progress') return
+      const p = e.payload as { action?: string; phase?: string; percent?: number; done?: boolean } | null
+      if (p?.action !== 'import') return
+      if (p.done) setProgress(null)
+      else setProgress({ phase: p.phase ?? 'Working…', percent: p.percent ?? null })
+    })
+  }, [])
 
   const close = () => setModals({ importShare: false })
 
@@ -72,8 +103,17 @@ export function ImportModal() {
     }
   }
 
+  const cancelImport = async () => {
+    try {
+      await api.share.cancelImport()
+    } catch {
+      /* the import may already be finishing — the main process still cleans up */
+    }
+  }
+
   const doImport = async () => {
     setImportBusy(true)
+    setProgress({ phase: 'Starting import…', percent: 0 })
     try {
       const res = zipPath ? await api.share.importZip(zipPath) : await api.share.importCode(code.trim())
       await refreshProfiles()
@@ -86,9 +126,15 @@ export function ImportModal() {
           : `“${res.name}” is ready to play.`
       )
     } catch (err) {
-      notify('error', 'Could not import profile', friendlyError(err))
+      if (err instanceof ApiError && err.code === 'IMPORT_CANCELLED') {
+        notify('info', 'Import cancelled', 'The partially-created profile was removed — your other profiles are untouched.')
+        close()
+      } else {
+        notify('error', 'Could not import profile', friendlyError(err))
+      }
     } finally {
       setImportBusy(false)
+      setProgress(null)
     }
   }
 
@@ -209,9 +255,45 @@ export function ImportModal() {
                 and re-resolve every item from its original source. No worlds or account data are transferred.
               </p>
 
-              <Button variant="primary" onClick={doImport} disabled={importBusy} style={{ alignSelf: 'flex-start' }}>
-                {importBusy ? <><Spinner /> Importing…</> : `Create “${preview.name}”`}
-              </Button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Button variant="primary" onClick={doImport} disabled={importBusy} style={{ alignSelf: 'flex-start' }}>
+                  {importBusy ? <><Spinner /> Importing…</> : `Create “${preview.name}”`}
+                </Button>
+                {importBusy && (
+                  <Button variant="danger" size="sm" onClick={cancelImport} style={{ alignSelf: 'flex-start' }}>
+                    <IconX style={{ width: 13, height: 13 }} /> Cancel
+                  </Button>
+                )}
+              </div>
+              {importBusy && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <span style={{ color: 'var(--text-2)', fontSize: 13 }}>{progress?.phase ?? 'Working…'}</span>
+                    {progress?.percent != null && (
+                      <span style={{ color: 'var(--accent)', fontSize: 13, fontFamily: 'var(--mono)' }}>{progress.percent}%</span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      height: 6,
+                      borderRadius: 4,
+                      background: 'var(--bg-4)',
+                      overflow: 'hidden',
+                      border: '1px solid var(--border)'
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(100, Math.max(0, progress?.percent ?? 0))}%`,
+                        borderRadius: 4,
+                        background: 'linear-gradient(90deg, var(--accent), var(--accent-2, var(--accent)))',
+                        transition: 'width .25s ease'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

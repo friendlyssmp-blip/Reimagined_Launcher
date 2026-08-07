@@ -14,6 +14,7 @@ import { CrashModal } from './components/CrashModal'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProgressOverlay } from './components/ProgressOverlay'
+import { api } from './lib/api'
 import { sound } from './lib/sound'
 import { SplashScreen } from './components/SplashScreen'
 import { BrandLogo } from './components/BrandLogo'
@@ -41,8 +42,10 @@ export type Page =
   | 'logs'
 
 function Shell() {
-  const { ready, modals, theme, settings } = useApp()
+  const { ready, modals, theme, settings, setModals } = useApp()
   const [page, setPage] = useState<Page>('home')
+  /* Share code arriving via a reimagined://share/<CODE> link (v1.0.19). */
+  const [importCode, setImportCode] = useState<string | null>(null)
   /* Splash shows once per session (skippable, never blocks init). */
   const [splash, setSplash] = useState(() => sessionStorage.getItem('reimagined:splash') !== '1')
 
@@ -53,6 +56,28 @@ function Shell() {
   useEffect(() => {
     localStorage.removeItem('reimagined:ui-scale')
   }, [])
+
+  /* v1.0.19: reimagined://share/<CODE> deep links open the Import modal with
+   * the code ready to preview — whether the link arrived before the UI was
+   * ready (pending code) or while the launcher was already running (event). */
+  useEffect(() => {
+    if (!ready) return
+    const openImport = (code: string) => {
+      setImportCode(code)
+      setModals({ importShare: true })
+    }
+    api.share
+      .pendingCode()
+      .then((c) => c && openImport(c))
+      .catch(() => {})
+    const off = api.onEvent((e) => {
+      if (e.type === 'share:deep-link') {
+        const code = (e.payload as { code?: string } | null)?.code
+        if (code) openImport(code)
+      }
+    })
+    return off
+  }, [ready, setModals])
 
   /* Wire the premium sound library to the launcher's audio settings — every
    * change in Settings applies immediately. */
@@ -169,7 +194,7 @@ function Shell() {
       {modals.profile && <ProfileModal mode={modals.profile.mode} profile={modals.profile.profile} />}
       {modals.duplicate && <DuplicateModal profile={modals.duplicate.profile} />}
       {modals.share && <ShareModal profile={modals.share.profile} />}
-      {modals.importShare && <ImportModal />}
+      {modals.importShare && <ImportModal initialCode={importCode} />}
       {modals.update && <UpdateModal auto={modals.update === 'auto'} />}
       {modals.crash && <CrashModal />}
       {modals.confirm && <ConfirmDialog {...modals.confirm} />}

@@ -118,6 +118,8 @@ export const IPC = {
   shareCreate: 'share:create',
   shareResolve: 'share:resolve',
   shareImport: 'share:import',
+  shareCancel: 'share:cancel',
+  sharePendingCode: 'share:pending-code',
   shareExportZip: 'share:export-zip',
   shareReadZip: 'share:read-zip',
   shareImportZip: 'share:import-zip',
@@ -166,6 +168,7 @@ export type AppEventType =
   | 'update:progress'
   | 'crash:detected'
   | 'shaders:auto-disabled'
+  | 'share:deep-link'
   | 'system:info'
 
 export interface AppEvent {

@@ -143,6 +143,12 @@ class ProfileManager {
     if (patch.name && patch.name !== current.name) changed.push(`name "${current.name}" → "${patch.name}"`)
     if (patch.minecraftVersion && patch.minecraftVersion !== current.minecraftVersion) {
       changed.push(`version ${current.minecraftVersion} → ${patch.minecraftVersion}`)
+      // v1.0.19 settings persistence: snapshot the instance config BEFORE the
+      // version switch — the instance folder is kept, but the backup is the
+      // rollback safety net if any operation around the change ever touches it.
+      void import('../minecraft/config-guard')
+        .then((m) => m.configGuard.backupInstanceConfig(current))
+        .catch(() => {})
     }
     if (patch.loader && (patch.loader.type !== current.loader.type || patch.loader.version !== current.loader.version)) {
       changed.push(`loader ${current.loader.type} → ${patch.loader.type}`)

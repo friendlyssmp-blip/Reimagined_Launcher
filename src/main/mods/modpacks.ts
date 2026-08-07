@@ -210,10 +210,14 @@ export async function installModpack(
   }
 
   // 6. Copy overrides (config / resourcepacks / shaderpacks / …) into the instance.
+  // v1.0.19 settings persistence: snapshot the config first so an override
+  // that ever touches user settings (options.txt, config/) is recoverable.
   const overridesSrc = path.join(staging, 'overrides')
   const gameDir = path.join(paths.games, profile.gameDir)
   if (fs.existsSync(overridesSrc)) {
     try {
+      const { configGuard } = await import('../minecraft/config-guard')
+      await configGuard.backupInstanceConfig(profile).catch(() => {})
       fs.cpSync(overridesSrc, gameDir, { recursive: true })
       logger.info(`Modpack overrides applied to ${profile.gameDir}`)
     } catch (err) {

@@ -31,6 +31,36 @@ import type { ShareSnapshot, ShareItem } from '@shared/types'
 const CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const MANIFEST_NAME = 'reimagined-manifest.json'
 const FORMAT_VERSION = 1
+/** Imports are re-resolved from source; a huge zip can never be a valid export. */
+const MAX_ZIP_BYTES = 100 * 1024 * 1024
+
+/** The single active import (for cancellation) — one at a time is fine. */
+let activeImport: { cancelled: boolean } | null = null
+
+/** Ask the active import (if any) to stop after the current item. */
+export function cancelImport(): void {
+  if (activeImport) activeImport.cancelled = true
+}
+
+/* --------------------------- deep links (v1.0.19) --------------------------- */
+
+/**
+ * Share codes arriving via `reimagined://share/<CODE>` links. The code is
+ * kept until the renderer asks for it (it may open before the UI is ready),
+ * and also pushed as a live event in case the UI is already listening.
+ */
+let pendingDeepLink: string | null = null
+
+export function setPendingDeepLink(code: string | null): void {
+  pendingDeepLink = code ? String(code).trim().toUpperCase() : null
+}
+
+/** Consume the pending deep-link code (renderer mount). */
+export function takePendingDeepLink(): string | null {
+  const c = pendingDeepLink
+  pendingDeepLink = null
+  return c
+}
 
 interface StoredRecord extends ShareSnapshot {
   code: string
@@ -85,7 +115,7 @@ export async function prepareSnapshot(profileId: string): Promise<ShareSnapshot>
     disabled: m.disabled
   }))
 
-  return {
+  return sanitizeSnapshot({
     schema: 'reimagined-profile',
     formatVersion: FORMAT_VERSION,
     name: profile.name,
@@ -93,6 +123,46 @@ export async function prepareSnapshot(profileId: string): Promise<ShareSnapshot>
     loader: profile.loader,
     memory: profile.memory,
     resolution: profile.resolution,
+    items,
+    createdAt: iso()
+  })
+}
+
+/**
+ * Privacy + integrity sanitization (defense in depth): a share must never
+ * carry local paths, separators, control characters or oversized strings —
+ * only plain identifiers and whitelisted fields. Applied on the way out
+ * (prepare) and on the way in (import), so a hand-crafted manifest can't
+ * smuggle anything into the launcher.
+ */
+function sanitizeSnapshot(snap: ShareSnapshot): ShareSnapshot {
+  const clean = (s: unknown): string =>
+    String(s ?? '').replace(/[\\/\r\n\x00-\x1f]/g, ' ').trim().slice(0, 240)
+  const PROJECT_TYPES = ['mod', 'resourcepack', 'datapack', 'shader', 'modpack']
+  const items: ShareItem[] = (snap.items ?? []).map((it) => ({
+    id: clean(it.id) || `p-${Math.random().toString(36).slice(2, 8)}`,
+    title: clean(it.title) || 'Shared item',
+    source: it.source === 'curseforge' ? 'curseforge' : 'modrinth',
+    projectType: (PROJECT_TYPES.includes(it.projectType ?? 'mod') ? it.projectType ?? 'mod' : 'mod') as ShareItem['projectType'],
+    versionId: clean(it.versionId),
+    versionNumber: clean(it.versionNumber),
+    disabled: Boolean(it.disabled)
+  }))
+  const res = snap.resolution
+  return {
+    schema: 'reimagined-profile',
+    formatVersion: FORMAT_VERSION,
+    name: clean(snap.name) || 'Shared profile',
+    minecraftVersion: clean(snap.minecraftVersion) || '1.21.4',
+    loader: {
+      type: snap.loader?.type === 'forge' || snap.loader?.type === 'fabric' ? snap.loader.type : 'vanilla',
+      version: snap.loader?.version ? clean(snap.loader.version) : null
+    },
+    memory: typeof snap.memory === 'number' ? Math.max(512, Math.min(65536, Math.round(snap.memory))) : 4096,
+    resolution:
+      res && typeof res.width === 'number' && typeof res.height === 'number'
+        ? { width: res.width, height: res.height, fullscreen: false }
+        : { width: 1280, height: 720, fullscreen: false },
     items,
     createdAt: iso()
   }
@@ -111,7 +181,7 @@ function validateSnapshot(raw: unknown): ShareSnapshot {
   if (!snap.name || !snap.minecraftVersion || !Array.isArray(snap.items)) {
     throw new LauncherError('SHARE_CORRUPT', 'This profile export is corrupted or incomplete.')
   }
-  return snap
+  return sanitizeSnapshot(snap)
 }
 
 /* ------------------------------- ZIP export ------------------------------- */
@@ -170,6 +240,11 @@ export async function exportZipWithDialog(profileId: string): Promise<{ canceled
 export async function readZip(zipPath: string): Promise<ShareSnapshot> {
   if (!exists(zipPath)) {
     throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
+  }
+  const st = await fsp.stat(zipPath).catch(() => null)
+  if (!st) throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
+  if (st.size > MAX_ZIP_BYTES) {
+    throw new LauncherError('INVALID_FILE', 'This .zip is too large to be a Reimagined export.')
   }
   const buf = await fsp.readFile(zipPath)
   const manifest = zipReadEntry(buf, MANIFEST_NAME)
@@ -256,6 +331,8 @@ export interface ImportResult {
  * no longer be resolved are skipped and reported — never a hard failure.
  */
 export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportResult> {
+  // v1.0.19: sanitize whatever came in (code or zip) before using it.
+  snapshot = sanitizeSnapshot(snapshot)
   const profile = await profileManager.create({
     name: snapshot.name,
     minecraftVersion: snapshot.minecraftVersion,
@@ -264,6 +341,7 @@ export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportRes
     resolution: snapshot.resolution
   })
 
+  activeImport = { cancelled: false }
   const emit = (phase: string, percent: number | null) =>
     eventBus.emit('profile:progress', {
       action: 'import',
@@ -274,57 +352,85 @@ export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportRes
       done: false
     })
 
-  emit('Setting up folders…', 8)
-  const { mkdirp } = await import('../utils/fs')
-  const pathMod = await import('node:path')
-  for (const d of ['mods', 'saves', 'logs', 'resourcepacks', 'shaderpacks', 'datapacks']) {
-    mkdirp(pathMod.join(paths.games, profile.gameDir, d))
-  }
-
-  const items = snapshot.items ?? []
-  const skipped: string[] = []
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-    emit(`Restoring ${item.title}…`, 15 + Math.round((i / Math.max(1, items.length)) * 80))
-    try {
-      if (item.source === 'curseforge') {
-        await modManager.installCurseforge(
-          profile.id,
-          item.id,
-          { title: item.title },
-          (item.projectType ?? 'mod') as 'mod' | 'resourcepack' | 'shader' | 'datapack'
-        )
-      } else if (item.source === 'modrinth') {
-        await modManager.install(
-          profile.id,
-          item.id,
-          (item.projectType ?? 'mod') as 'mod' | 'resourcepack' | 'shader' | 'datapack'
-        )
-      } else {
-        skipped.push(`${item.title} (local content — not included in share)`)
-        continue
-      }
-      // A shared disabled item must stay disabled in the new profile.
-      const installed = await profileManager.get(profile.id)
-      const mod = installed?.mods.find((m) => m.id === item.id)
-      if (item.disabled && mod) {
-        await modManager.setEnabled(profile.id, mod.slug, false)
-      }
-    } catch (err) {
-      logger.warn(`Import: could not restore "${item.title}": ${(err as Error).message}`)
-      skipped.push(item.title)
+  try {
+    emit('Setting up folders…', 8)
+    const { mkdirp } = await import('../utils/fs')
+    const pathMod = await import('node:path')
+    for (const d of ['mods', 'saves', 'logs', 'resourcepacks', 'shaderpacks', 'datapacks']) {
+      mkdirp(pathMod.join(paths.games, profile.gameDir, d))
     }
+
+    const items = snapshot.items ?? []
+    const skipped: string[] = []
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (activeImport?.cancelled) {
+        throw new LauncherError('IMPORT_CANCELLED', 'Import cancelled.', 'The partially-created profile was removed.')
+      }
+      emit(`Restoring ${item.title}…`, 15 + Math.round((i / Math.max(1, items.length)) * 80))
+      try {
+        const type = (item.projectType ?? 'mod') as 'mod' | 'resourcepack' | 'shader' | 'datapack'
+        if (item.source === 'curseforge') {
+          // Exact file id is preferred; only fall back to "latest" when the
+          // share predates version ids (never silently substitute versions).
+          if (item.versionId) {
+            await modManager.installVersion(profile.id, 'curseforge', item.id, item.versionId, type)
+          } else {
+            await modManager.installCurseforge(profile.id, item.id, { title: item.title }, type)
+          }
+        } else if (item.source === 'modrinth') {
+          // Exact version preferred; dependencies are resolved and deduped
+          // (already-installed dependencies are never duplicated).
+          await modManager.installWithDeps(profile.id, item.id, item.versionId ?? undefined, type)
+        } else {
+          skipped.push(`${item.title} (local content — not included in share)`)
+          continue
+        }
+        // A shared disabled item must stay disabled in the new profile.
+        const installed = await profileManager.get(profile.id)
+        const mod = installed?.mods.find((m) => m.id === item.id)
+        if (item.disabled && mod) {
+          await modManager.setEnabled(profile.id, mod.slug, false)
+        }
+      } catch (err) {
+        // Already present (e.g. installed as a dependency of an earlier item)
+        // is a SUCCESS, not a skip — the shared content is fully there.
+        if ((err as { code?: string }).code === 'MOD_INSTALLED') {
+          logger.info(`Import: "${item.title}" was already installed — keeping it.`)
+          continue
+        }
+        logger.warn(`Import: could not restore "${item.title}": ${(err as Error).message}`)
+        skipped.push(item.title)
+      }
+    }
+
+    emit('Finalizing…', 97)
+    const finalProfile = await profileManager.get(profile.id)
+    eventBus.emit('profile:changed', { action: 'created', profile: finalProfile })
+    eventBus.emit('profile:progress', { action: 'import', profileId: profile.id, name: profile.name, phase: 'Done', percent: 100, done: true })
+
+    logger.info(
+      `Profile imported: "${snapshot.name}" (${snapshot.minecraftVersion}) — ${items.length - skipped.length}/${items.length} items restored`
+    )
+    return { profileId: profile.id, name: profile.name, skipped }
+  } catch (err) {
+    if ((err as { code?: string }).code === 'IMPORT_CANCELLED') {
+      // Leave no trace: remove the partially-created profile and its instance.
+      await profileManager.delete(profile.id, { deleteFiles: true }).catch(() => {})
+      eventBus.emit('profile:progress', {
+        action: 'import',
+        profileId: profile.id,
+        name: profile.name,
+        phase: 'Cancelled',
+        percent: 0,
+        done: true
+      })
+      logger.warn(`Import cancelled by the user — profile "${snapshot.name}" removed.`)
+    }
+    throw err
+  } finally {
+    activeImport = null
   }
-
-  emit('Finalizing…', 97)
-  const finalProfile = await profileManager.get(profile.id)
-  eventBus.emit('profile:changed', { action: 'created', profile: finalProfile })
-  eventBus.emit('profile:progress', { action: 'import', profileId: profile.id, name: profile.name, phase: 'Done', percent: 100, done: true })
-
-  logger.info(
-    `Profile imported: "${snapshot.name}" (${snapshot.minecraftVersion}) — ${items.length - skipped.length}/${items.length} items restored`
-  )
-  return { profileId: profile.id, name: profile.name, skipped }
 }
 
 /** Import by online code. */
@@ -347,5 +453,8 @@ export const shareService = {
   createCode,
   resolveCode,
   importCode,
-  importZip
+  importZip,
+  cancelImport,
+  setPendingDeepLink,
+  takePendingDeepLink
 }

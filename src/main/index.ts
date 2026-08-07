@@ -4,6 +4,7 @@
  * Boot order: data dirs → settings → logger → account → window → IPC.
  * Supports `--smoke-test` for CI-style verification without a window.
  */
+import path from 'node:path'
 import { app, dialog, Menu } from 'electron'
 import { paths, ensureDataDirs, appVersion } from './paths'
 import { logger, configureLogger, cleanupOldLogs } from './logs/logger'
@@ -11,6 +12,7 @@ import { settingsManager } from './settings/settings-manager'
 import { accountStore } from './auth/account-store'
 import { microsoftAuth } from './auth/microsoft-auth'
 import { profileManager } from './profiles/profile-manager'
+import { shareService } from './share/share'
 import { detectJavaRuntimes } from './minecraft/java'
 import { registerIpcHandlers } from './ipc'
 import { createMainWindow, getMainWindow } from './window'
@@ -66,12 +68,14 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock && !SMOKE && !BENCH) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     const win = getMainWindow()
     if (win) {
       if (win.isMinimized()) win.restore()
       win.focus()
     }
+    // v1.0.19: a reimagined://share/<CODE> link opened while running.
+    handleDeepLinkArgs(argv.slice(1))
   })
 
   app
@@ -105,6 +109,16 @@ if (!gotLock && !SMOKE && !BENCH) {
 
         const win = createMainWindow()
         registerIpcHandlers(win)
+
+        // v1.0.19: Minecraft survives launcher restarts — reconnect to any
+        // game process still running from a previous session (validated PIDs).
+        void import('./minecraft/session-state')
+          .then((m) => m.restoreRunningSessions())
+          .catch(() => {})
+
+        // v1.0.19: deep links — reimagined://share/<CODE> opens Import with the code.
+        registerProtocol()
+        handleDeepLinkArgs(process.argv.slice(1))
       } catch (err) {
         logger.exception('Fatal startup error', err)
         if (!SMOKE) {
@@ -125,9 +139,66 @@ if (!gotLock && !SMOKE && !BENCH) {
     if (process.platform !== 'darwin') app.quit()
   })
 
+  // v1.0.19: before a normal quit, remember which Minecraft processes are
+  // still running so the next launch reconnects to them (never kill them).
+  // The quit is deferred until the snapshot is safely on disk — `before-quit`
+  // is not awaited by Electron, so a fire-and-forget write could be lost.
+  let quitSessionsSaved = false
+  app.on('before-quit', (e) => {
+    if (SMOKE || BENCH || quitSessionsSaved) return
+    quitSessionsSaved = true
+    e.preventDefault()
+    void import('./minecraft/session-state')
+      .then((m) => m.saveRunningSessions())
+      .catch(() => {})
+      .finally(() => app.exit())
+  })
+
   app.on('activate', () => {
     if (process.platform === 'darwin' && !getMainWindow()) createMainWindow()
   })
+}
+
+/* ------------------------------ deep links (v1.0.19) ------------------------------ */
+
+/** Register the reimagined:// protocol so links open this launcher (packaged). */
+function registerProtocol(): void {
+  try {
+    if (process.defaultApp && process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient('reimagined', process.execPath, [path.resolve(process.argv[1])])
+    } else {
+      app.setAsDefaultProtocolClient('reimagined')
+    }
+    logger.info('reimagined:// protocol registered')
+  } catch (err) {
+    logger.warn(`Could not register reimagined:// protocol: ${(err as Error).message}`)
+  }
+}
+
+/** Emit a share deep-link event for every reimagined://share/<CODE> argv entry. */
+function handleDeepLinkArgs(argv: string[]): void {
+  for (const raw of argv) {
+    const code = shareCodeFromUrl(raw)
+    if (code) {
+      logger.info(`Deep link received — share code ${code}`)
+      // Keep it for the renderer even if it is not listening yet, and push
+      // a live event in case the UI is already open.
+      try {
+        shareService.setPendingDeepLink(code)
+      } catch {
+        /* best-effort */
+      }
+      eventBus.emit('share:deep-link', { code })
+    }
+  }
+}
+
+function shareCodeFromUrl(raw: string): string | null {
+  const s = String(raw).trim()
+  if (!s.startsWith('reimagined://')) return null
+  const m = s.match(/reimagined:\/\/share\/([A-Za-z0-9]+)/i)
+  if (!m) return null
+  return m[1].toUpperCase()
 }
 
 /** Headless verification used by `npm run smoke`. */
@@ -261,6 +332,34 @@ async function runSmokeTest(): Promise<void> {
     await profileManager.delete(imported.profileId)
     await profileManager.delete(source.id)
     logger.info('Share flow OK (prepare → code → resolve → zip → import → expiry)')
+  })
+
+  await ok('config guard: backup + restore preserves options.txt', async () => {
+    const fsMod = await import('node:fs')
+    const pathMod = await import('node:path')
+    const p = await profileManager.create({
+      name: 'Guard Smoke',
+      minecraftVersion: '1.21.4',
+      loader: { type: 'vanilla', version: null }
+    })
+    try {
+      const dir = pathMod.join(paths.games, p.gameDir)
+      fsMod.mkdirSync(dir, { recursive: true })
+      fsMod.writeFileSync(pathMod.join(dir, 'options.txt'), 'maxFps:120\nrenderDistance:12\n')
+      const { configGuard } = await import('./minecraft/config-guard')
+      const backupId = await configGuard.backupInstanceConfig(p)
+      if (!backupId) throw new Error('backup produced no snapshot')
+      // Simulate an operation clobbering options.txt, then restore.
+      fsMod.writeFileSync(pathMod.join(dir, 'options.txt'), 'maxFps:60\n')
+      const restored = await configGuard.restoreInstanceConfig(p, pathMod.basename(backupId))
+      const content = fsMod.readFileSync(pathMod.join(dir, 'options.txt'), 'utf-8')
+      if (restored < 1 || !content.includes('renderDistance:12')) {
+        throw new Error('restore did not bring back the user settings')
+      }
+      logger.info('Config guard round-trip OK (backup → clobber → restore)')
+    } finally {
+      await profileManager.delete(p.id)
+    }
   })
 
   const summary = `Smoke test results\n${checks.join('\n')}`

@@ -63,9 +63,6 @@ function cacheFile(): string {
 function stagingDir(): string {
   return path.join(paths.updates, 'staging')
 }
-function markerFile(): string {
-  return path.join(paths.updates, 'applied-version.json')
-}
 
 /** The file the last download produced (zip in source runs, .exe in packaged). */
 function downloadFile(info: UpdateInfo): string {
@@ -85,11 +82,19 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** The version currently applied to this installation (marker, else local). */
+/**
+ * The version currently applied to this installation.
+ *
+ * v1.0.19: this is ALWAYS the real installed version (`appVersion`, read from
+ * the running package/exe — it is replaced by the update itself). Using a
+ * separate marker here was the source of two failure modes: a stale marker
+ * could re-offer an already-applied update, or a marker written before a
+ * failed install could hide the update forever. With the real version, a
+ * failed update simply leaves the old version in place and the update is
+ * re-offered — no loops, no stuck state.
+ */
 async function readInstalledVersion(): Promise<string> {
-  const marker = await readJson<{ version?: string } | null>(markerFile(), null)
-  const v = marker?.version || appVersion
-  return v || '0.0.0'
+  return appVersion || '0.0.0'
 }
 
 export const updater = {
@@ -247,12 +252,17 @@ export const updater = {
     }
 
     try {
-      await writeJson(markerFile(), { version: info.latestVersion })
+      await remove(cacheFile())
     } catch {
       /* best-effort */
     }
+
+    // v1.0.19: Minecraft must survive the launcher update. Record every
+    // running game session so the restarted launcher reconnects to them
+    // instead of showing them as stopped.
     try {
-      await remove(cacheFile())
+      const { saveRunningSessions } = await import('../minecraft/session-state')
+      await saveRunningSessions()
     } catch {
       /* best-effort */
     }
@@ -305,13 +315,16 @@ function armRelaunchAfterInstaller(installerPid: number | null): void {
       logger.warn('Relaunch helper skipped: not running from a packaged .exe.')
       return
     }
+    // v1.0.19: wait for BOTH the installer and the OLD launcher process to
+    // fully exit, then wait ~3 s so Windows releases every file handle and
+    // finishes the replacement before the updated exe is started.
     const waitCmd = installerPid
-      ? `Wait-Process -Id ${installerPid} -ErrorAction SilentlyContinue`
-      : 'Start-Sleep -Seconds 4'
+      ? `Wait-Process -Id ${installerPid} -ErrorAction SilentlyContinue; Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue`
+      : 'Start-Sleep -Seconds 5'
     const cmd = [
       waitCmd,
-      // Let the file replacement settle (antivirus may briefly lock the exe).
-      'Start-Sleep -Milliseconds 1200',
+      // Release file handles / finish process termination (spec: ~3 seconds).
+      'Start-Sleep -Seconds 3',
       `$exe = '${exe.replace(/'/g, "''")}'`,
       // Launch the NEW launcher; retry briefly if the file is still locked.
       '$ok = $false',
@@ -370,15 +383,21 @@ async function installSource(): Promise<void> {
     logger.info('Update applied — rebuilding the app…')
     await rebuild()
 
-    // Only after a successful install: mark this version as applied and
-    // invalidate the check cache so the next startup reports the truth.
+    // Only after a successful install: invalidate the check cache so the next
+    // startup reports the truth (the installed version is read from the app
+    // itself, so no separate marker is needed — a failed update simply leaves
+    // the old version in place and the update is offered again).
     try {
-      await writeJson(markerFile(), { version: info.latestVersion })
+      await remove(cacheFile())
     } catch {
       /* best-effort */
     }
+
+    // v1.0.19: record running game sessions so they survive the relaunch and
+    // the updated launcher reconnects to them.
     try {
-      await remove(cacheFile())
+      const { saveRunningSessions } = await import('../minecraft/session-state')
+      await saveRunningSessions()
     } catch {
       /* best-effort */
     }

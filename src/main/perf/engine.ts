@@ -210,6 +210,10 @@ function snapFpsCap(target: number): number {
  * so re-applying it here each launch is the correct, real mechanism.
  */
 export function applyFrameCap(gameDir: string, maxFps: number): void {
+  // v1.0.19 settings persistence: snapshot options.txt (at most once a day)
+  // before the per-launch cap write so the user's settings are always
+  // recoverable — the cap edit itself only rewrites the maxFps line.
+  void import('../minecraft/config-guard').then((m) => m.configGuard.backupOptionsTxt(gameDir)).catch(() => {})
   try {
     const file = path.join(gameDir, 'options.txt')
     const cap = snapFpsCap(maxFps)

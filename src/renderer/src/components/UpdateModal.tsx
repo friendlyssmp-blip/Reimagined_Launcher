@@ -66,6 +66,7 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
       else if (p.phase === 'extract') setPhaseText('Extracting update...')
       else if (p.phase === 'apply') setPhaseText('Applying files...')
       else if (p.phase === 'build') setPhaseText('Rebuilding the launcher...')
+      else if (p.phase === 'restarting') setPhaseText('Relaunching… Minecraft keeps running')
       else if (p.phase === 'done') setPhaseText('Relaunching...')
     })
     return off
