@@ -54,6 +54,7 @@ export const IPC = {
   modsCategories: 'mods:categories',
   modsLocalFiles: 'mods:local-files',
   modsRemoveLocalFile: 'mods:remove-local-file',
+  modsIdentifyManual: 'mods:identify-manual',
   modsChangeVersion: 'mods:change-version',
   modsSetEnabled: 'mods:set-enabled',
   modsAvailableVersions: 'mods:available-versions',
@@ -67,6 +68,7 @@ export const IPC = {
   contentDetail: 'content:detail',
   contentVersions: 'content:versions',
   contentChangelog: 'content:changelog',
+  contentModpackContents: 'content:modpack-contents',
 
   // Modpacks (Modrinth)
   modpacksSearch: 'modpacks:search',

@@ -9,6 +9,7 @@
 import path from 'node:path'
 import { paths } from '../paths'
 import { exists, remove, rename } from '../utils/fs'
+import { zipReadEntry } from '../utils/zip'
 import { logger } from '../logs/logger'
 import { eventBus } from '../core/event-bus'
 import { LauncherError, Errors } from '../core/errors'
@@ -37,6 +38,51 @@ function folderFor(projectType: ProjectType): string {
     case 'modpack': return 'modpacks'
     default: return 'mods'
   }
+}
+
+/* ------------------- manual-jar metadata (v1.0.22) ------------------- */
+
+interface ModMeta {
+  id?: string
+  name?: string
+  version?: string
+}
+
+/**
+ * Read the mod's real identity out of a jar: `fabric.mod.json` for Fabric,
+ * `META-INF/mods.toml` / `neoforge.mods.toml` for Forge. Never trusts the
+ * file name alone — the name shown to the user comes from the mod itself.
+ */
+function readModMetadata(buf: Buffer, filename: string): ModMeta {
+  try {
+    const fabric = zipReadEntry(buf, 'fabric.mod.json')
+    if (fabric) {
+      const j = JSON.parse(fabric.toString('utf-8')) as { id?: unknown; name?: unknown; version?: unknown }
+      if (j && (j.id || j.name)) {
+        return {
+          id: typeof j.id === 'string' ? j.id : undefined,
+          name: typeof j.name === 'string' ? j.name : undefined,
+          version: typeof j.version === 'string' ? j.version : undefined
+        }
+      }
+    }
+  } catch {
+    /* fall through to Forge */
+  }
+  for (const entry of ['META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+    try {
+      const toml = zipReadEntry(buf, entry)
+      if (!toml) continue
+      const text = toml.toString('utf-8')
+      const modSection = text.split(/\[\[mods\]\]/i)[1] ?? ''
+      const modId = /(?:^|\n)\s*modId\s*=\s*["']?([^"'\n]+)["']?/.exec(modSection)?.[1]?.trim()
+      const name = /(?:^|\n)\s*(?:displayName|name)\s*=\s*["']([^"'\n]+)["']/.exec(modSection)?.[1]?.trim()
+      if (modId || name) return { id: modId, name: name || modId || filename.replace(/\.jar$/i, ''), version: undefined }
+    } catch {
+      /* try next */
+    }
+  }
+  return { name: filename.replace(/\.jar$/i, '') }
 }
 
 /**
@@ -468,6 +514,72 @@ class ModManager {
     const files = await listDir(dir)
     const tracked = new Set(profile.mods.map((m) => m.filename))
     return files.filter((f) => f.endsWith('.jar') && !tracked.has(f))
+  }
+
+  /**
+   * v1.0.22 — detect jars dropped manually into the mods/ folder and resolve
+   * them to their REAL project (name + icon via Modrinth, when the mod id is
+   * the slug), registering them as installed items. Once registered, Modrinth
+   * search marks them "Installed" and reinstalling is blocked — a manually
+   * installed mod can never be double-installed from the catalog.
+   */
+  async identifyManualMods(profileId: string): Promise<{ identified: number; matched: number }> {
+    const profile = await this.requireProfile(profileId)
+    const dir = this.modsDir(profile)
+    if (!exists(dir)) return { identified: 0, matched: 0 }
+    const { listDir } = await import('../utils/fs')
+    const fsp = await import('node:fs/promises')
+    const files = await listDir(dir)
+    const tracked = new Set(profile.mods.map((m) => m.filename))
+    const candidates = files.filter((f) => f.endsWith('.jar') && !tracked.has(f))
+    if (candidates.length === 0) return { identified: 0, matched: 0 }
+
+    let identified = 0
+    let matched = 0
+    const additions: ProfileMod[] = []
+    for (const filename of candidates) {
+      try {
+        const meta = readModMetadata(await fsp.readFile(path.join(dir, filename)), filename)
+        // Best-effort Modrinth match by the mod id (usually the slug).
+        let project: { id: string; slug: string; title: string; iconUrl?: string } | null = null
+        if (meta.id) {
+          try {
+            const p = await modrinth.getProject(meta.id)
+            project = { id: p.id, slug: p.slug, title: p.title, iconUrl: p.icon_url }
+          } catch {
+            project = null
+          }
+        }
+        const entry: ProfileMod = {
+          id: project?.id ?? meta.id ?? filename,
+          slug: project?.slug ?? meta.id ?? filename,
+          title: project?.title ?? meta.name ?? filename.replace(/\.jar$/i, ''),
+          filename,
+          versionId: '',
+          versionNumber: meta.version || 'manual',
+          downloads: 0,
+          iconUrl: project?.iconUrl,
+          source: 'local',
+          projectType: 'mod',
+          installedAt: iso(),
+          updateAvailable: null
+        }
+        additions.push(entry)
+        identified++
+        if (project) matched++
+      } catch {
+        /* unreadable jar — leave it in the manual list */
+      }
+    }
+
+    if (additions.length > 0) {
+      await profileManager.update(profileId, { mods: [...profile.mods, ...additions] })
+      eventBus.emit('mods:changed', { profileId, action: 'manual-identified', count: additions.length })
+      logger.info(
+        `Identified ${additions.length} manually-installed mod(s) (${matched} matched to Modrinth) in "${profile.name}"`
+      )
+    }
+    return { identified, matched }
   }
 
   /** Delete a manually-dropped jar from the profile's mods folder. */

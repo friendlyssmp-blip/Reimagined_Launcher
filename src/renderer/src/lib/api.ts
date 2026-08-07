@@ -97,7 +97,9 @@ export const api = {
     versions: (payload: { provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }) =>
       unwrap<ProjectVersionInfo[]>(window.reimagined.content.versions(payload)),
     changelog: (projectId: string, versionId: string) =>
-      unwrap<string>(window.reimagined.content.changelog(projectId, versionId))
+      unwrap<string>(window.reimagined.content.changelog(projectId, versionId)),
+    modpackContents: (versionId: string) =>
+      unwrap<{ path: string; size: number; source: 'modrinth' | 'curseforge' | 'bundled' }[]>(window.reimagined.content.modpackContents(versionId))
   },
   auth: {
     getAccount: () => unwrap<AccountPublic>(window.reimagined.auth.getAccount()),
@@ -139,6 +141,7 @@ export const api = {
     checkUpdates: (profileId: string) => unwrap<ProfileMod[]>(window.reimagined.mods.checkUpdates(profileId)),
     update: (profileId: string, slug: string) => unwrap<ProfileMod>(window.reimagined.mods.update(profileId, slug)),
     localFiles: (profileId: string) => unwrap<string[]>(window.reimagined.mods.localFiles(profileId)),
+    identifyManual: (profileId: string) => unwrap<{ identified: number; matched: number }>(window.reimagined.mods.identifyManual(profileId)),
     removeLocalFile: (profileId: string, filename: string) => unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename)),
     searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string) =>
       unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType)),

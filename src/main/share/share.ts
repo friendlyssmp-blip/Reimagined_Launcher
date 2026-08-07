@@ -43,6 +43,9 @@ let activeImport: { cancelled: boolean } | null = null
 /** Ask the active import (if any) to stop after the current item. */
 export function cancelImport(): void {
   if (activeImport) activeImport.cancelled = true
+  // Also abort any in-flight download RIGHT NOW (not just between items), so
+  // a CurseForge/Modrinth file stops mid-fetch and its partial file is cleaned.
+  void import('../minecraft/downloader').then((m) => m.abortAllDownloads()).catch(() => {})
 }
 
 /* --------------------------- deep links (v1.0.19) --------------------------- */

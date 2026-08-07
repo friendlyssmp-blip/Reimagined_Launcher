@@ -6,11 +6,10 @@
  * fallback failed intermittently — that's why covers sometimes didn't load.
  *
  * Icons now go through the MAIN-process proxy (retries + browser headers +
- * bounded cache) and show a styled placeholder while loading or on failure —
- * a broken-image glyph can never appear.
+ * bounded cache) and show the Reimagined logo (Logo/Logo.png) while loading
+ * or when a project has no icon of its own — never a broken-image glyph.
  */
 import { useProjectImage } from '../lib/useProjectImage'
-import { IconPuzzle } from './icons'
 
 export function ModIcon({ src, style, draggable = false }: { src?: string | null; style?: React.CSSProperties; draggable?: boolean }) {
   const state = useProjectImage(src)
@@ -19,7 +18,7 @@ export function ModIcon({ src, style, draggable = false }: { src?: string | null
     return <img src={state.dataUrl} alt="" style={style} draggable={draggable} />
   }
 
-  // Loading / unavailable — a clean placeholder instead of a broken image.
+  // Loading / unavailable — the app logo (Logo/Logo.png) replaces a broken glyph.
   return (
     <div
       style={{
@@ -28,12 +27,21 @@ export function ModIcon({ src, style, draggable = false }: { src?: string | null
         alignItems: 'center',
         justifyContent: 'center',
         background: 'linear-gradient(135deg, var(--bg-4, #22222c), var(--bg-3, #191921))',
-        color: 'var(--text-3)',
         borderRadius: style?.borderRadius ?? 9,
         overflow: 'hidden'
       }}
     >
-      <IconPuzzle style={{ width: '38%', height: '38%', opacity: 0.6 }} />
+      <img
+        src="./app-logo.png"
+        alt=""
+        draggable={false}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          opacity: state.status === 'loading' ? 0.45 : 0.72
+        }}
+      />
     </div>
   )
 }

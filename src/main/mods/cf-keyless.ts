@@ -54,21 +54,22 @@ export async function cfFileInfo(projectId: string, fileId: string): Promise<CfF
   }
 }
 
-/** Download a CurseForge file (follows the CDN redirect) and verify its size. */
-async function downloadFile(projectId: string, fileId: string, dest: string, expectedSize: number): Promise<void> {
-  const res = await fetch(`${CF_API}/mods/${projectId}/files/${fileId}/download`, {
-    headers: { 'User-Agent': CF_UA, Accept: '*/*' },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(300_000)
-  })
-  if (!res.ok || !res.body) {
-    throw new LauncherError('CF_DOWNLOAD_FAILED', `CurseForge download failed (HTTP ${res.status}).`, 'Try the import again in a moment.')
-  }
-  const buf = Buffer.from(await res.arrayBuffer())
-  if (expectedSize > 0 && buf.length !== expectedSize) {
+/**
+ * Download a CurseForge file (follows the CDN redirect) through the shared
+ * batch downloader — so the Downloads section shows REAL byte progress and
+ * per-item speed, retries failures, and supports cancel (v1.0.22).
+ */
+async function downloadFile(projectId: string, fileId: string, dest: string, expectedSize: number, label: string): Promise<void> {
+  const { runDownloadBatch } = await import('../minecraft/downloader')
+  await runDownloadBatch(
+    [{ url: `${CF_API}/mods/${projectId}/files/${fileId}/download`, dest, expectedSize }],
+    { kind: 'mods', label }
+  )
+  // Assert the exact on-disk size — a partial file must never count as done.
+  const st = await fsp.stat(dest).catch(() => null)
+  if (!st || (expectedSize > 0 && st.size !== expectedSize)) {
     throw new LauncherError('CF_DOWNLOAD_FAILED', 'CurseForge download was incomplete.', 'Try the import again — the file will be re-fetched.')
   }
-  await fsp.writeFile(dest, buf)
 }
 
 /** Map a project type to its instance folder name. */
@@ -110,7 +111,7 @@ export async function installCurseforgeFile(
   if (exists(dest)) await remove(dest)
 
   logger.info(`Importing CurseForge ${projectId} @ ${fileId} → ${safeName} (${projectType})`)
-  await downloadFile(projectId, fileId, dest, info.size)
+  await downloadFile(projectId, fileId, dest, info.size, info.displayName)
 
   const mod: ProfileMod = {
     id: projectId,

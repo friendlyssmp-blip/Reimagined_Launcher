@@ -282,6 +282,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsCheckUpdates, (profileId) => modManager.checkUpdates(profileId))
   on(IPC.modsUpdate, (payload) => modManager.update(payload.profileId, payload.slug))
   on(IPC.modsLocalFiles, (profileId) => modManager.localModFiles(profileId))
+  on(IPC.modsIdentifyManual, (profileId) => modManager.identifyManualMods(profileId))
   on(IPC.modsRemoveLocalFile, (payload) => modManager.removeLocalFile(payload.profileId, payload.filename))
   on(IPC.modsSearchCurseforge, (payload) =>
     modManager.searchCurseforge(payload.profileId, payload.query ?? '', payload.sort ?? undefined, payload.projectType ?? 'mod')
@@ -379,6 +380,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
     const { modrinth } = await import('./mods/modrinth')
     return modrinth.listVersions(projectId, projectType as 'mod' | 'resourcepack' | 'shader' | 'datapack')
+  })
+
+  on(IPC.contentModpackContents, async (payload: { versionId?: string }) => {
+    const { modpackContents } = await import('./mods/modpacks')
+    return modpackContents(payload?.versionId ?? '')
   })
 
   // CurseForge release notes are per-file — fetch one at a time on demand.

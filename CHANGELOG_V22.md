@@ -292,3 +292,39 @@
   executable / shortcuts now use `Logo/Logo.png` as the icon (center-fitted on
   a square canvas — content fully visible, nothing clipped), applied to the
   packaged .exe on every build.
+
+## v1.0.22 — Manual-mod detection (real names), modpack contents view, live download progress
+
+### The big one: manually-installed mods are now truly detected
+- Dropping a .jar straight into the instance's `mods/` folder is no longer
+  invisible. The launcher reads the mod's REAL identity from inside the jar
+  (`fabric.mod.json` for Fabric, `META-INF/mods.toml` for Forge) and shows the
+  mod's name — not the file name — with its icon (matched to Modrinth when
+  possible, otherwise the Reimagined logo).
+- Identified manual mods are registered as installed: Modrinth search marks
+  them "Installed" (button disabled) so you can never re-download something
+  you already have. The install guard also blocks by slug, so e.g. a manual
+  Sodium blocks the Modrinth Sodium in every code path.
+- The scan runs automatically whenever the Installed panel opens.
+
+### Modpack contents
+- A modpack's detail page now has an "Includes" tab listing every file it
+  bundles (mods / resource packs / data packs, clean list) straight from
+  Modrinth — you can see exactly what you're installing before you install.
+
+### Live download progress everywhere
+- CurseForge imports now stream through the same batch downloader as mod
+  installs: the Downloads section shows them with real bytes, and the import
+  modal shows "Downloading <mod> — 18.4 MB / 25.1 MB · 8.4 MB/s · ETA" live
+  (real measured speed, never fake). Cancelling an import aborts the current
+  download immediately.
+
+### Images + icons
+- Full-resolution covers/gallery images are cached like small icons are
+  (raised the cache ceilings) — nothing is downscaled, so covers stay crisp.
+- Any project without its own icon now shows the Reimagined logo (Logo/Logo.png)
+  instead of a generic puzzle placeholder.
+
+### App icon
+- The .exe icon was regenerated from Logo.png with a smaller, centered fit so
+  it never looks cut off in the taskbar.

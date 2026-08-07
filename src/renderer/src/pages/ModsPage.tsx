@@ -539,16 +539,28 @@ export function ModsPage() {
   /* Part 4 — keep the "Update" badges honest: refresh the installed list
    * against Modrinth's real release order whenever the Installed panel is
    * opened or the profile changes, so "Up to date" / "Update" / the
-   * "Update All (N)" count always match reality (never stale metadata). */
+   * "Update All (N)" count always match reality (never stale metadata).
+   *
+   * v1.0.22 — also run manual-mod identification here: jars dropped straight
+   * into the mods/ folder get their REAL name + icon resolved (and registered
+   * as installed), so Modrinth search marks them "Installed" instead of
+   * offering a re-download, and the list shows the mod name, not the file. */
   useEffect(() => {
     if (tab !== 'installed' || !activeProfile) return
     let cancelled = false
-    api.mods
-      .checkUpdates(activeProfile.id)
-      .then((fresh) => {
-        if (!cancelled) setInstalled(fresh)
-      })
-      .catch(() => {})
+    ;(async () => {
+      await api.mods.identifyManual(activeProfile.id).catch(() => {})
+      if (cancelled) return
+      // After identification, freshly-registered mods must appear immediately.
+      setInstalled(await api.mods.list(activeProfile.id).catch(() => []))
+      api.mods.localFiles(activeProfile.id).then(setManualFiles).catch(() => setManualFiles([]))
+      api.mods
+        .checkUpdates(activeProfile.id)
+        .then((fresh) => {
+          if (!cancelled) setInstalled(fresh)
+        })
+        .catch(() => {})
+    })()
     return () => {
       cancelled = true
     }

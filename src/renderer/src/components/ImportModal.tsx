@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, Button, Field, TextInput, Badge, Spinner } from './ui'
 import { api, friendlyError, ApiError } from '../lib/api'
@@ -13,6 +13,24 @@ const TYPE_LABELS: Record<string, string> = {
   datapack: 'Data Packs',
   shader: 'Shader Packs',
   modpack: 'Modpacks'
+}
+
+/** 123456 → “120.6 KB” / “18.4 MB” / “1.2 GB”. */
+function fmtBytes(b: number): string {
+  if (!b || b <= 0) return '0 B'
+  if (b < 1024) return `${Math.round(b)} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`
+  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+/** Seconds → “1.2s” / “45s” / “2m 5s”. */
+function fmtEta(sec: number): string {
+  if (!sec || !isFinite(sec) || sec < 0) return ''
+  if (sec < 60) return `${sec.toFixed(1)}s`
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m ${s}s`
 }
 
 /**
@@ -34,6 +52,9 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
   const [busy, setBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
   const [progress, setProgress] = useState<{ phase: string; percent: number | null } | null>(null)
+  /* Live byte-level download state (from download:progress) — real MB/s + ETA. */
+  const [dl, setDl] = useState<{ label: string; received: number; total: number; speed: number } | null>(null)
+  const dlSample = useRef({ at: 0, received: 0, speed: 0 })
 
   /* Deep link: a reimagined://share/<CODE> arrived → jump straight to preview. */
   useEffect(() => {
@@ -52,14 +73,30 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialCode])
 
-  /* Live import progress from the main process (real per-item phases). */
+  /* Live import progress from the main process (real per-item phases + bytes). */
   useEffect(() => {
     return api.onEvent((e) => {
+      if (e.type === 'download:progress') {
+        const p = e.payload as { label?: string; received?: number; totalBytes?: number } | null
+        if (!p?.label) return
+        const now = performance.now()
+        const prev = dlSample.current
+        const received = p.received ?? 0
+        const speed =
+          prev.at > 0 && now - prev.at >= 500 ? Math.max(0, (received - prev.received) / ((now - prev.at) / 1000)) : prev.speed
+        dlSample.current = { at: now, received, speed }
+        setDl({ label: p.label, received, total: p.totalBytes ?? 0, speed })
+        return
+      }
       if (e.type !== 'profile:progress') return
       const p = e.payload as { action?: string; phase?: string; percent?: number; done?: boolean } | null
       if (p?.action !== 'import') return
-      if (p.done) setProgress(null)
-      else setProgress({ phase: p.phase ?? 'Working…', percent: p.percent ?? null })
+      if (p.done) {
+        setProgress(null)
+        setDl(null)
+      } else {
+        setProgress({ phase: p.phase ?? 'Working…', percent: p.percent ?? null })
+      }
     })
   }, [])
 
@@ -135,6 +172,7 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
     } finally {
       setImportBusy(false)
       setProgress(null)
+      setDl(null)
     }
   }
 
@@ -292,6 +330,27 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
                       }}
                     />
                   </div>
+                  {dl && dl.received > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                      <span
+                        style={{
+                          color: 'var(--text-2)',
+                          fontSize: 12,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Downloading {dl.label}
+                      </span>
+                      <span style={{ color: 'var(--text-2)', fontSize: 12, fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                        {fmtBytes(dl.received)} / {dl.total > 0 ? fmtBytes(dl.total) : '…'}
+                        {dl.speed > 0 && ` · ${fmtBytes(dl.speed)}/s`}
+                        {dl.speed > 0 && dl.total > dl.received && ` · ETA ${fmtEta((dl.total - dl.received) / dl.speed)}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -23,7 +23,13 @@ import {
 import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo } from '@shared/types'
 
 type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader' | 'modpack'
-type DetailTab = 'overview' | 'changelog' | 'gallery' | 'versions'
+type DetailTab = 'overview' | 'changelog' | 'gallery' | 'versions' | 'includes'
+
+interface PackFile {
+  path: string
+  size: number
+  source: 'modrinth' | 'curseforge' | 'bundled'
+}
 
 const CONTENT_LABEL: Record<ContentType, string> = {
   mod: 'Mod',
@@ -111,7 +117,8 @@ export function ProjectDetail({
    * action through these optional props instead of the per-profile install. */
   onInstallVersion,
   compatibleCheck,
-  contextLabel
+  contextLabel,
+  modpackIncludes
 }: {
   provider: 'modrinth' | 'curseforge'
   projectId: string
@@ -126,6 +133,8 @@ export function ProjectDetail({
   onInstallVersion?: (versionId: string) => Promise<void>
   compatibleCheck?: (v: ProjectVersionInfo) => boolean
   contextLabel?: string
+  /* Modpacks: resolve what the pack actually contains (Includes tab). */
+  modpackIncludes?: (versionId: string) => Promise<PackFile[]>
 }) {
   const { activeProfile, notify, setModals } = useApp()
   const [detail, setDetail] = useState<ProjectDetailData | null>(null)
@@ -145,6 +154,10 @@ export function ProjectDetail({
   /* Part 1 (V2) — gallery lightbox: click any screenshot to view it full-size
    * with prev/next navigation; Esc or click-outside closes. */
   const [lightbox, setLightbox] = useState<number | null>(null)
+  /* Modpack Includes tab data (fetched from the .mrpack index on demand). */
+  const [includes, setIncludes] = useState<PackFile[] | null>(null)
+  const [includesLoading, setIncludesLoading] = useState(false)
+  const [includesError, setIncludesError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -169,7 +182,36 @@ export function ProjectDetail({
     setChangelogLoading(false)
     setShowAllVersions(false)
     setLightbox(null)
+    setIncludes(null)
+    setIncludesError(null)
   }, [provider, projectId])
+
+  /* Includes: fetch the pack's manifest file list when the tab opens. */
+  useEffect(() => {
+    if (tab !== 'includes' || projectType !== 'modpack' || !modpackIncludes || includes !== null) return
+    const target = detail?.versions?.[0] ?? null
+    if (!target) {
+      setIncludes([])
+      return
+    }
+    let cancelled = false
+    setIncludesLoading(true)
+    setIncludesError(null)
+    modpackIncludes(target.id)
+      .then((files) => {
+        if (!cancelled) setIncludes(files)
+      })
+      .catch((err) => {
+        if (!cancelled) setIncludesError(friendlyError(err))
+      })
+      .finally(() => {
+        if (!cancelled) setIncludesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, projectType, detail, includes, modpackIncludes])
 
   /* Lightbox keyboard: Esc closes, ← / → navigate between screenshots. */
   useEffect(() => {
@@ -594,6 +636,7 @@ export function ProjectDetail({
           { id: 'overview', label: 'Overview' },
           ...(showChangelogTab ? [{ id: 'changelog', label: 'Changelog' }] : []),
           { id: 'gallery', label: 'Gallery' },
+          ...(projectType === 'modpack' && modpackIncludes ? [{ id: 'includes', label: 'Includes' }] : []),
           { id: 'versions', label: `Versions (${versions.length})` }
         ]}
         active={tab}

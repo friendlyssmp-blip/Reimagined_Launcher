@@ -14,10 +14,12 @@ import { logger } from '../logs/logger'
 
 const MAX_CACHE = 150
 /** Total cached bytes budget — a hard ceiling so huge covers can never
- * accumulate in memory (icons are a few KB, so this is never hit in practice). */
-const MAX_CACHE_BYTES_TOTAL = 40 * 1024 * 1024
-/** Images bigger than this are not cached (they are still delivered once). */
-const MAX_CACHE_BYTES = 3 * 1024 * 1024
+ * accumulate in memory. Raised for v1.0.22 so large/full-res (4K) covers and
+ * gallery screenshots are cached like small icons are. */
+const MAX_CACHE_BYTES_TOTAL = 160 * 1024 * 1024
+/** Images bigger than this are not cached (they are still delivered once).
+ * Bumped so real high-resolution covers fit — never downscaled. */
+const MAX_CACHE_BYTES = 12 * 1024 * 1024
 const MAX_ATTEMPTS = 3
 const TIMEOUT_MS = 15_000
 

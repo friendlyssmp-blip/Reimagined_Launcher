@@ -232,3 +232,52 @@ export async function installModpack(
   logger.info(`Modpack installed: ${packName} (MC ${mcVersion}, ${loaderType}) — ${installed} mods, ${skipped.length} skipped`)
   return { profileId: profile.id, name: packName, installed, skipped }
 }
+
+export interface ModpackFileInfo {
+  path: string
+  size: number
+  source: 'modrinth' | 'curseforge' | 'bundled'
+}
+
+/**
+ * What a modpack version actually contains, read from its .mrpack index:
+ * every bundled/curated file with its path + size + source. Powers the
+ * preview page's "Includes" tab — no guessing, real manifest data.
+ */
+export async function modpackContents(versionId: string): Promise<ModpackFileInfo[]> {
+  const version = await getJson<{ files?: { filename: string; url: string; size: number }[] }>(
+    `${API}/version/${versionId}`,
+    { headers: headers(), timeoutMs: 15_000 }
+  )
+  const mrpack = version.files?.find((f) => f.filename.toLowerCase().endsWith('.mrpack'))
+  if (!mrpack) return []
+
+  const tmpDir = path.join(paths.data, 'tmp', 'modpacks')
+  fs.mkdirSync(tmpDir, { recursive: true })
+  const packPath = path.join(tmpDir, `contents-${versionId}.mrpack`)
+  fs.rmSync(packPath, { force: true })
+  try {
+    await downloadFile(mrpack.url, packPath, undefined, 300_000)
+    const staging = path.join(tmpDir, `contents-${versionId}`)
+    fs.rmSync(staging, { recursive: true, force: true })
+    zipExtractAll(fs.readFileSync(packPath), staging)
+    const indexPath = path.join(staging, 'index.json')
+    if (!fs.existsSync(indexPath)) return []
+    const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8')) as {
+      files?: { path?: string; downloads?: string[]; size?: number }[]
+    }
+    return (index.files ?? [])
+      .filter((f) => f.path && !f.path.startsWith('overrides/'))
+      .map((f) => ({
+        path: String(f.path),
+        size: f.size ?? 0,
+        source: f.downloads?.some((d) => d.includes('modrinth.com'))
+          ? ('modrinth' as const)
+          : f.downloads?.some((d) => d.includes('curseforge.com'))
+            ? ('curseforge' as const)
+            : ('bundled' as const)
+      }))
+  } finally {
+    fs.rmSync(packPath, { force: true })
+  }
+}

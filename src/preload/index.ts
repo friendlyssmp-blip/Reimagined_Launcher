@@ -48,6 +48,8 @@ const api = {
       ipcRenderer.invoke(IPC.contentVersions, payload),
     changelog: (projectId: string, versionId: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.contentChangelog, { projectId, versionId }),
+    modpackContents: (versionId: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.contentModpackContents, { versionId }),
     image: (url: string): Promise<unknown> => ipcRenderer.invoke(IPC.contentImage, url)
   },
 
@@ -84,6 +86,7 @@ const api = {
     checkUpdates: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsCheckUpdates, profileId),
     update: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsUpdate, { profileId, slug }),
     localFiles: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsLocalFiles, profileId),
+    identifyManual: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsIdentifyManual, profileId),
     removeLocalFile: (profileId: string, filename: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsRemoveLocalFile, { profileId, filename }),
     searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string): Promise<unknown> =>

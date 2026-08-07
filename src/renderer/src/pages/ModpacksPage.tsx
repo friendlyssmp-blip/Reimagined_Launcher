@@ -28,8 +28,13 @@ export function ModpacksPage() {
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [installingId, setInstallingId] = useState<string | null>(null)
-  /* Part 1 (V2) — full-screen modpack preview (replaces the whole page). */
+  /* Part 1 (V2) — full-screen modpack preview (replaces the whole page), with
+   * browser-style back/forward history just like the Mods page: opening a
+   * pack pushes it, the back arrow returns to the previous pack or to the
+   * list, and the forward arrow re-enters. */
   const [detailPack, setDetailPack] = useState<{ projectId: string; title: string } | null>(null)
+  const [packHistory, setPackHistory] = useState<{ projectId: string; title: string }[]>([])
+  const [packIndex, setPackIndex] = useState(-1)
 
   useEffect(() => {
     api.versions
@@ -87,13 +92,49 @@ export function ModpacksPage() {
     if (!detailPack) return
     const el = document.querySelector<HTMLElement>('.content')
     el?.scrollTo({ top: 0 })
-  }, [detailPack])
+  }, [detailPack, packIndex])
+
+  /** Open a pack from the list (pushes onto the history stack). */
+  const openPack = (r: ModrinthSearchResult) => {
+    const target = { projectId: r.projectId, title: r.title }
+    const next = packIndex + 1
+    setPackHistory((h) => [...h.slice(0, next), target])
+    setPackIndex(next)
+    setDetailPack(target)
+  }
+
+  const packGoBack = () => {
+    if (packIndex <= 0) return
+    const i = packIndex - 1
+    setPackIndex(i)
+    setDetailPack(packHistory[i])
+  }
+
+  const packGoForward = () => {
+    if (packIndex >= packHistory.length - 1) return
+    const i = packIndex + 1
+    setPackIndex(i)
+    setDetailPack(packHistory[i])
+  }
+
+  const closePack = () => {
+    setDetailPack(null)
+    setPackHistory([])
+    setPackIndex(-1)
+  }
 
   /* Part 1 (V2) — a version is compatible when it matches the page's current
    * Minecraft-version and loader filters (mirrors the old quick-install pick). */
   const compatibleCheck = (v: ProjectVersionInfo): boolean =>
     (mcFilter === 'any' || v.gameVersions.includes(mcFilter)) &&
     (loaderFilter === 'any' || v.loaders.some((l) => l.toLowerCase().includes(loaderFilter)))
+
+  /* Part 1 (V2) — fetch what a modpack actually contains (from the .mrpack
+   * index) for the Includes tab: mods, resource packs, data packs, shaders. */
+  const fetchPackIncludes = async (versionId: string) => {
+    const files = await api.content.modpackContents(versionId)
+    return files.map((f) => ({ path: f.path, size: f.size, source: f.source }))
+  }
 
   /* Part 1 (V2) — install the EXACT version chosen inside the preview page.
    * Creates a new independent profile and switches to it on success. */
@@ -164,15 +205,16 @@ export function ModpacksPage() {
           projectId={detailPack.projectId}
           projectType="modpack"
           installed={null}
-          onBack={() => {}}
-          onForward={() => {}}
-          canBack={false}
-          canForward={false}
-          onClose={() => setDetailPack(null)}
+          onBack={packGoBack}
+          onForward={packGoForward}
+          canBack={packIndex > 0}
+          canForward={packIndex < packHistory.length - 1}
+          onClose={closePack}
           onInstalledChange={() => {}}
           onInstallVersion={installPackVersion}
           compatibleCheck={compatibleCheck}
           contextLabel="Modpacks"
+          modpackIncludes={fetchPackIncludes}
         />
       ) : (
         <>
@@ -227,7 +269,7 @@ export function ModpacksPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {results.map((r) => (
-                <div key={r.projectId} className="mod-row card" onClick={() => setDetailPack({ projectId: r.projectId, title: r.title })} role="button" tabIndex={0} title="Open full preview">
+                <div key={r.projectId} className="mod-row card" onClick={() => openPack(r)} role="button" tabIndex={0} title="Open full preview">
                   <div className="mod-icon">
                     {r.iconUrl ? <ModIcon src={r.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <IconPuzzle style={{ width: 20, height: 20 }} />}
                   </div>

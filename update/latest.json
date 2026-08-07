@@ -1,7 +1,7 @@
 {
-  "version": "1.0.21",
-  "notes": "v1.0.21 — (1) CURSED? NO — CURSEFORGE: importa modpacks exportados de CurseForge (.zip con manifest.json + overrides). La importación descarga las versiones EXACTAS fijadas en el manifest desde los endpoints públicos de CurseForge (sin API key), aplica configs/resource packs de overrides en la instancia, mapea el loader Fabric/Forge y salta con aviso lo que ya no existe. Preview con nombre/versión/loader/conteo antes de importar. (2) Ícono nuevo: el .exe, el instalador y los accesos directos ahora usan Logo.png (antes el banner Reimagined_Launcher.png, que fue eliminado).",
-  "installer": "dist/Reimagined-Setup-1.0.21.exe",
+  "version": "1.0.22",
+  "notes": "v1.0.22 — (1) MODS MANUALES DETECTADOS: si metes un .jar directo en la carpeta mods, el launcher lee su identidad real (fabric.mod.json / mods.toml) y muestra el NOMBRE del mod (no el del archivo) con su icono; queda marcado como Instalado en Modrinth (no puedes re-descargarlo). (2) Modpacks: nueva pestaña Includes con el contenido real del pack (mods/resourcepacks/datapacks). (3) Progreso real de descarga: imports de CurseForge con MB/s y ETA en vivo, y cancelar import aborta la descarga al instante. (4) Imagenes en resolucion completa (nada se downscalea) y proyectos sin icono muestran el logo de Reimagined. (5) Icono del .exe mas pequeno y centrado para que no se corte en la taskbar.",
+  "installer": "dist/Reimagined-Setup-1.0.22.exe",
   "checksum": "SHA256SUMS.txt",
-  "publishedAt": "2026-08-07T00:30:00Z"
+  "publishedAt": "2026-08-07T15:10:00.000Z"
 }

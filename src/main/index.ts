@@ -447,6 +447,42 @@ async function runSmokeTest(): Promise<void> {
     }
   })
 
+  await ok('manual mod: jar dropped in mods/ → identified with its real name', async () => {
+    const { modManager } = await import('./mods/mod-manager')
+    const { zipCreate } = await import('./utils/zip')
+    const { mkdirp } = await import('./utils/fs')
+    const fsp = await import('node:fs/promises')
+    const pathMod = await import('node:path')
+    const p = await profileManager.create({
+      name: 'Manual Smoke',
+      minecraftVersion: '1.21.4',
+      loader: { type: 'vanilla', version: null }
+    })
+    try {
+      const modsDir = pathMod.join(paths.games, p.gameDir, 'mods')
+      mkdirp(modsDir)
+      // A jar whose file name says nothing about the mod — the REAL identity
+      // lives inside fabric.mod.json. This is the core v1.0.22 bug fix.
+      const fakeJar = zipCreate([
+        {
+          name: 'fabric.mod.json',
+          data: JSON.stringify({ id: 'reimagined-smoke-test-mod', name: 'Smoke Mod', version: '1.0.0' })
+        }
+      ])
+      await fsp.writeFile(pathMod.join(modsDir, 'random-file-name.jar'), fakeJar)
+      const res = await modManager.identifyManualMods(p.id)
+      if (res.identified !== 1) throw new Error(`expected 1 identified, got ${res.identified}`)
+      const profile = await profileManager.get(p.id)
+      const mod = (profile?.mods ?? []).find((m) => m.filename === 'random-file-name.jar')
+      if (!mod) throw new Error('manual mod was not registered as installed')
+      if (mod.title !== 'Smoke Mod') throw new Error(`shown name is the FILE name, not the mod: "${mod.title}"`)
+      if (mod.source !== 'local') throw new Error(`wrong source ${mod.source}`)
+      logger.info('Manual mod identification OK (file name → real mod name + registered installed)')
+    } finally {
+      await profileManager.delete(p.id).catch(() => {})
+    }
+  })
+
   const summary = `Smoke test results\n${checks.join('\n')}`
   logger.info(summary)
   console.log('=== SMOKE TEST ===')
