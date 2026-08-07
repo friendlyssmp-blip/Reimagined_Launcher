@@ -185,7 +185,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (silent = true, force = false): Promise<UpdateInfo | null> => {
       try {
         const info = await api.update.check(force)
-        setUpdateInfo(info)
+        // v1.0.25 — skip no-op state writes: a background check that returns
+        // the same version must not re-render the whole app tree.
+        setUpdateInfo((prev) =>
+          prev && prev.latestVersion === info.latestVersion && prev.hasUpdate === info.hasUpdate
+            ? prev
+            : info
+        )
         if (info.hasUpdate && info.latestVersion !== notifiedVersionRef.current) {
           notifiedVersionRef.current = info.latestVersion
           notify('info', 'Update available', `Reimagined v${info.latestVersion} is ready — check the Update panel.`)
@@ -431,12 +437,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, settings?.autoInstallUpdates])
 
-  // Re-check while the launcher stays open (configurable, default 15 s) so a
-  // running launcher notices a new release within seconds — the sidebar
-  // Update button appears the moment one is published. Always on.
+  // Re-check while the launcher stays open (configurable, default 60 s) so a
+  // running launcher notices a new release quickly — the sidebar Update button
+  // appears the moment one is published. Always on. v1.0.25 raised the default
+  // from 15 s to 60 s: each check hits the GitHub API and (when changed) state,
+  // and a 15 s default wasted a request + potential re-render every 15 s all
+  // day for a launcher that is usually just sitting there.
   useEffect(() => {
     if (!ready) return
-    const sec = Math.max(15, Math.min(900, settings?.updateCheckIntervalSec ?? 15))
+    const sec = Math.max(15, Math.min(900, settings?.updateCheckIntervalSec ?? 60))
     const iv = setInterval(() => void checkForUpdates(true, true), sec * 1000)
     return () => clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps

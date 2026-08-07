@@ -15,10 +15,11 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-// v1.0.5 adds the adaptive chunk-load stabilizer (see the mod's changelog).
+// v1.0.6 adds AFK Mode + density-aware entity-crowd throttling + real
+// entity/queue telemetry (see the mod's changelog).
 // ensureFpsBoost upgrades existing profiles to the new bundle automatically.
-const FPS_BOOST_VERSION = '1.0.5'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.5.jar'
+const FPS_BOOST_VERSION = '1.0.6'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.6.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

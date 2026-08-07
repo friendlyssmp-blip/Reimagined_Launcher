@@ -64,6 +64,10 @@ interface GameSession {
   windowPoller: ReturnType<typeof setInterval> | null
   /** Epoch ms when the game window was confirmed open (0 = not yet). */
   windowOpenedAt: number
+  /** v1.0.25 — tail of the game's OWN logs/latest.log (survives launcher restarts). */
+  logTailFile: string | null
+  logTailOffset: number
+  logTailTimer: ReturnType<typeof setInterval> | null
 }
 
 class Launcher {
@@ -144,7 +148,10 @@ class Launcher {
       sessionLog: null,
       sessionLogPath: null,
       windowPoller: null,
-      windowOpenedAt: 0
+      windowOpenedAt: 0,
+      logTailFile: null,
+      logTailOffset: 0,
+      logTailTimer: null
     }
     this.sessions.set(profileId, session)
 
@@ -578,6 +585,82 @@ class Launcher {
       clearInterval(session.windowPoller)
       session.windowPoller = null
     }
+    // v1.0.25 — stop the reattach log tail the moment the session ends.
+    this.stopLogTail(session)
+  }
+
+  /**
+   * v1.0.25 — console survival across a launcher self-update.
+   *
+   * Minecraft writes its OWN log4j file (logs/latest.log) in the instance
+   * dir, completely independent of the launcher process. When we reattach to
+   * a game that survived a launcher restart, the old stdout pipe is gone (the
+   * previous launcher process owned it), so we tail that file instead: replay
+   * the last 150 lines for context, then poll for appended bytes every second
+   * and emit them as normal launch log lines. The console view is therefore
+   * restored with the real output the game kept producing while the launcher
+   * was closed/updating — no gaps, no fake lines.
+   */
+  private startLogTail(session: GameSession): void {
+    try {
+      const file = path.join(paths.games, session.profile.gameDir, 'logs', 'latest.log')
+      if (!fs.existsSync(file)) return
+      const size = fs.statSync(file).size
+      // Replay the last 150 lines for context (real game output).
+      try {
+        const readSize = Math.min(size, 48 * 1024)
+        const buf = Buffer.alloc(readSize)
+        const fd = fs.openSync(file, 'r')
+        fs.readSync(fd, buf, 0, readSize, Math.max(0, size - readSize))
+        fs.closeSync(fd)
+        const lines = buf.toString('utf-8').split(/\r?\n/).filter((l) => l.trim())
+        for (const line of lines.slice(-150)) this.emitLog('stdout', line)
+      } catch {
+        /* replay is best-effort */
+      }
+      session.logTailFile = file
+      session.logTailOffset = size
+      this.emitLog('system', `Console reconnected — tailing ${file}`)
+      session.logTailTimer = setInterval(() => {
+        if (this.sessions.get(session.profile.id) !== session) {
+          this.stopLogTail(session)
+          return
+        }
+        try {
+          if (!fs.existsSync(file)) return
+          const st = fs.statSync(file)
+          let offset = session.logTailOffset ?? 0
+          // File rotated/truncated (size shrank): restart from the top so the
+          // tail never goes permanently silent on a stale offset.
+          if (st.size < offset) {
+            offset = 0
+            session.logTailOffset = 0
+          }
+          if (st.size <= offset) return
+          const buf = Buffer.alloc(st.size - offset)
+          const fd = fs.openSync(file, 'r')
+          fs.readSync(fd, buf, 0, buf.length, offset)
+          fs.closeSync(fd)
+          session.logTailOffset = st.size
+          for (const line of buf.toString('utf-8').split(/\r?\n/)) {
+            if (!line.trim()) continue
+            this.emitLog('stdout', line)
+          }
+        } catch {
+          /* file may be locked/rotated — skip this tick */
+        }
+      }, 1000)
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private stopLogTail(session: GameSession): void {
+    if (session.logTailTimer) {
+      clearInterval(session.logTailTimer)
+      session.logTailTimer = null
+    }
+    session.logTailFile = null
   }
 
   /**
@@ -646,12 +729,17 @@ class Launcher {
       sessionLog: null,
       sessionLogPath: null,
       windowPoller: null,
-      windowOpenedAt: 0
+      windowOpenedAt: 0,
+      logTailFile: null,
+      logTailOffset: 0,
+      logTailTimer: null
     }
     this.sessions.set(profileId, session)
     logger.info(`Reconnected to running Minecraft for "${profile.name}" (pid ${pid}) after a launcher restart`)
     eventBus.emit('launch:status', { profileId, running: true, pid })
     this.startReattachWatch(session)
+    // v1.0.25 — restore the console view by tailing the game's own log file.
+    this.startLogTail(session)
     return true
   }
 

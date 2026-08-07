@@ -164,6 +164,7 @@ export type AppEventType =
   | 'launch:exit'
   | 'launch:window-open'
   | 'download:progress'
+  | 'downloads:changed'
   | 'settings:changed'
   | 'profile:changed'
   | 'profile:progress'

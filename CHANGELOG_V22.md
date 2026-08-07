@@ -392,3 +392,43 @@
   never stay stuck at 100% while a duplicate entry takes the done state.
 - Live progress persists into the stored entry (throttled) so the Downloads
   section moves in real time.
+
+## v1.0.25 — AFK Mode, entity-crowd throttling, console that survives launcher updates, UI perf
+
+### Reimagined FPS Boost 1.0.6
+- AFK Mode (default ON, 3 min): no keyboard/mouse input -> auto cap FPS to 12,
+  lower render distance to 4, keep fewer particles, throttle distant entity
+  animation and collapse the chunk-build pool to one thread. The FIRST input
+  (mouse move/click or any key) restores everything instantly. Purely local
+  rendering throttle - zero gameplay/server-visible effect. Toggle + threshold
+  (90s-10min) in the K menu; AFK chip shows in the F7 overlay. If you leave
+  the world while AFK, settings restore immediately (never stuck).
+- Entity-crowd density throttling: when more than 700 entities (or 350 item
+  entities) are extracted in one frame - e.g. 10 000 dropped sticks or a
+  packed mob farm - distant entities stop allocating fresh render state
+  (density-aware Limit Entity Animations, detail kept around the player).
+  Budgets configurable in the K menu. Purely visual.
+- Real telemetry: the 10s PROF line now reports entities/items per frame
+  (current + peak), the pending chunk-mesh queue depth (Q), and AFK state;
+  the F7 overlay shows Q + AFK chip. Verifiable, never guessed.
+
+### Console survives launcher self-updates
+- When the launcher restarts to apply an update while a game is running, the
+  reconnected instance now restores its console view by tailing the game own
+  logs/latest.log (Minecraft writes it via log4j, fully independent of the
+  launcher): replays the last 150 lines and streams new ones live. The game
+  was already process-independent (detached spawn) - now the console output
+  survives the restart too. Handles log rotation/truncation.
+
+### Launcher UI performance
+- Downloads page is event-driven: main pings downloads:changed (throttled)
+  whenever a real download task mutates, so the page refreshes the instant
+  something changes instead of polling the full list every 2 s (5 s interval
+  kept only as a safety net).
+- Background update checks: default interval 15s -> 60s, and a check that
+  returns the same version no longer re-renders the whole app (no-op state
+  writes skipped).
+
+Verification: mod compiled against the 26.2 merged jar (all signatures
+  javap-verified, incl. Window.handle() and instanceof ItemEntity), launcher
+  typechecks 0/0, smoke 10/10.

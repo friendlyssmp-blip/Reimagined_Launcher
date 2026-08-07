@@ -94,10 +94,20 @@ export function DownloadsPage() {
     }
   }, [notify, refresh])
 
+  // v1.0.25 — event-driven: main pings 'downloads:changed' whenever a real
+  // download task mutates (throttled), so the page refreshes the instant
+  // something actually changes instead of polling the full list every 2 s.
+  // A 5 s interval remains only as a safety net (page is mounted while open).
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 2000)
-    return () => clearInterval(t)
+    const off = api.onEvent((e) => {
+      if (e.type === 'downloads:changed') void refresh()
+    })
+    const t = setInterval(refresh, 5000)
+    return () => {
+      off()
+      clearInterval(t)
+    }
   }, [refresh])
 
   /* The "active downloads" panel reflects REAL state only. It prefers the

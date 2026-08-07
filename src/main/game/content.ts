@@ -12,6 +12,7 @@ import fsp from 'node:fs/promises'
 import { paths } from '../paths'
 import { profileManager } from '../profiles/profile-manager'
 import { listDir, dirSize, exists } from '../utils/fs'
+import { eventBus } from '../core/event-bus'
 
 export interface WorldEntry {
   name: string
@@ -125,6 +126,21 @@ let downloadSeq = 0
  * every update appended a NEW entry, so the original one stayed stuck on
  * 'downloading' forever. Failures/completions now overwrite the same entry.
  */
+// v1.0.25 — throttle the change ping (250 ms) so a batch of files does not
+// spam the renderer; the Downloads page refreshes on this event instead of
+// polling the full list every 2 s.
+let lastDownloadsNotify = 0
+function notifyDownloadsChanged(): void {
+  const now = Date.now()
+  if (now - lastDownloadsNotify < 250) return
+  lastDownloadsNotify = now
+  try {
+    eventBus.emit('downloads:changed', { at: new Date().toISOString() })
+  } catch {
+    /* notification is best-effort */
+  }
+}
+
 export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updatedAt'>): string {
   // v1.0.24 — a TERMINAL update (done/failed) must always land on the entry
   // the user is looking at. Progress/start updates still match only live
@@ -143,11 +159,13 @@ export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updated
     existing.totalBytes = entry.totalBytes
     if (entry.iconUrl !== undefined) existing.iconUrl = entry.iconUrl
     existing.updatedAt = now
+    notifyDownloadsChanged()
     return existing.id
   }
   const id = String(++downloadSeq)
   downloadHistory.unshift({ ...entry, id, at: now, updatedAt: now })
   if (downloadHistory.length > 40) downloadHistory.length = 40
+  notifyDownloadsChanged()
   return id
 }
 
