@@ -213,13 +213,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // after the game process spawns).
       if (settings?.showConsoleOnLaunch !== false) void api.console.open().catch(() => {})
       setLaunch({ phase: 'preparing', message: 'Preparing launch…', percent: 0, profileId })
-      await runGuarded('Launch', async () => {
+      try {
         const handle = await api.launch.start(profileId)
         setLaunch({ phase: 'running', message: `Starting ${handle.pid ? 'game' : ''}…`, percent: null, pid: handle.pid, profileId })
         setModals({ profile: null })
-      })
+      } catch (err) {
+        // A failed launch must never leave the UI stuck on "Launching…" — go
+        // idle immediately (the launch:status event may never fire when the
+        // pipeline rejects before spawning).
+        setLaunch({ phase: 'idle', message: '', percent: null, pid: undefined, profileId })
+        notify('error', 'Launch failed', friendlyError(err))
+      }
     },
-    [runGuarded, setModals, settings]
+    [notify, setModals, settings]
   )
 
   const stopLaunch = useCallback(async () => {

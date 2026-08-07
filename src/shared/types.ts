@@ -234,6 +234,44 @@ export interface ProjectVersionInfo {
   changelog?: string
   /** Direct download URL for this version when the source exposes one. */
   fileUrl?: string
+  /** Real dependency declarations for this version (Modrinth exposes these). */
+  dependencies?: ProjectDependency[]
+}
+
+/** One dependency a version declares on its provider (Modrinth). */
+export interface ProjectDependency {
+  /** Provider project id of the dependency. */
+  projectId: string
+  /** Exact version id when the parent pins one, else resolve the newest compatible. */
+  versionId?: string
+  dependencyType: 'required' | 'optional' | 'incompatible'
+  fileName?: string
+}
+
+/** Resolved dependency info shown in the install confirmation dialog. */
+export interface InstallDepInfo {
+  projectId: string
+  title: string
+  slug: string
+  iconUrl?: string
+  dependencyType: 'required' | 'optional' | 'incompatible'
+  /** Version resolved for this profile (null when no compatible version exists). */
+  versionId: string | null
+  versionNumber: string | null
+  /** True when already present in this profile (never reinstalled). */
+  installed: boolean
+  /** Nested dependencies of this dependency (resolved recursively, deduped). */
+  children?: InstallDepInfo[]
+}
+
+/** Result of an "install with dependencies" operation. */
+export interface InstallWithDepsResult {
+  /** The main item's installed profile entry. */
+  mod: ProfileMod
+  /** Titles of everything installed (item + dependencies). */
+  installed: string[]
+  /** Titles of dependencies that could not be restored (with reason). */
+  skipped: string[]
 }
 
 /** Whether a side (client/server) is required, optional or unsupported. */

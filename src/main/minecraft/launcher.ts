@@ -8,7 +8,7 @@
  * produce installer-grade version JSONs that flow through the same path as
  * vanilla.
  */
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 import { paths, appVersion } from '../paths'
@@ -57,6 +57,10 @@ class Launcher {
   private startedAt = 0
   private sessionLog: fs.WriteStream | null = null
   private sessionLogPath: string | null = null
+  /** Poller that detects when the game's actual window appears (real signal). */
+  private windowPoller: ReturnType<typeof setInterval> | null = null
+  /** Epoch ms when the game window was confirmed open (0 = not yet). */
+  private windowOpenedAt = 0
 
   isRunning(): boolean {
     return !!this.child && this.child.exitCode === null
@@ -69,6 +73,11 @@ class Launcher {
       pid: this.child?.pid,
       startedAt: this.startedAt ? new Date(this.startedAt).toISOString() : undefined
     }
+  }
+
+  /** Launch-timing info for the game console's chronometer. */
+  getLaunchTimes(): { startedAt: number; windowOpenedAt: number } {
+    return { startedAt: this.startedAt, windowOpenedAt: this.windowOpenedAt }
   }
 
   async launch(profileId: string): Promise<LaunchHandle> {
@@ -86,6 +95,8 @@ class Launcher {
 
     this.profile = profile
     this.startedAt = Date.now()
+    this.windowOpenedAt = 0
+    this.stopWindowWatch()
 
     try {
       const mc = profile.minecraftVersion
@@ -298,13 +309,23 @@ class Launcher {
     logger.info(started)
     this.emitLog('system', started)
     eventBus.emit('launch:status', { profileId: profile.id, running: true, pid: child.pid })
+    this.startWindowWatch(child)
 
     child.stdout?.on('data', (d: Buffer) => this.onOutput('stdout', d))
     child.stderr?.on('data', (d: Buffer) => this.onOutput('stderr', d))
 
     child.on('error', (err) => {
+      // A spawn-level failure (bad Java path, missing DLL…) means the launch
+      // is over before any window appears. Always reset the UI state — the
+      // renderer must never stay stuck on "Launching…".
       logger.exception('Game process error', err)
       this.emitLog('stderr', `Process error: ${err.message}`)
+      this.stopWindowWatch()
+      this.child = null
+      this.profile = null
+      this.startedAt = 0
+      this.windowOpenedAt = 0
+      eventBus.emit('launch:status', { profileId: profile.id, running: false, error: `Game process error: ${err.message}` })
     })
 
     child.on('close', (code, signal) => void this.onExit(code, signal))
@@ -338,6 +359,8 @@ class Launcher {
     this.sessionLog?.end()
     this.sessionLog = null
     this.child = null
+    this.stopWindowWatch()
+    this.windowOpenedAt = 0
 
     logger.info(`Game exited (code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}) after ${Math.round(duration)}s`)
     this.emitLog('system', `Game exited with code ${code ?? 'n/a'}`)
@@ -378,6 +401,50 @@ class Launcher {
 
     this.profile = null
     this.startedAt = 0
+  }
+
+  /**
+   * Poll the spawned game process's main window handle (Windows). A non-zero
+   * handle is the real "the game window is up" signal — the chronometer uses
+   * the measured elapsed seconds between Play and this moment.
+   */
+  private startWindowWatch(child: ChildProcess): void {
+    if (process.platform !== 'win32' || !child.pid) return
+    this.stopWindowWatch()
+    const pid = child.pid
+    const started = Date.now()
+    this.windowPoller = setInterval(() => {
+      if (this.child !== child || child.exitCode !== null) {
+        this.stopWindowWatch()
+        return
+      }
+      execFile(
+        'powershell',
+        ['-NoProfile', '-Command', `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowHandle`],
+        { windowsHide: true, timeout: 4000 },
+        (err, stdout) => {
+          if (this.windowPoller === null) return
+          const handle = Number(String(stdout ?? '').trim())
+          if (Number.isFinite(handle) && handle > 0) {
+            const elapsedSec = Math.max(0, Math.round((Date.now() - started) / 1000))
+            this.windowOpenedAt = Date.now()
+            logger.info(`Minecraft window opened after ${elapsedSec}s (pid ${pid})`)
+            eventBus.emit('launch:window-open', { elapsedSec })
+            this.stopWindowWatch()
+          } else if (Date.now() - started > 180_000) {
+            // Give up after 3 minutes — some configs never expose a handle.
+            this.stopWindowWatch()
+          }
+        }
+      )
+    }, 1000)
+  }
+
+  private stopWindowWatch(): void {
+    if (this.windowPoller) {
+      clearInterval(this.windowPoller)
+      this.windowPoller = null
+    }
   }
 
   /** Kill the process tree (Minecraft spawns many threads + subprocesses). */

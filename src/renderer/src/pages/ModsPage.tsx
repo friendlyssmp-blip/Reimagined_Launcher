@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Button, TextInput, Spinner, EmptyState, Badge, Toggle, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
+import { InstallConfirmModal, type InstallTarget } from '../components/InstallConfirmModal'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
@@ -105,6 +106,9 @@ export function ModsPage() {
   const [versionsBusy, setVersionsBusy] = useState(false)
   const [sort, setSort] = useState<SortKey>('downloads')
   const [updatingAll, setUpdatingAll] = useState(false)
+  // Install confirmation with real dependencies (plain click = dialog,
+  // Shift-click = install immediately with dependencies).
+  const [installConfirm, setInstallConfirm] = useState<InstallTarget | null>(null)
   // Installed panel organization: Mods / Resource Packs / Data Packs /
   // Shaders / Worlds — everything lives under its own clean tab.
   const [instTab, setInstTab] = useState<InstTab>('mods')
@@ -226,6 +230,25 @@ export function ModsPage() {
       notify('success', 'Installed', r.title)
     } catch {
       // handled by runGuarded
+    } finally {
+      setInstallingId(null)
+    }
+  }
+
+  /** Shift-click fast path — install immediately WITH dependencies. */
+  const installFast = async (r: ProviderResult, versionId?: string) => {
+    if (!activeProfile) return
+    setInstallingId(r.projectId)
+    try {
+      const res = await api.mods.installWithDeps(activeProfile.id, r.projectId, versionId, contentType)
+      setInstalled(await api.mods.list(activeProfile.id))
+      notify(
+        'success',
+        'Installed with dependencies',
+        res.installed.join(', ') + (res.skipped.length > 0 ? ` — skipped: ${res.skipped.join('; ')}` : '')
+      )
+    } catch (err) {
+      notify('error', 'Could not install', friendlyError(err))
     } finally {
       setInstallingId(null)
     }
@@ -444,7 +467,13 @@ export function ModsPage() {
           size="sm"
           variant={isInstalled(r) ? 'ghost' : 'primary'}
           disabled={installingId === r.projectId || isInstalled(r)}
-          onClick={() => installMod(r)}
+          onClick={(e) => {
+            e.stopPropagation()
+            // Shift-click skips the confirmation and installs with deps.
+            if (e.shiftKey) void installFast(r)
+            else setInstallConfirm({ provider: 'modrinth', projectId: r.projectId, projectType: contentType })
+          }}
+          title="Install (hold Shift to install immediately with dependencies)"
         >
           {installingId === r.projectId ? <Spinner /> : isInstalled(r) ? 'Installed' : 'Install'}
         </Button>
@@ -722,7 +751,7 @@ export function ModsPage() {
           { id: 'modrinth', label: 'Modrinth' }
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={(id) => setTab(id as SourceTab)}
       />
 
       {/* Part 3 — Vanilla profiles can't run mods, but packs work fine. */}
@@ -886,6 +915,22 @@ export function ModsPage() {
           canForward={detailIndex < detailHistory.length - 1}
           onClose={closeDetail}
           onInstalledChange={handleInstalledChange}
+        />
+      )}
+
+      {/* Install confirmation with real dependency data */}
+      {installConfirm && (
+        <InstallConfirmModal
+          target={installConfirm}
+          onClose={() => setInstallConfirm(null)}
+          onInstalled={(mod) => {
+            if (mod && activeProfile) {
+              setInstalled((prev) =>
+                prev.some((m) => m.id === mod.id) ? prev.map((m) => (m.id === mod.id ? mod : m)) : [...prev, mod]
+              )
+              void api.mods.list(activeProfile.id).then(setInstalled).catch(() => {})
+            }
+          }}
         />
       )}
     </div>

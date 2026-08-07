@@ -105,7 +105,10 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     enabled: true,
     reduceParticles: true,
     simplifyClouds: true,
-    limitEntityAnimations: true,
+    // Off by default since 1.0.1: the entity-animation state cache was removed
+    // from the bundled mod (it could cause visual artifacts such as the
+    // enchantment glint disappearing). Kept in the schema for compat.
+    limitEntityAnimations: false,
     smartRenderDistance: true,
     reduceVisualEffects: false,
     showFps: false

@@ -22,6 +22,27 @@ function ConsoleApp() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [follow, setFollow] = useState(true)
   const logRef = useRef<HTMLDivElement>(null)
+  /* Part 1 — live timers: chronometer counting from Play click, plus the
+   * real measured "window opened after Xs" signal (both reset on the next
+   * launch attempt). */
+  const [launchStartedAt, setLaunchStartedAt] = useState<number | null>(null)
+  const [windowOpenedSec, setWindowOpenedSec] = useState<number | null>(null)
+  const [now, setNow] = useState(Date.now())
+
+  // Tick the chronometer once per second while a session is active.
+  useEffect(() => {
+    if (!launchStartedAt) return
+    setNow(Date.now())
+    const iv = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(iv)
+  }, [launchStartedAt])
+
+  const openSecs = launchStartedAt ? Math.max(0, Math.floor((now - launchStartedAt) / 1000)) : null
+  const fmtOpen = (s: number): string => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  }
 
   // Seed the view from the main process, then stream live events.
   useEffect(() => {
@@ -44,6 +65,12 @@ function ConsoleApp() {
           setPercent(s.progress.percent)
           setPhase(s.running ? 'running' : 'preparing')
         }
+        if (s.launchStartedAt) {
+          setLaunchStartedAt(s.launchStartedAt)
+          if (s.windowOpenedAt) {
+            setWindowOpenedSec(Math.max(0, Math.round((s.windowOpenedAt - s.launchStartedAt) / 1000)))
+          }
+        }
       })
       .catch(() => {})
 
@@ -59,10 +86,23 @@ function ConsoleApp() {
           setPhase(p.stage === 'running' ? 'running' : p.stage === 'launching' ? 'launching' : 'preparing')
           break
         }
+        case 'launch:window-open': {
+          const p = e.payload as { elapsedSec: number }
+          setWindowOpenedSec(Math.max(0, Math.round(p.elapsedSec)))
+          break
+        }
         case 'launch:status': {
           const p = e.payload as { running: boolean }
-          if (p.running) setPhase('running')
-          else setPhase((prev) => (prev === 'running' || prev === 'launching' ? 'idle' : prev))
+          if (p.running) {
+            setPhase('running')
+            // New launch attempt — both timers start fresh.
+            setLaunchStartedAt(Date.now())
+            setWindowOpenedSec(null)
+          } else {
+            setPhase((prev) => (prev === 'running' || prev === 'launching' ? 'idle' : prev))
+            setLaunchStartedAt(null)
+            setWindowOpenedSec(null)
+          }
           break
         }
         case 'launch:exit':
@@ -116,6 +156,22 @@ function ConsoleApp() {
             <span style={{ width: `${percent}%` }} />
           </div>
         )}
+        <div className="cw-timers">
+          {openSecs !== null && (
+            <span className="cw-chrono" title="Time since Play was clicked">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              Open for {fmtOpen(openSecs)}
+            </span>
+          )}
+          {windowOpenedSec !== null && (
+            <span className="cw-opened" title="Measured from Play click to the game window appearing">
+              Minecraft opened after {windowOpenedSec}s
+            </span>
+          )}
+        </div>
         {running && (
           <button className="cw-stop" onClick={() => void api.launch.stop()}>
             Stop game

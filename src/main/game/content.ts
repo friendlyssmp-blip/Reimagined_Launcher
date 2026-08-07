@@ -36,6 +36,8 @@ export interface DownloadEntry {
   downloadedBytes: number
   totalBytes: number
   at: string
+  /** Last time the entry was touched — stale 'downloading' entries die here. */
+  updatedAt?: string
 }
 
 function fmtSize(bytes: number): string {
@@ -114,30 +116,72 @@ const downloadHistory: DownloadEntry[] = []
 let downloadSeq = 0
 
 /**
- * Record (or update) a download entry.
+ * Record (or update) a download entry and return its stable id.
  *
  * The same task is updated in place by matching label+kind while it is still
  * marked 'downloading' — this is the fix for "ghost downloads": previously
  * every update appended a NEW entry, so the original one stayed stuck on
  * 'downloading' forever. Failures/completions now overwrite the same entry.
  */
-export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at'>): void {
+export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updatedAt'>): string {
   const existing = downloadHistory.find(
     (d) => d.status === 'downloading' && d.label === entry.label && d.kind === entry.kind
   )
+  const now = new Date().toISOString()
   if (existing) {
     existing.status = entry.status
     existing.percent = entry.percent
     existing.downloadedBytes = entry.downloadedBytes
     existing.totalBytes = entry.totalBytes
-    return
+    existing.updatedAt = now
+    return existing.id
   }
-  downloadHistory.unshift({ ...entry, id: String(++downloadSeq), at: new Date().toISOString() })
+  const id = String(++downloadSeq)
+  downloadHistory.unshift({ ...entry, id, at: now, updatedAt: now })
   if (downloadHistory.length > 40) downloadHistory.length = 40
+  return id
 }
 
+/**
+ * Entries still marked 'downloading' that were last touched a while ago are
+ * the product of a crashed/killed session — they never completed. Flip them
+ * to a terminal 'failed' state so the UI can never show a frozen spinner at
+ * 100% forever (same state-sync rigor as the rest of the app).
+ */
+const STALE_DOWNLOAD_MS = 60 * 60 * 1000 // 60 minutes
+
 export function listDownloads(): DownloadEntry[] {
+  const cutoff = Date.now() - STALE_DOWNLOAD_MS
+  for (const d of downloadHistory) {
+    if (d.status === 'downloading') {
+      const last = d.updatedAt ? new Date(d.updatedAt).getTime() : new Date(d.at).getTime()
+      if (last < cutoff) {
+        d.status = 'failed'
+        d.percent = 0
+      }
+    }
+  }
   return [...downloadHistory]
+}
+
+/**
+ * Cancel one active download from the Downloads section. The underlying
+ * network fetch is aborted (partial files cleaned by the downloader), the
+ * entry flips to failed, and the operation is logged.
+ */
+export async function cancelDownload(id: string): Promise<boolean> {
+  const { abortBatch } = await import('../minecraft/downloader')
+  const entry = downloadHistory.find((d) => d.id === id)
+  const aborted = abortBatch(id)
+  if (entry) {
+    if (entry.status === 'downloading') {
+      entry.status = 'failed'
+      entry.percent = 0
+    }
+    const { logger } = await import('../logs/logger')
+    logger.info(`Download cancelled: ${entry.label} (${entry.kind}, stage ${Math.round(entry.percent)}%)`)
+  }
+  return aborted || Boolean(entry)
 }
 
 /**

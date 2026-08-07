@@ -24,6 +24,10 @@ let consoleWindow: BrowserWindow | null = null
 /** Rolling log buffer (seeded into the window on open). */
 const logBuffer: LaunchLogLine[] = []
 let lastProgress: { stage: string; message: string; percent: number | null } | null = null
+/** Epoch ms the game window was confirmed open (real signal, from launcher). */
+let windowOpenedAt = 0
+/** Epoch ms the current launch session started (Play click). */
+let launchStartedAt = 0
 
 // Forward every app event to the console window if it is alive. Also keep the
 // buffer so a freshly opened window immediately shows what already happened.
@@ -34,13 +38,22 @@ eventBus.subscribeAll((event: AppEvent) => {
   } else if (event.type === 'launch:progress') {
     const p = event.payload as LaunchProgress
     lastProgress = { stage: p.stage, message: p.message, percent: p.percent ?? null }
-  } else if (event.type === 'launch:status') {
-    // A new session starts / the old one ends — drop the stale snapshot so a
-    // reopened console never shows yesterday's "Launching…" message.
-    const p = event.payload as { running?: boolean }
-    if (p.running) lastProgress = null
+  } else if (event.type === 'launch:window-open') {
+    windowOpenedAt = Date.now()
   } else if (event.type === 'launch:exit') {
     lastProgress = null
+  } else if (event.type === 'launch:status') {
+    const p = event.payload as { running?: boolean }
+    if (p.running) {
+      // A new session starts — drop the stale snapshot so a reopened console
+      // never shows yesterday's "Launching…" message.
+      lastProgress = null
+    } else {
+      // Session over (stopped/failed/crashed) — the chronometer resets on the
+      // next real launch attempt.
+      launchStartedAt = 0
+      windowOpenedAt = 0
+    }
   }
   if (consoleWindow && !consoleWindow.isDestroyed()) {
     consoleWindow.webContents.send(EVENT_CHANNEL, event)
@@ -118,10 +131,15 @@ export function consoleWindowRef(): BrowserWindow | null {
 
 /** Initial state for a freshly opened console window. */
 export function getConsoleState() {
+  const times = launcher.getLaunchTimes()
+  if (times.startedAt > 0) launchStartedAt = times.startedAt
+  if (times.windowOpenedAt > 0) windowOpenedAt = times.windowOpenedAt
   return {
     running: launcher.isRunning(),
     handle: launcher.handle,
     progress: lastProgress,
-    logs: [...logBuffer]
+    logs: [...logBuffer],
+    launchStartedAt: launchStartedAt || undefined,
+    windowOpenedAt: windowOpenedAt || undefined
   }
 }

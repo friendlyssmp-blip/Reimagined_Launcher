@@ -155,6 +155,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   on(IPC.downloadsList, () => import('./game/content').then((m) => m.listDownloads()))
 
+  on(IPC.downloadsCancel, async (id: string) => {
+    const { cancelDownload } = await import('./game/content')
+    return cancelDownload(id)
+  })
+
   on(IPC.openInstanceFolder, async (payload: { profileId: string; sub?: string }) => {
     const { instanceSubPath, instanceRoot } = await import('./game/content')
     let target = payload?.sub
@@ -299,6 +304,23 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       payload.provider,
       payload.projectId,
       payload.versionId,
+      payload.projectType ?? 'mod'
+    )
+  )
+  // Install confirmation — real dependency data + install-with-dependencies.
+  on(IPC.modsDependencies, (payload) =>
+    modManager.resolveDependencies(
+      payload.profileId,
+      payload.projectId,
+      payload.versionId,
+      payload.projectType ?? 'mod'
+    )
+  )
+  on(IPC.modsInstallWithDeps, (payload) =>
+    modManager.installWithDeps(
+      payload.profileId,
+      payload.projectId,
+      payload.versionId ?? undefined,
       payload.projectType ?? 'mod'
     )
   )

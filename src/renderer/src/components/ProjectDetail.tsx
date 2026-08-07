@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner, EmptyState, Toggle, TabBar } from './ui'
 import { ModIcon } from './ModIcon'
+import { InstallConfirmModal, type InstallTarget } from './InstallConfirmModal'
 import { api, friendlyError } from '../lib/api'
 import {
   IconDownload,
@@ -126,6 +127,9 @@ export function ProjectDetail({
   // Lazily-fetched CurseForge release notes, keyed by version id.
   const [changelogs, setChangelogs] = useState<Record<string, string>>({})
   const [changelogLoading, setChangelogLoading] = useState(false)
+  // Install confirmation (plain click = dialog with real deps; Shift-click
+  // = install immediately with dependencies).
+  const [confirm, setConfirm] = useState<InstallTarget | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -195,21 +199,35 @@ export function ProjectDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, provider, projectId, detail])
 
-  const installLatest = async () => {
+  const installLatest = (e?: React.MouseEvent) => {
     if (!activeProfile) return
-    setBusy('latest')
-    try {
-      const mod =
-        provider === 'modrinth'
-          ? await api.mods.install(activeProfile.id, projectId, projectType)
-          : await api.mods.installCurseforge(activeProfile.id, projectId, { title: detail?.title, iconUrl: detail?.iconUrl, downloads: detail?.downloads }, projectType)
-      onInstalledChange(mod)
-      notify('success', 'Installed', mod.title)
-    } catch (err) {
-      notify('error', 'Could not install', friendlyError(err))
-    } finally {
-      setBusy(null)
+    // Shift-click fast path — install immediately WITH dependencies.
+    if (e?.shiftKey) {
+      setBusy('latest')
+      void api.mods
+        .installWithDeps(activeProfile.id, projectId, '', projectType)
+        .then((res) => {
+          onInstalledChange(res.mod)
+          notify('success', 'Installed with dependencies', res.installed.join(', '))
+        })
+        .catch((err) => notify('error', 'Could not install', friendlyError(err)))
+        .finally(() => setBusy(null))
+      return
     }
+    if (provider === 'curseforge') {
+      // CurseForge is no longer supported — direct fallback for legacy items.
+      setBusy('latest')
+      void api.mods
+        .installCurseforge(activeProfile.id, projectId, { title: detail?.title, iconUrl: detail?.iconUrl, downloads: detail?.downloads }, projectType)
+        .then((mod) => {
+          onInstalledChange(mod)
+          notify('success', 'Installed', mod.title)
+        })
+        .catch((err) => notify('error', 'Could not install', friendlyError(err)))
+        .finally(() => setBusy(null))
+      return
+    }
+    setConfirm({ provider: 'modrinth', projectId, projectType })
   }
 
   const updateInstalled = async () => {
@@ -226,18 +244,34 @@ export function ProjectDetail({
     }
   }
 
-  const installVersion = async (v: ProjectVersionInfo) => {
+  const installVersion = (v: ProjectVersionInfo, e?: React.MouseEvent) => {
     if (!activeProfile) return
-    setBusy('v:' + v.id)
-    try {
-      const mod = await api.mods.installVersion(activeProfile.id, provider, projectId, v.id, projectType)
-      onInstalledChange(mod)
-      notify('success', 'Installed', mod.title + ' ' + v.versionNumber)
-    } catch (err) {
-      notify('error', 'Could not install this version', friendlyError(err))
-    } finally {
-      setBusy(null)
+    // Shift-click fast path — install immediately WITH dependencies.
+    if (e?.shiftKey) {
+      setBusy('v:' + v.id)
+      void api.mods
+        .installWithDeps(activeProfile.id, projectId, v.id, projectType)
+        .then((res) => {
+          onInstalledChange(res.mod)
+          notify('success', 'Installed with dependencies', res.installed.join(', '))
+        })
+        .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
+        .finally(() => setBusy(null))
+      return
     }
+    if (provider === 'curseforge') {
+      setBusy('v:' + v.id)
+      void api.mods
+        .installVersion(activeProfile.id, provider, projectId, v.id, projectType)
+        .then((mod) => {
+          onInstalledChange(mod)
+          notify('success', 'Installed', mod.title + ' ' + v.versionNumber)
+        })
+        .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
+        .finally(() => setBusy(null))
+      return
+    }
+    setConfirm({ provider: 'modrinth', projectId, projectType, versionId: v.id })
   }
 
   const changeVersion = async (versionId: string) => {
@@ -393,7 +427,12 @@ export function ProjectDetail({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {!installed ? (
-              <Button variant="primary" onClick={installLatest} disabled={busy !== null}>
+              <Button
+                variant="primary"
+                onClick={(e) => installLatest(e)}
+                disabled={busy !== null}
+                title="Install (hold Shift to install immediately with dependencies)"
+              >
                 {busy === 'latest' ? <><Spinner /> Installing…</> : 'Install'}
               </Button>
             ) : isCurrent ? (
@@ -475,7 +514,7 @@ export function ProjectDetail({
           { id: 'versions', label: `Versions (${versions.length})` }
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={(id) => setTab(id as DetailTab)}
       />
 
       <div key={tab} className="tab-fade">
@@ -588,7 +627,8 @@ export function ProjectDetail({
                           variant={installed ? 'ghost' : 'primary'}
                           size="sm"
                           disabled={busy !== null}
-                          onClick={() => (installed ? void changeVersion(v.id) : void installVersion(v))}
+                          onClick={(e) => (installed ? void changeVersion(v.id) : void installVersion(v, e))}
+                          title={installed ? 'Switch to this version' : 'Install (hold Shift to install immediately with dependencies)'}
                         >
                           {busy === 'v:' + v.id || busy === 'cv:' + v.id ? <Spinner /> : installed ? 'Switch' : 'Install'}
                         </Button>
@@ -614,6 +654,17 @@ export function ProjectDetail({
           Profile: {activeProfile?.name} · {activeProfile?.minecraftVersion} · {activeProfile?.loader.type}
         </span>
       </div>
+
+      {/* Install confirmation with real dependency data */}
+      {confirm && (
+        <InstallConfirmModal
+          target={confirm}
+          onClose={() => setConfirm(null)}
+          onInstalled={(mod) => {
+            if (mod) onInstalledChange(mod)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -15,8 +15,8 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-const FPS_BOOST_VERSION = '1.0.0'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.0.jar'
+const FPS_BOOST_VERSION = '1.0.1'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.1.jar'
 
 /** Path of the mod jar bundled with the launcher.
  * Dev: project `data/bundled`. Packaged: shipped inside the installer via
@@ -48,10 +48,22 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
     // clobber each other's mods list.
     const fresh = await profileManager.get(profile.id)
     const mods = fresh?.mods ?? profile.mods
-    if (mods.some((m) => m.id === FPS_BOOST_ID)) return
+    const existing = mods.find((m) => m.id === FPS_BOOST_ID)
+    // Already on the current bundled version — nothing to do.
+    if (existing && existing.versionNumber === FPS_BOOST_VERSION) return
 
     const { mkdirp } = await import('../utils/fs')
     mkdirp(modsDir)
+    // 1.0.1 removed the fragile entity-animation state cache (it could cause
+    // visual artifacts like the enchantment glint disappearing). Drop any
+    // previous bundled jar so no stale copy stays behind.
+    if (existing && existing.filename && existing.filename !== FPS_BOOST_FILENAME) {
+      try {
+        fs.rmSync(path.join(modsDir, existing.filename), { force: true })
+      } catch {
+        /* best-effort: a missing old file is not an error */
+      }
+    }
     fs.copyFileSync(source, dest)
 
     const mod: ProfileMod = {
@@ -68,7 +80,9 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
       updateAvailable: null
     }
 
-    await profileManager.update(profile.id, { mods: [...mods, mod] })
+    await profileManager.update(profile.id, {
+      mods: existing ? mods.map((m) => (m.id === FPS_BOOST_ID ? mod : m)) : [...mods, mod]
+    })
     logger.info(`Reimagined FPS Boost ${FPS_BOOST_VERSION} ready for "${profile.name}"`)
   } catch (err) {
     logger.warn(`FPS Boost install failed for "${profile.name}": ${(err as Error).message}`)

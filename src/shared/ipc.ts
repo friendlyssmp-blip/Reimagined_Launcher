@@ -58,6 +58,10 @@ export const IPC = {
   modsSetEnabled: 'mods:set-enabled',
   modsAvailableVersions: 'mods:available-versions',
   modsInstallVersion: 'mods:install-version',
+  // Install confirmation with real dependency resolution (Part 1 of the
+  // install-confirmation pass — Modrinth only, CurseForge is removed).
+  modsDependencies: 'mods:dependencies',
+  modsInstallWithDeps: 'mods:install-with-deps',
 
   // Content detail page (Part 5)
   contentDetail: 'content:detail',
@@ -84,6 +88,7 @@ export const IPC = {
   worldsList: 'worlds:list',
   packsList: 'packs:list',
   downloadsList: 'downloads:list',
+  downloadsCancel: 'downloads:cancel',
   openInstanceFolder: 'content:open-folder',
   backupWorld: 'content:backup-world',
 
@@ -138,6 +143,7 @@ export type AppEventType =
   | 'launch:log'
   | 'launch:status'
   | 'launch:exit'
+  | 'launch:window-open'
   | 'download:progress'
   | 'settings:changed'
   | 'profile:changed'

@@ -423,7 +423,8 @@ async function setFpsBoostConfig(gameDir: string, enabled: boolean): Promise<voi
         enabled,
         reduceParticles: enabled,
         simplifyClouds: enabled,
-        limitEntityAnimations: enabled,
+        // 1.0.1: entity-animation throttle removed from the bundled mod.
+        limitEntityAnimations: false,
         smartRenderDistance: enabled,
         reduceVisualEffects: false,
         showFps: false,

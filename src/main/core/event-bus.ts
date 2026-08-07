@@ -49,6 +49,7 @@ class EventBus {
       'launch:log': true,
       'launch:status': true,
       'launch:exit': true,
+      'launch:window-open': true,
       'download:progress': true,
       'settings:changed': true,
       'profile:changed': true,

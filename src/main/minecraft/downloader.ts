@@ -23,11 +23,25 @@ const MAX_ATTEMPTS = 3
 
 /** Abort controllers for every in-flight download (real cancel support). */
 const inflight = new Set<AbortController>()
+/** Per-batch controllers so a single entry can be cancelled from the UI. */
+const batchControllers = new Map<string, AbortController>()
 
 /** Abort every running download — files stop being written immediately. */
 export function abortAllDownloads(): void {
   for (const ctrl of inflight) ctrl.abort()
   inflight.clear()
+  batchControllers.clear()
+}
+
+/**
+ * Abort ONE batch by its id (Downloads → Cancel). Partial files are removed
+ * by the running worker and the entry flips to a terminal failed state.
+ */
+export function abortBatch(batchId: string): boolean {
+  const ctrl = batchControllers.get(batchId)
+  if (!ctrl) return false
+  ctrl.abort()
+  return true
 }
 
 /** sha1 hex of a file, or null when unreadable. */
@@ -63,6 +77,8 @@ export interface DownloadBatchOptions {
   kind: DownloadKind
   label: string
   concurrency?: number
+  /** Stable id so the Downloads section can cancel THIS batch individually. */
+  batchId?: string
 }
 
 export async function runDownloadBatch(
@@ -76,7 +92,13 @@ export async function runDownloadBatch(
   let skipped = 0
   let received = 0
   let currentFile = ''
-  recordDownload({ label: opts.label, kind: opts.kind, status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes })
+  // Register the batch controller BEFORE any work so a cancel can reach it.
+  const batchCtrl = new AbortController()
+  inflight.add(batchCtrl)
+  const batchId = opts.batchId ?? `dl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  batchControllers.set(batchId, batchCtrl)
+  const entryId = recordDownload({ label: opts.label, kind: opts.kind, status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes })
+  batchControllers.set(entryId || batchId, batchCtrl)
 
   const emit = (): void => {
     const progress: BatchProgress = {
@@ -95,6 +117,9 @@ export async function runDownloadBatch(
   if (items.length === 0) {
     emit()
     recordDownload({ label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: 0, totalBytes: 0 })
+    batchControllers.delete(batchId)
+    batchControllers.delete(entryId)
+    inflight.delete(batchCtrl)
     return { downloaded: 0, skipped: 0 }
   }
 
@@ -111,13 +136,11 @@ export async function runDownloadBatch(
         continue
       }
       // Download with retry + sha1 verification — a corrupt or partial file
-      // is deleted and re-fetched, never accepted silently. An abort (user
-      // cancel) stops the current attempt immediately and is NOT retried.
+      // is deleted and re-fetched, never accepted silently. A batch abort
+      // (user cancel) stops the current fetch immediately and is NOT retried.
       let attempts = 0
       for (;;) {
         attempts++
-        const ctrl = new AbortController()
-        inflight.add(ctrl)
         try {
           let lastReported = 0
           let fileReported = 0
@@ -127,7 +150,7 @@ export async function runDownloadBatch(
             lastReported = p.received
             fileReported = p.received
             emit()
-          }, 120_000, ctrl.signal)
+          }, 120_000, batchCtrl.signal)
           if (item.expectedSha1) {
             const actual = await sha1Of(item.dest)
             if (actual !== item.expectedSha1) {
@@ -144,7 +167,7 @@ export async function runDownloadBatch(
         } catch (err) {
           // Clean up the partial/corrupt file before retrying.
           await (await import('../utils/fs')).remove(item.dest).catch(() => {})
-          if (ctrl.signal.aborted) {
+          if (batchCtrl.signal.aborted) {
             logger.info(`Download cancelled: ${item.url}`)
             throw err
           }
@@ -154,8 +177,6 @@ export async function runDownloadBatch(
           }
           logger.warn(`Download failed (attempt ${attempts}/${MAX_ATTEMPTS}), retrying: ${item.url}`)
           await new Promise((r) => setTimeout(r, 400 * attempts))
-        } finally {
-          inflight.delete(ctrl)
         }
       }
       done++
@@ -172,5 +193,10 @@ export async function runDownloadBatch(
     // Never leave the entry stuck in 'downloading' — mark it failed.
     recordDownload({ label: opts.label, kind: opts.kind, status: 'failed', percent: 0, downloadedBytes: received, totalBytes })
     throw err
+  } finally {
+    // A cancelled batch must never keep its controller registered.
+    batchControllers.delete(batchId)
+    batchControllers.delete(entryId)
+    inflight.delete(batchCtrl)
   }
 }

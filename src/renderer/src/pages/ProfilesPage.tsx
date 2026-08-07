@@ -143,15 +143,10 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
                 </div>
               </div>
 
+              {/* Card stats are intentionally minimal: only Playtime lives on
+                  the card. RAM and Resolution stay configurable in Edit — they
+                  just don't clutter the default card display. */}
               <div className="profile-stats">
-                <div className="profile-stat">
-                  <b>{p.memory}MB</b>
-                  <span>RAM</span>
-                </div>
-                <div className="profile-stat">
-                  <b>{p.resolution.width}x{p.resolution.height}</b>
-                  <span>Resolution</span>
-                </div>
                 <div className="profile-stat">
                   <b>{p.playtimeSeconds > 0 ? Math.round(p.playtimeSeconds / 60) + 'm' : '---'}</b>
                   <span>Playtime</span>
@@ -160,7 +155,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
 
               <div className="profile-card-actions">
                 <Button
-                  variant={running ? 'ghost' : 'play'}
+                  variant={running ? 'danger' : 'play'}
                   onClick={(e) => {
                     e.stopPropagation()
                     if (running) void stopLaunch()

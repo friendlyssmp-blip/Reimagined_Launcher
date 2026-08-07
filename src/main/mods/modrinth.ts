@@ -231,6 +231,12 @@ export async function listVersions(projectId: string, _projectType: ProjectType 
       loaders: string[]
       changelog?: string
       files?: { filename: string; url: string; size: number }[]
+      dependencies?: {
+        project_id: string
+        version_id?: string | null
+        dependency_type: string
+        file_name?: string
+      }[]
     }[]
   >(`${API}/project/${projectId}/version`, { headers: headers(), timeoutMs: 15_000 })
   return (versions ?? []).map((v) => ({
@@ -242,7 +248,17 @@ export async function listVersions(projectId: string, _projectType: ProjectType 
     filename: v.files?.[0]?.filename,
     size: v.files?.[0]?.size,
     changelog: v.changelog,
-    fileUrl: v.files?.[0]?.url
+    fileUrl: v.files?.[0]?.url,
+    dependencies: (v.dependencies ?? [])
+      .filter((d) => d.project_id)
+      .map((d) => ({
+        projectId: d.project_id,
+        versionId: d.version_id ?? undefined,
+        dependencyType: (d.dependency_type === 'required' || d.dependency_type === 'optional' || d.dependency_type === 'incompatible'
+          ? d.dependency_type
+          : 'optional') as 'required' | 'optional' | 'incompatible',
+        fileName: d.file_name
+      }))
   }))
 }
 

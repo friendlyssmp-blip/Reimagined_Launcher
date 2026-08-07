@@ -17,7 +17,15 @@ import { modrinth, type ProjectType } from './modrinth'
 import { curseforge } from './curseforge'
 import { profileManager } from '../profiles/profile-manager'
 import { iso } from '../utils/format'
-import type { Profile, ProfileMod, ModrinthSearchResult, LoaderType, ProjectVersionInfo } from '@shared/types'
+import type {
+  Profile,
+  ProfileMod,
+  ModrinthSearchResult,
+  LoaderType,
+  ProjectVersionInfo,
+  InstallDepInfo,
+  InstallWithDepsResult
+} from '@shared/types'
 
 /** Map a project type to its folder inside the instance. */
 function folderFor(projectType: ProjectType): string {
@@ -127,7 +135,7 @@ class ModManager {
     logger.info(`Installing mod ${projectId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: file.filename
+      label: `${project.title} — ${version.versionNumber}`
     })
 
     const mod: ProfileMod = {
@@ -236,7 +244,7 @@ class ModManager {
     logger.info(`Installing ${provider} ${projectId} @ ${versionId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: file.filename
+      label: `${title} — ${file.version}`
     })
 
     const mod: ProfileMod = {
@@ -326,7 +334,15 @@ class ModManager {
     eventBus.emit('mods:changed', { profileId, action: 'removed', slug })
   }
 
-  /** Compare installed mods against the newest available versions. */
+  /**
+   * Compare installed mods against the newest available versions.
+   *
+   * Updates are detected by REAL RELEASE ORDER (datePublished), never naive
+   * string comparison — so "1.10" is never treated as older than "1.9". The
+   * Update badge only appears when the installed version is genuinely older
+   * than the newest compatible one: already-latest and installed-newer builds
+   * (pre-releases, manual installs ahead of the listing) show "up to date".
+   */
   async checkUpdates(profileId: string): Promise<ProfileMod[]> {
     const profile = await this.requireProfile(profileId)
     let changed = false
@@ -334,16 +350,30 @@ class ModManager {
       profile.mods.map(async (mod) => {
         if (mod.source !== 'modrinth') return mod
         try {
-          const latest = await modrinth.latestVersionFor(mod.id, profile.minecraftVersion, profile.loader.type, mod.projectType ?? 'mod')
-          if (latest && latest.id !== mod.versionId) {
-            changed = true
-            return { ...mod, updateAvailable: { versionId: latest.id, versionNumber: latest.versionNumber } }
-          }
-          if (mod.updateAvailable) {
-            changed = true
-            return { ...mod, updateAvailable: null }
-          }
-          return mod
+          const versions = await modrinth.listVersions(mod.id, mod.projectType ?? 'mod')
+          const latest = versions.find((v) =>
+            this.versionCompatible(v, profile.minecraftVersion, profile.loader.type, mod.projectType ?? 'mod')
+          )
+          const installedV = versions.find((v) => v.id === mod.versionId)
+          const installedDate = installedV?.datePublished ? new Date(installedV.datePublished).getTime() : null
+          const latestDate = latest?.datePublished ? new Date(latest.datePublished).getTime() : null
+          // Only a real newer release triggers an update. If the installed
+          // version is missing from the listing (removed upstream) we stay
+          // conservative and show nothing rather than a false positive.
+          const needsUpdate = Boolean(
+            latest &&
+              latest.id !== mod.versionId &&
+              installedDate !== null &&
+              latestDate !== null &&
+              latestDate > installedDate
+          )
+          const next = needsUpdate && latest
+            ? { ...mod, updateAvailable: { versionId: latest.id, versionNumber: latest.versionNumber } }
+            : mod.updateAvailable
+              ? { ...mod, updateAvailable: null }
+              : mod
+          if (next !== mod) changed = true
+          return next
         } catch {
           return mod
         }
@@ -465,7 +495,7 @@ class ModManager {
     logger.info(`Changing version of ${mod.title} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: file.filename
+      label: `${mod.title} — ${newVersionNumber}`
     })
 
     // A disabled mod stays disabled after a version swap.
@@ -562,6 +592,147 @@ class ModManager {
       if (v.loaders.length === 0) return true
       return v.loaders.includes(wantedLoader) || v.loaders.includes('any')
     })
+  }
+
+  /** True when a version supports the profile's MC version + loader. */
+  private versionCompatible(v: ProjectVersionInfo, mc: string, loader: LoaderType, projectType: ProjectType = 'mod'): boolean {
+    if (v.gameVersions.length > 0 && !v.gameVersions.includes(mc)) return false
+    if (projectType !== 'mod') return true // packs aren't loader-specific
+    if (v.loaders.length === 0) return true
+    return v.loaders.includes(loader) || v.loaders.includes('any')
+  }
+
+  /**
+   * Resolve the FULL dependency tree of a version (recursive, de-duplicated)
+   * from Modrinth's real dependency data. Returns a flat-ish tree where every
+   * entry carries its resolved version + installed status for the profile.
+   */
+  async resolveDependencies(
+    profileId: string,
+    projectId: string,
+    versionId: string,
+    projectType: ProjectType = 'mod'
+  ): Promise<InstallDepInfo[]> {
+    const profile = await this.requireProfile(profileId)
+    return this.resolveDepTree(profile, projectId, versionId, projectType, 0, new Set([projectId]))
+  }
+
+  private async resolveDepTree(
+    profile: Profile,
+    projectId: string,
+    versionId: string,
+    projectType: ProjectType,
+    depth: number,
+    seen: Set<string>
+  ): Promise<InstallDepInfo[]> {
+    if (depth > 6) return []
+    const mc = profile.minecraftVersion
+    const loader: LoaderType = profile.loader.type
+    const versions = await modrinth.listVersions(projectId, projectType)
+    const target = versions.find((v) => v.id === versionId) ?? versions[0]
+    const declared = (target?.dependencies ?? []).filter((d) => d.dependencyType !== 'incompatible' && d.projectId)
+    const out: InstallDepInfo[] = []
+    for (const dep of declared) {
+      if (seen.has(dep.projectId)) continue
+      seen.add(dep.projectId)
+      // Dependencies are mods on Modrinth even when the parent is a pack
+      // (e.g. a shader that depends on Iris) — resolve them as mods.
+      const depVersions = await modrinth.listVersions(dep.projectId, 'mod')
+      let chosen: ProjectVersionInfo | null = null
+      if (dep.versionId) {
+        const pinned = depVersions.find((x) => x.id === dep.versionId)
+        if (pinned && this.versionCompatible(pinned, mc, loader, 'mod')) chosen = pinned
+      }
+      if (!chosen) chosen = depVersions.find((x) => this.versionCompatible(x, mc, loader, 'mod')) ?? null
+      let meta: { title: string; slug: string; icon_url?: string }
+      try {
+        meta = await modrinth.getProject(dep.projectId)
+      } catch {
+        meta = { title: dep.projectId, slug: dep.projectId }
+      }
+      const info: InstallDepInfo = {
+        projectId: dep.projectId,
+        title: meta.title,
+        slug: meta.slug,
+        iconUrl: meta.icon_url,
+        dependencyType: dep.dependencyType,
+        versionId: chosen?.id ?? null,
+        versionNumber: chosen?.versionNumber ?? null,
+        installed: profile.mods.some((m) => m.id === dep.projectId || m.slug === meta.slug)
+      }
+      const children = await this.resolveDepTree(
+        profile,
+        dep.projectId,
+        chosen?.id ?? dep.versionId ?? '',
+        'mod',
+        depth + 1,
+        seen
+      )
+      if (children.length > 0) info.children = children
+      out.push(info)
+    }
+    return out
+  }
+
+  /**
+   * Install an item AND every currently-missing dependency together.
+   * Dependencies that are already installed are skipped (never duplicated);
+   * failures on individual dependencies are reported, not fatal to the rest.
+   */
+  async installWithDeps(
+    profileId: string,
+    projectId: string,
+    versionId?: string,
+    projectType: ProjectType = 'mod'
+  ): Promise<InstallWithDepsResult> {
+    const profile = await this.requireProfile(profileId)
+    const project = await modrinth.getProject(projectId)
+    if (profile.mods.some((m) => m.id === projectId || m.slug === project.slug)) {
+      throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
+    }
+    let targetVersionId = versionId
+    if (!targetVersionId) {
+      const latest = await modrinth.latestVersionFor(projectId, profile.minecraftVersion, profile.loader.type, projectType)
+      if (!latest || latest.files.length === 0) {
+        throw new LauncherError('MOD_VERSION_MISSING', 'No compatible version of this project exists for this profile.')
+      }
+      targetVersionId = latest.id
+    }
+
+    // 1. The item itself.
+    const mod = await this.installVersion(profileId, 'modrinth', projectId, targetVersionId, projectType)
+    const installedTitles = [mod.title]
+    const skipped: string[] = []
+
+    // 2. Every missing dependency, in tree order, deduped, already-installed skipped.
+    const tree = await this.resolveDepTree(profile, projectId, targetVersionId, projectType, 0, new Set([projectId]))
+    const flat: InstallDepInfo[] = []
+    const seenDeps = new Set<string>()
+    const flatten = (list: InstallDepInfo[]): void => {
+      for (const d of list) {
+        if (seenDeps.has(d.projectId)) continue
+        seenDeps.add(d.projectId)
+        flat.push(d)
+        if (d.children) flatten(d.children)
+      }
+    }
+    flatten(tree)
+    for (const dep of flat) {
+      if (dep.installed) continue
+      if (!dep.versionId) {
+        if (dep.dependencyType === 'required') skipped.push(`${dep.title} (no compatible version for this profile)`)
+        continue
+      }
+      try {
+        const dmod = await this.installVersion(profileId, 'modrinth', dep.projectId, dep.versionId, 'mod')
+        installedTitles.push(dmod.title)
+      } catch (err) {
+        skipped.push(`${dep.title} (${(err as Error).message})`)
+        logger.warn(`Dependency install failed for ${dep.title}: ${(err as Error).message}`)
+      }
+    }
+    logger.info(`Install with dependencies: ${mod.title} + ${installedTitles.length - 1} dep(s), ${skipped.length} skipped`)
+    return { mod, installed: installedTitles, skipped }
   }
 
   private async requireProfile(profileId: string): Promise<Profile> {

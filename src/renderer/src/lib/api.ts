@@ -19,6 +19,8 @@ import type {
   ShareSnapshot,
   ProjectDetail,
   ProjectVersionInfo,
+  InstallDepInfo,
+  InstallWithDepsResult,
   PerfStatus,
   PerfRecommendation,
   PerfModOption
@@ -85,6 +87,7 @@ export const api = {
     worlds: (profileId: string) => unwrap<{ name: string; folder: string; sizeBytes: number; lastModified: string | null }[]>(window.reimagined.content.worlds(profileId)),
     packs: (profileId: string, kind: 'resourcepacks' | 'shaders') => unwrap<{ name: string; kind: 'folder' | 'zip'; sizeBytes: number }[]>(window.reimagined.content.packs(profileId, kind)),
     downloads: () => unwrap<{ id: string; label: string; kind: string; status: 'downloading' | 'done' | 'failed'; percent: number; downloadedBytes: number; totalBytes: number; at: string }[]>(window.reimagined.content.downloads()),
+    cancelDownload: (id: string) => unwrap<boolean>(window.reimagined.content.cancelDownload(id)),
     openFolder: (profileId: string, sub?: string) => unwrap<void>(window.reimagined.content.openFolder(profileId, sub)),
     backupWorld: (profileId: string, world: string) => unwrap<{ destination: string }>(window.reimagined.content.backupWorld(profileId, world)),
     detail: (payload: { provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }) =>
@@ -146,7 +149,11 @@ export const api = {
     availableVersions: (profileId: string, slug: string) =>
       unwrap<ProjectVersionInfo[]>(window.reimagined.mods.availableVersions(profileId, slug)),
     installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string) =>
-      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType))
+      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType)),
+    dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string) =>
+      unwrap<InstallDepInfo[]>(window.reimagined.mods.dependencies(profileId, projectId, versionId, projectType)),
+    installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string) =>
+      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType))
   },
   launch: {
     start: (profileId: string) => unwrap<LaunchHandle>(window.reimagined.launch.start(profileId)),
@@ -237,6 +244,10 @@ export interface ConsoleState {
   handle: LaunchHandle
   progress: { stage: string; message: string; percent: number | null } | null
   logs: { at: string; stream: 'stdout' | 'stderr' | 'system'; text: string }[]
+  /** Epoch ms of the Play click (for the "Open for …" chronometer). */
+  launchStartedAt?: number
+  /** Epoch ms the game window was confirmed open (real signal). */
+  windowOpenedAt?: number
 }
 
 /** Convenience: turn any error into a friendly message. */

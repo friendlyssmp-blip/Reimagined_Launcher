@@ -153,7 +153,7 @@ export function ModpacksPage() {
           { id: 'share', label: 'Share & Import' }
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={(id) => setTab(id as 'browse' | 'share')}
       />
 
       {tab === 'browse' && (

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { Button, EmptyState, Spinner, AnimatedNumber } from '../components/ui'
-import { api } from '../lib/api'
+import { api, friendlyError } from '../lib/api'
 import { IconDownload, IconCheck, IconX, IconRefresh } from '../components/icons'
 
 interface Download {
@@ -36,7 +36,7 @@ const kindLabel: Record<string, string> = {
 }
 
 export function DownloadsPage() {
-  const { launch } = useApp()
+  const { launch, notify } = useApp()
   const [history, setHistory] = useState<Download[]>([])
   const [loading, setLoading] = useState(true)
   /* Ids already announced as done — plays the completion chime only once. */
@@ -67,18 +67,35 @@ export function DownloadsPage() {
     }
   }, [])
 
+  /** Cancel one real download — the underlying fetch is aborted in main. */
+  const cancel = useCallback(async (d: { id: string; label: string }) => {
+    try {
+      await api.content.cancelDownload(d.id)
+      notify('info', 'Download cancelled', d.label)
+      void refresh()
+    } catch (err) {
+      notify('error', 'Could not cancel download', friendlyError(err))
+    }
+  }, [notify, refresh])
+
   useEffect(() => {
     refresh()
     const t = setInterval(refresh, 2000)
     return () => clearInterval(t)
   }, [refresh])
 
-  /* The "active downloads" panel reflects REAL downloads only — once the
-   * game is running (phase 'running') there is nothing downloading, so the
-   * bar and spinner must disappear instead of sitting frozen at 100%. */
-  const active = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
-    ? { label: launch.message || 'Working…', percent: launch.percent ?? 0 }
+  /* The "active downloads" panel reflects REAL state only. It prefers the
+   * live download-history entry (mods, deps, modpacks — anything recorded by
+   * a real task), falling back to the launch pipeline's progress. The moment
+   * the underlying task resolves, its entry stops being 'downloading', so the
+   * bar + spinner can never sit frozen at 100%. */
+  const dlActive = history.find((d) => d.status === 'downloading') ?? null
+  const launchActive = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
+    ? { label: launch.message || 'Working…', percent: launch.percent ?? 0, id: undefined as string | undefined }
     : null
+  const active = dlActive
+    ? { label: dlActive.label, percent: dlActive.percent, id: dlActive.id }
+    : launchActive
 
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spinner /></div>
@@ -99,9 +116,14 @@ export function DownloadsPage() {
           <div className="dl-icon"><IconDownload /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <b>{active ? active.label : 'No active downloads'}</b>
-            <small>{active ? 'Streaming from the launch pipeline' : 'Downloads appear here when you install versions, loaders or mods.'}</small>
+            <small>{active ? (active.id ? 'Downloading in real time' : 'Streaming from the launch pipeline') : 'Downloads appear here when you install versions, loaders or mods.'}</small>
           </div>
-          {active && <Spinner />}
+          {active && active.id && (
+            <Button size="sm" variant="danger" onClick={() => void cancel({ id: active.id as string, label: active.label })}>
+              Cancel
+            </Button>
+          )}
+          {active && !active.id && <Spinner />}
         </div>
         {active && (
           <>
@@ -126,12 +148,25 @@ export function DownloadsPage() {
                   {d.status === 'done' ? <IconCheck /> : d.status === 'failed' ? <IconX /> : <Spinner />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{kindLabel[d.kind] ?? d.label}</div>
+                  {/* Specific label — the real item/dependency name + version,
+                      never a generic "Mods" placeholder. */}
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{d.label}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                    {d.status === 'done' ? `Complete · ${fmtSize(d.totalBytes)}` : d.status === 'failed' ? 'Failed' : 'In progress'}
+                    {kindLabel[d.kind] ?? d.kind}
+                    {' · '}{d.status === 'done' ? `Complete · ${fmtSize(d.totalBytes)}` : d.status === 'failed' ? 'Failed' : 'In progress'}
                     {' · '}{new Date(d.at).toLocaleTimeString()}
                   </div>
                 </div>
+                {d.status === 'downloading' && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => void cancel(d)}
+                    title="Stop this download and remove partial files"
+                  >
+                    Cancel
+                  </Button>
+                )}
                 <span className={`badge ${d.status === 'done' ? 'badge-success' : d.status === 'failed' ? 'badge-danger' : ''}`}>
                   {d.status}
                 </span>

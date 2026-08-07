@@ -39,6 +39,7 @@ const api = {
     worlds: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.worldsList, profileId),
     packs: (profileId: string, kind: string): Promise<unknown> => ipcRenderer.invoke(IPC.packsList, { profileId, kind }),
     downloads: (): Promise<unknown> => ipcRenderer.invoke(IPC.downloadsList),
+    cancelDownload: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.downloadsCancel, id),
     openFolder: (profileId: string, sub?: string): Promise<unknown> => ipcRenderer.invoke(IPC.openInstanceFolder, { profileId, sub }),
     backupWorld: (profileId: string, world: string): Promise<unknown> => ipcRenderer.invoke(IPC.backupWorld, { profileId, world }),
     detail: (payload: { provider: string; projectId: string; projectType?: string }): Promise<unknown> =>
@@ -95,7 +96,11 @@ const api = {
     availableVersions: (profileId: string, slug: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsAvailableVersions, { profileId, slug }),
     installVersion: (profileId: string, provider: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsInstallVersion, { profileId, provider, projectId, versionId, projectType })
+      ipcRenderer.invoke(IPC.modsInstallVersion, { profileId, provider, projectId, versionId, projectType }),
+    dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsDependencies, { profileId, projectId, versionId, projectType }),
+    installWithDeps: (profileId: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsInstallWithDeps, { profileId, projectId, versionId, projectType })
   },
 
   launch: {
