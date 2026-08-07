@@ -165,8 +165,13 @@ const api = {
     recommendations: (profileId?: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfRecommendations, profileId),
     apply: (payload: { id: string; profileId?: string }): Promise<unknown> => ipcRenderer.invoke(IPC.perfApply, payload),
     mods: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfMods, profileId),
-    installMod: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfInstallMod, { profileId, slug }),
-    removeMod: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfRemoveMod, { profileId, slug })
+    installMod: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.perfInstallMod, { profileId, slug }),    removeMod: (profileId: string, slug: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.perfRemoveMod, { profileId, slug })
+  },
+
+  shaders: {
+    support: (profileId?: string): Promise<unknown> => ipcRenderer.invoke(IPC.shadersSupport, profileId),
+    disable: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shadersDisable, profileId)
   },
   
   /** Subscribe to main-process push events. Returns an unsubscribe fn. */

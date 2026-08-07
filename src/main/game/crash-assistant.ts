@@ -17,12 +17,32 @@ import type { CrashReport, Profile } from '@shared/types'
  *  report from a previous session being attributed to today's exit. */
 const MAX_AGE_MS = 10 * 60_000
 
+/** Patterns that indicate a shader-pipeline crash (Iris / shader compile / GL). */
+const SHADER_PATTERNS =
+  /iris|shader|glsl|spirv|glCompileShader|glLinkProgram|shadercompile|shader.*compile|shader.*error|glslang|opengl.*version|pixelformat|no.*pixel|glfw.*error/i
+
+/** True when a crash report looks like a shader-pipeline failure. */
+export function isShaderCrash(text: string): boolean {
+  return SHADER_PATTERNS.test(text)
+}
+
 /** Human suggestions derived from the report's content. */
 function suggestFor(text: string): string[] {
   const lower = text.toLowerCase()
   const out: string[] = []
+  // Shader crashes — the specific, user-facing problem this assistant exists for.
+  if (SHADER_PATTERNS.test(lower)) {
+    out.push('This looks like a shader crash. The launcher will start the next session with shaders disabled so the game can run — re-enable them from the in-game shader menu when you\'re ready.')
+    out.push('If shaders keep crashing, update your GPU drivers or try a different shader pack. Older/low-VRAM GPUs often need render distance lowered.')
+  }
   if (/outofmemoryerror|out of memory|memoryerror|unable to allocate/i.test(lower)) {
     out.push('The game ran out of memory. Increase this profile RAM (Play → Memory) to 4–8 GB, or close other apps while playing.')
+  }
+  if (/resourcepack|texturepack|pack format|model engine|missing texture/i.test(lower)) {
+    out.push('A resource pack may be incompatible. Try disabling recently added resource packs, then re-enable them one by one.')
+  }
+  if (/world|level|chunk|region|dimension|saving|loading.*world/i.test(lower)) {
+    out.push('The game crashed while processing world data. Try a backup world, or launch with mods disabled to isolate the cause.')
   }
   if (/\.mod\.|fabric|forge|loader|classnotfound|nosuchmethod|noclassdeffound|mixins?/i.test(lower)) {
     out.push('A mod or loader conflict is likely. Disable recently added mods (Installed → toggle Off) or remove them, then try again.')

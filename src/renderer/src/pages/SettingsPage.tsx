@@ -6,9 +6,15 @@ import { sound, SOUND_PACKS } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
 import { IconSettings, IconGamepad, IconShield, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconMoon, IconCrystal, IconLeaf } from '../components/icons'
 
-/** Custom tier icon — Potato / Balanced / High (no OS emoji rendering). */
+const IconBolt = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+)
+
+/** Custom tier icon — Potato / Balanced / High / Turbo (no OS emoji rendering). */
 function PerfTierIcon({ tier, size = 14 }: { tier: string; size?: number }) {
-  const Icon = tier === 'potato' ? IconPotato : tier === 'high' ? IconRocket : IconGauge
+  const Icon = tier === 'potato' ? IconPotato : tier === 'high' ? IconRocket : tier === 'turbo' ? IconBolt : IconGauge
   return <Icon style={{ width: size, height: size, flex: '0 0 auto' }} />
 }
 
@@ -25,12 +31,6 @@ const themes: { id: ThemeId; label: string; colors: string[] }[] = [
   { id: 'obsidian', label: 'Obsidian', colors: ['#0a0a0e', '#15151d', '#9d8cff'] }
 ]
 
-const IconBolt = ({ size = 16 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-  </svg>
-)
-
 const sections = [
   { id: 'general', label: 'General', icon: IconSettings },
   { id: 'minecraft', label: 'Minecraft', icon: IconGamepad },
@@ -38,6 +38,7 @@ const sections = [
   { id: 'performance', label: 'Performance', icon: IconBolt },
   { id: 'downloads', label: 'Downloads', icon: IconDownload },
   { id: 'updates', label: 'Updates', icon: IconRefresh },
+  { id: 'stability', label: 'Stability', icon: IconShield },
   { id: 'appearance', label: 'Appearance', icon: IconImage },
   { id: 'audio', label: 'Audio', icon: IconVolume },
   { id: 'about', label: 'About', icon: IconSparkle },
@@ -193,6 +194,8 @@ export function SettingsPage() {
 
           {section === 'performance' && <PerformanceSection />}
 
+          {section === 'stability' && <StabilitySection />}
+
           {section === 'downloads' && (
             <div className="panel">
               <div className="panel-title">Downloads</div>
@@ -293,7 +296,7 @@ export function SettingsPage() {
                   How aggressively the Reimagined Client's native optimizations apply (chunk-build threads, culling thresholds, auto render distance).
                 </p>
                 <div className="row" style={{ gap: 8 }}>
-                  {(['potato', 'balanced', 'high'] as const).map((p) => (
+                  {(['potato', 'balanced', 'high', 'turbo'] as const).map((p) => (
                     <button
                       key={p}
                       onClick={() => updateSettings({ preset: p })}
@@ -315,7 +318,7 @@ export function SettingsPage() {
                       }}
                     >
                       <PerfTierIcon tier={p} size={14} />
-                      {p === 'potato' ? 'Potato' : p === 'balanced' ? 'Balanced' : 'High'}
+                      {p === 'potato' ? 'Potato' : p === 'balanced' ? 'Balanced' : p === 'high' ? 'High' : 'Turbo'}
                     </button>
                   ))}
                 </div>
@@ -552,7 +555,7 @@ function PerformanceSection() {
     }
   }
 
-  const setTier = async (t: 'auto' | 'potato' | 'balanced' | 'high'): Promise<void> => {
+  const setTier = async (t: 'auto' | 'potato' | 'balanced' | 'high' | 'turbo'): Promise<void> => {
     if (t === 'auto') {
       await updateSettings({ perfTier: 'auto', perfAutoTune: true })
       notify('success', 'Auto-optimization on', 'The engine will pick the best profile for your hardware.')
@@ -583,7 +586,7 @@ function PerformanceSection() {
   }
 
   const hw = status?.hardware
-  const tierLabel = status?.tier === 'potato' ? 'Potato' : status?.tier === 'high' ? 'High' : 'Balanced'
+  const tierLabel = status?.tier === 'potato' ? 'Potato' : status?.tier === 'high' ? 'High' : status?.tier === 'turbo' ? 'Turbo' : 'Balanced'
 
   return (
     <>
@@ -628,7 +631,7 @@ function PerformanceSection() {
           </div>
           <div style={{ flex: 1 }} />
           <div className="row" style={{ gap: 6 }}>
-            {(['auto', 'potato', 'balanced', 'high'] as const).map((t) => (
+            {(['auto', 'potato', 'balanced', 'high', 'turbo'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => void setTier(t)}
@@ -777,6 +780,133 @@ o apply."
         ) : (
           <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12 }}>Create a profile first — performance mods are installed per profile.</div>
         )}
+      </div>
+    </>
+  )
+}
+
+/**
+ * Stability — the Shader Guard panel (v1.0.12 anti-crash system).
+ *
+ * Shows the REAL GPU/driver assessment for the shader rendering path, the
+ * auto-recovery state, and the two safety toggles. If the hardware genuinely
+ * cannot run shaders, that is stated plainly here — and the launcher refuses
+ * to even launch a shader session on it (see Shader Guard in main).
+ */
+function StabilitySection() {
+  const { settings, updateSettings, notify, activeProfile, refreshProfiles } = useApp()
+  const [support, setSupport] = useState<{
+    level: 'ok' | 'limited' | 'unsupported'
+    reasons: string[]
+    vramGB: number
+    driverVersion: string | null
+    recoveryPending: boolean
+    recentCrashes?: { profileId: string; profileName: string; cause: string; at: string }[]
+  } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const s = await api.shaders.support(activeProfile?.id)
+      setSupport(s)
+    } catch {
+      setSupport(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeProfile?.id])
+
+  useEffect(() => { void load() }, [load])
+
+  const levelColor = support?.level === 'ok' ? 'var(--green, #34d399)' : support?.level === 'limited' ? 'var(--yellow, #fbbf24)' : 'var(--red, #f87171)'
+  const levelLabel = support?.level === 'ok' ? 'Shaders supported' : support?.level === 'limited' ? 'Shaders limited' : 'Shaders not supported'
+
+  const disableForProfile = async (): Promise<void> => {
+    if (!activeProfile) return
+    try {
+      await api.shaders.disable(activeProfile.id)
+      notify('info', 'Shaders disabled', 'Shaders were turned off for this profile — the next launch starts without them.')
+      void refreshProfiles()
+    } catch (err) {
+      notify('error', 'Could not disable shaders', friendlyError(err))
+    }
+  }
+
+  return (
+    <>
+      <div className="panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div>
+            <div className="panel-title">Shader Guard</div>
+            <p className="panel-sub">
+              Real GPU/driver assessment for the shader rendering path. If the hardware can't safely run shaders, the launcher refuses them before the game starts — and if the game crashes with shaders on, they're automatically disabled for the next session.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+            {loading ? <Spinner /> : 'Re-check'}
+          </Button>
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          {loading ? (
+            <div className="row" style={{ gap: 8, color: 'var(--text-3)', fontSize: 12.5 }}>
+              <Spinner /> Checking your graphics hardware…
+            </div>
+          ) : support ? (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid ' + levelColor,
+                background: 'var(--bg-2)',
+                fontSize: 12.5,
+                lineHeight: 1.5
+              }}
+            >
+              <div style={{ fontWeight: 700, color: levelColor, marginBottom: 6 }}>{levelLabel}</div>
+              {support.reasons.map((r, i) => (
+                <div key={i} style={{ color: 'var(--text-2)' }}>• {r}</div>
+              ))}
+              {support.recoveryPending && (
+                <div style={{ color: 'var(--yellow, #fbbf24)', marginTop: 8, fontWeight: 600 }}>
+                  The last session for this profile ended with shaders armed — the next launch starts with shaders disabled automatically.
+                </div>
+              )}
+              {support.recentCrashes && support.recentCrashes.length > 0 && (
+                <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 700, marginBottom: 4 }}>Recent shader crashes (auto-recovery):</div>
+                  {support.recentCrashes.slice(0, 4).map((c, i) => (
+                    <div key={i} style={{ fontSize: 11.5, color: 'var(--text-2)', marginBottom: 2 }}>
+                      {new Date(c.at).toLocaleDateString()} — {c.cause.slice(0, 90)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: 'var(--text-3)' }}>Could not read the hardware assessment.</div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Toggle
+            checked={settings.shaderAutoReduceRd ?? true}
+            onChange={(v) => void updateSettings({ shaderAutoReduceRd: v })}
+            label="Auto-reduce render distance on low VRAM when shaders are on"
+          />
+          <Toggle
+            checked={settings.autoDisableShadersOnCrash ?? true}
+            onChange={(v) => void updateSettings({ autoDisableShadersOnCrash: v })}
+            label="Auto-disable shaders after a shader crash"
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button variant="ghost" size="sm" onClick={() => void disableForProfile()} disabled={!activeProfile}>
+              Disable shaders now{activeProfile ? ' · ' + activeProfile.name : ''}
+            </Button>
+            {!activeProfile && <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Select a profile to disable shaders for it.</span>}
+          </div>
+        </div>
       </div>
     </>
   )

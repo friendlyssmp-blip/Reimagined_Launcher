@@ -57,6 +57,7 @@ class EventBus {
       'mods:changed': true,
       'update:progress': true,
       'crash:detected': true,
+      'shaders:auto-disabled': true,
       'system:info': true
     }
   }

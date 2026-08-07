@@ -34,7 +34,7 @@ const PS_QUERY = `
 $ErrorActionPreference = 'SilentlyContinue'
 $o = @{}
 $o.cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,L2CacheSize,L3CacheSize
-$o.gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object Name,AdapterRAM,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate
+$o.gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object Name,AdapterRAM,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate,DriverVersion
 $o.ram = Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | Select-Object Capacity,Speed
 $o.disk = Get-CimInstance Win32_PhysicalDisk -ErrorAction SilentlyContinue | Select-Object MediaType,Size
 $o.chassis = Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ChassisTypes
@@ -142,12 +142,14 @@ export async function detectHardware(force = false): Promise<HardwareProfile | n
     const gpus = gpuList
       .map((g) => {
         const name = str(g.Name) || 'Unknown GPU'
+        const driverVersion = str(g.DriverVersion) || undefined
         return {
           name,
           vendor: gpuVendor(name),
           // AdapterRAM is a 32-bit field and wraps above 4 GB — cap at 24.
           vramGB: Math.min(24, Math.round(num(g.AdapterRAM) / 1024 / 1024 / 1024)),
           integrated: gpuIntegrated(name),
+          driverVersion,
           resolution: `${num(g.CurrentHorizontalResolution)}×${num(g.CurrentVerticalResolution)}`,
           refreshHz: num(g.CurrentRefreshRate) || null
         }
@@ -191,7 +193,7 @@ export async function detectHardware(force = false): Promise<HardwareProfile | n
     const hw: HardwareProfile = {
       detectedAt: new Date().toISOString(),
       cpu: { model: cpuModel, cores: cpuCores, threads: cpuThreads, speedGHz: Math.round(cpuSpeed * 10) / 10, cache: `L2 ${l2} · L3 ${l3}` },
-      gpu: gpus.map(({ name, vendor, vramGB, integrated, refreshHz }) => ({ name, vendor, vramGB, integrated })),
+      gpu: gpus.map(({ name, vendor, vramGB, integrated, driverVersion }) => ({ name, vendor, vramGB, integrated, driverVersion })),
       memory: { totalGB: ramTotalGB, speedMHz: ramSpeed },
       storage,
       os: `${str(osInfo.Caption) || os.type()} ${str(osInfo.Version) || os.release()}`,

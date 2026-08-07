@@ -29,11 +29,18 @@ export interface LauncherSettings {
   /** Low-cost rendering: static 2D previews instead of animated 3D. */
   performanceMode: boolean
   /** Hardware-aware preset: how aggressively native optimizations apply. */
-  preset: 'potato' | 'balanced' | 'high'
+  preset: 'potato' | 'balanced' | 'high' | 'turbo'
   /** RPE: auto-tune the preset to the detected hardware. */
   perfAutoTune: boolean
   /** RPE: 'auto' = engine-chosen tier, otherwise a manual override. */
-  perfTier: 'auto' | 'potato' | 'balanced' | 'high'
+  perfTier: 'auto' | 'potato' | 'balanced' | 'high' | 'turbo'
+
+  /* --------------------------- Shader / crash safety --------------------------- */
+
+  /** Automatically lower render distance when shaders are enabled on low VRAM. */
+  shaderAutoReduceRd: boolean
+  /** After a shader crash, launch the next session with shaders disabled. */
+  autoDisableShadersOnCrash: boolean
   /** Recently performed activities shown on the Home page. */
   recentActivity: RecentActivity[]
 
@@ -417,13 +424,13 @@ export interface JavaRuntime {
 
 /* ------------------------------ Performance Engine (RPE) ------------------------------ */
 
-export type PerfTier = 'potato' | 'balanced' | 'high'
+export type PerfTier = 'potato' | 'balanced' | 'high' | 'turbo'
 
 /** Full snapshot of the user's machine, detected by the RPE. */
 export interface HardwareProfile {
   detectedAt: string
   cpu: { model: string; cores: number; threads: number; speedGHz: number; cache: string }
-  gpu: { name: string; vendor: string; vramGB: number; integrated: boolean }[]
+  gpu: { name: string; vendor: string; vramGB: number; integrated: boolean; driverVersion?: string }[]
   memory: { totalGB: number; speedMHz: number | null }
   storage: { type: string; totalGB: number }
   os: string
@@ -481,6 +488,28 @@ export interface PerfStatus {
   tuning: Record<string, number>
   /** The FPS Boost config the engine seeds for the current tier. */
   fpsConfig: Record<string, unknown>
+}
+
+/* ---------------------------- Shader / crash safety ---------------------------- */
+
+/** Real GPU/driver assessment for the shader rendering path. */
+export interface ShaderSupport {
+  /** ok = safe to enable, limited = works but risky (low VRAM / old driver), unsupported = do not enable. */
+  level: 'ok' | 'limited' | 'unsupported'
+  /** Human-readable reasons for the verdict (shown to the user). */
+  reasons: string[]
+  vramGB: number
+  driverVersion: string | null
+  /** True when a shader crash was detected on the previous session. */
+  recoveryPending: boolean
+}
+
+/** A shader-related crash recorded by the crash assistant (auto-recovery input). */
+export interface ShaderCrashRecord {
+  profileId: string
+  profileName: string
+  cause: string
+  at: string
 }
 
 /* ---------------------------------- Misc --------------------------------- */

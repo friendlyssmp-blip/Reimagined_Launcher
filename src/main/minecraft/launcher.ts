@@ -24,6 +24,7 @@ import { installFabric, latestFabricLoader } from './loaders/fabric'
 import { installForge, recommendedForgeVersion } from './loaders/forge'
 import { pickJava, type JavaRuntime } from './java'
 import { dateStamp } from '../utils/format'
+import { profileUsesShaders } from '../anti-crash/shader-guard'
 import type { Profile, LaunchProgress, LaunchLogLine, LaunchHandle, LaunchStage, Account } from '@shared/types'
 
 const CLASSPATH_SEP = process.platform === 'win32' ? ';' : ':'
@@ -155,6 +156,46 @@ class Launcher {
       // carries the in-game knobs; the JVM flags apply regardless). The
       // values come from the RPE for the current hardware tier.
       await this.seedFpsBoostConfig(gameDir)
+
+      // Shader Guard (anti-crash, v1.0.12):
+      // 1. Refuse shader sessions on hardware that genuinely cannot run them
+      //    (VRAM too low / old Intel iGPU) — fail BEFORE the game starts,
+      //    with a clear explanation instead of a crash.
+      // 2. Auto-recovery: if the previous session crashed with shaders armed,
+      //    disable shaders now and tell the user why (breaks the crash loop).
+      // 3. VRAM-aware render distance when shaders are enabled.
+      if (profileUsesShaders(profile)) {
+        const guard = await import('../anti-crash/shader-guard')
+        const guardHw = await (await import('../perf/engine')).detectHardware(false)
+        const support = guard.assessShaderSupport(guardHw)
+        if (support.level === 'unsupported') {
+          logger.warn('Shader Guard: refusing shader session for unsupported hardware.')
+          throw new LauncherError(
+            'SHADERS_UNSUPPORTED',
+            'Your graphics hardware cannot run shaders safely.',
+            support.reasons.join(' ') + ' The game will launch without shaders — remove or disable the shader pack to keep this session stable.'
+          )
+        }
+        // Auto-recovery: the previous session crashed with shaders armed —
+        // disable shaders now and tell the user why (breaks the crash loop).
+        if (settingsManager.get().autoDisableShadersOnCrash && guard.shaderCrashPending(profile)) {
+          guard.disableShadersForSession(profile)
+          eventBus.emit('shaders:auto-disabled', {
+            profileId: profile.id,
+            message: 'Minecraft crashed last time while shaders were enabled, so we disabled them for this session — you can re-enable them in the game.'
+          })
+        } else if (settingsManager.get().shaderAutoReduceRd) {
+          // Low-VRAM safety: apply the real render-distance cap to options.txt
+          // so the shader session starts at a distance this GPU can hold.
+          const { rd, message } = guard.shaderRenderDistanceFor(guardHw, 12)
+          guard.capRenderDistance(profile, rd)
+          if (message) {
+            logger.info('Shader Guard: ' + message)
+            this.emitLog('system', 'Shader Guard: ' + message)
+          }
+        }
+        guard.armShaderCrashFlag(profile)
+      }
 
       const args = await this.buildArgs({
         vj,
@@ -393,9 +434,44 @@ class Launcher {
         if (report) {
           logger.warn(`Crash detected for "${profile.name}": ${report.cause}`)
           eventBus.emit('crash:detected', report)
+          // Shader Guard: a crash on a shader-armed session is recorded so the
+          // next launch auto-disables shaders (no endless crash loop).
+          if (profileUsesShaders(profile)) {
+            const { recordShaderCrash } = await import('../anti-crash/shader-guard')
+            await recordShaderCrash({
+              profileId: profile.id,
+              profileName: profile.name,
+              cause: report.cause,
+              at: new Date().toISOString()
+            })
+            logger.warn(`Shader Guard: session for "${profile.name}" crashed with shaders enabled (${report.cause.slice(0, 120)}) — auto-recovery armed for next launch.`)
+          }
         }
       } catch {
         /* Crash Assistant is strictly best-effort — never breaks the exit flow */
+      }
+    }
+
+    // Shader Guard exit bookkeeping:
+    //  - A CLEAN exit (code 0) clears the crash flag so recovery never
+    //    triggers after a successful session; the render distance cap applied
+    //    for the shader session is restored.
+    //  - A USER-INITIATED STOP (taskkill → non-zero/null code) also clears the
+    //    crash flag — pressing Stop is not a shader crash and must not arm
+    //    recovery for the next launch.
+    //  - A real crash (code !== 0, no intentional-stop marker) leaves the flag
+    //    armed — that is the signal the next launch uses to disable shaders.
+    if (profile) {
+      try {
+        const guard = await import('../anti-crash/shader-guard')
+        const intentional = guard.intentionalStopPending(profile)
+        if (code === 0 || intentional) {
+          guard.clearShaderCrashFlag(profile)
+          guard.restoreRenderDistance(profile)
+          guard.clearIntentionalStop(profile)
+        }
+      } catch {
+        /* best-effort */
       }
     }
 
@@ -451,6 +527,17 @@ class Launcher {
   async stop(): Promise<void> {
     const child = this.child
     if (!child || child.exitCode !== null) return
+    // A user-initiated stop must never look like a shader crash — mark it so
+    // onExit can tell a forced kill apart from a real crash.
+    const profile = this.profile
+    if (profile) {
+      try {
+        const { markIntentionalStop } = await import('../anti-crash/shader-guard')
+        markIntentionalStop(profile)
+      } catch {
+        /* best-effort */
+      }
+    }
     logger.info('Stopping game process')
     this.emitLog('system', 'Stopping game…')
     if (process.platform === 'win32') {

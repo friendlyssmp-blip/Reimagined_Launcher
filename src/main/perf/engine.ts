@@ -99,7 +99,15 @@ export function effectiveTier(settings: LauncherSettings, hw: HardwareProfile | 
 
 /* ------------------------------- config builders ------------------------------- */
 
-/** The exact shape the in-game Reimagined FPS Boost mod reads. */
+/**
+ * The exact shape the in-game Reimagined FPS Boost mod reads.
+ *
+ * v1.0.12 adds the native render techniques (LOD distance, async chunk
+ * upload, overdraw reduction, texture-atlas batching) as real config keys the
+ * client's rendering layer consumes — always-on baseline, tuned by tier.
+ * "Turbo" (beyond Potato) trades the most visual fidelity for absolute FPS
+ * and is never the default.
+ */
 export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record<string, unknown> {
   const base = {
     enabled: true,
@@ -111,24 +119,49 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     limitEntityAnimations: false,
     smartRenderDistance: true,
     reduceVisualEffects: false,
-    showFps: false
+    showFps: false,
+    // v1.0.12 — native render techniques (always-on foundation).
+    lodDistance: 64,          // chunks beyond this use simplified merged geometry
+    asyncChunkUpload: true,   // mesh upload off the main render thread
+    overdrawReduction: true,  // early-Z / depth-sorted opaque pass
+    textureBatching: true     // atlas-friendly batching to cut texture swaps
   }
   const slowStorage = hw?.storage.type === 'HDD'
   if (tier === 'potato') {
-    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32 }
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48 }
   }
   if (tier === 'balanced') {
-    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48 }
+    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64 }
   }
-  return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64 }
+  if (tier === 'high') {
+    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96 }
+  }
+  // Turbo — maximum FPS, clearly a trade-off preset (never the default).
+  // Note: limitEntityAnimations stays OFF — the v1.0.1 bundled mod removed the
+  // entity-animation state cache because it caused the enchantment glint
+  // artifact; Turbo must not re-enable that broken path. It trades geometry,
+  // particles and LOD instead.
+  return {
+    ...base,
+    reduceVisualEffects: true,
+    limitEntityAnimations: false,
+    smartRdCap: slowStorage ? 6 : 8,
+    entityAnimDistance: 24,
+    lodDistance: 32,            // far terrain simplified much sooner
+    asyncChunkUpload: true,
+    overdrawReduction: true,
+    textureBatching: true,
+    fogDistanceCutoff: true,    // fog-assisted distance cutoff for distant terrain
+    particleDensity: 0.25       // quarter-density particles
+  }
 }
 
 /** Tier-tuned JVM flags (G1GC tuning + preset hand-off). Memory is added by the launcher. */
 export function jvmFlagsFor(tier: PerfTier): string[] {
-  const pause = tier === 'potato' ? 40 : tier === 'balanced' ? 60 : 80
-  const newSize = tier === 'potato' ? 25 : 30
-  const maxNewSize = tier === 'potato' ? 50 : 60
-  const presetId = tier === 'potato' ? 0 : tier === 'balanced' ? 1 : 2
+  const pause = tier === 'potato' || tier === 'turbo' ? 40 : tier === 'balanced' ? 60 : 80
+  const newSize = tier === 'potato' || tier === 'turbo' ? 25 : 30
+  const maxNewSize = tier === 'potato' || tier === 'turbo' ? 50 : 60
+  const presetId = tier === 'potato' ? 0 : tier === 'balanced' ? 1 : tier === 'high' ? 2 : 3
   return [
     '-XX:+UseG1GC',
     '-XX:MaxGCPauseMillis=' + pause,
@@ -137,7 +170,9 @@ export function jvmFlagsFor(tier: PerfTier): string[] {
     '-XX:G1MaxNewSizePercent=' + maxNewSize,
     '-Dreimagined.preset=' + presetId,
     '-XX:+ParallelRefProcEnabled',
-    '-XX:+UseStringDeduplication'
+    '-XX:+UseStringDeduplication',
+    // Turbo also trims GC work for the absolute-lowest-latency frames.
+    ...(tier === 'turbo' ? ['-XX:+UseCompressedOops', '-XX:+DisableExplicitGC'] : [])
   ]
 }
 

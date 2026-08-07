@@ -506,6 +506,36 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return true
   })
 
+  /* ------------------------------ shader / crash safety ------------------------------ */
+
+  // Real GPU/driver assessment for the shader rendering path (anti-crash).
+  // recoveryPending reflects the ACTUAL armed crash flag (the signal that
+  // really triggers auto-disable on the next launch), not the crash history.
+  on(IPC.shadersSupport, async (profileId?: string) => {
+    const { assessShaderSupport, recentShaderCrashes, shaderCrashPending } = await import('./anti-crash/shader-guard')
+    const { detectHardware } = await import('./perf/hardware')
+    const hw = await detectHardware(false)
+    const support = assessShaderSupport(hw)
+    const crashes = await recentShaderCrashes()
+    support.recoveryPending = false
+    if (profileId) {
+      const { profileManager } = await import('./profiles/profile-manager')
+      const profile = await profileManager.get(profileId)
+      if (profile) support.recoveryPending = shaderCrashPending(profile)
+    }
+    return { ...support, recentCrashes: crashes }
+  })
+
+  // Manually disable shaders for a profile (Settings → Shader Safety).
+  on(IPC.shadersDisable, async (profileId: string) => {
+    const { profileManager } = await import('./profiles/profile-manager')
+    const { disableShadersForSession } = await import('./anti-crash/shader-guard')
+    const profile = await profileManager.get(profileId)
+    if (!profile) throw new Error('Profile not found.')
+    disableShadersForSession(profile)
+    return true
+  })
+
   /* ------------------------------ future systems ------------------------------ */
 
   on(IPC.modpackExport, (profileId) => futureSystems.modpack.export(profileId))

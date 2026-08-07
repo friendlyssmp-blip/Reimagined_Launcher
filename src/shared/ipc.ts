@@ -127,7 +127,11 @@ export const IPC = {
   perfApply: 'perf:apply',
   perfMods: 'perf:mods',
   perfInstallMod: 'perf:install-mod',
-  perfRemoveMod: 'perf:remove-mod'
+  perfRemoveMod: 'perf:remove-mod',
+
+  // Shader / crash safety (v1.0.12 anti-crash system)
+  shadersSupport: 'shaders:support',
+  shadersDisable: 'shaders:disable'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -151,6 +155,7 @@ export type AppEventType =
   | 'mods:changed'
   | 'update:progress'
   | 'crash:detected'
+  | 'shaders:auto-disabled'
   | 'system:info'
 
 export interface AppEvent {

@@ -23,7 +23,8 @@ import type {
   InstallWithDepsResult,
   PerfStatus,
   PerfRecommendation,
-  PerfModOption
+  PerfModOption,
+  ShaderSupport
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -209,6 +210,15 @@ export const api = {
       unwrap<boolean>(window.reimagined.perf.installMod(profileId, slug)),
     removeMod: (profileId: string, slug: string) =>
       unwrap<boolean>(window.reimagined.perf.removeMod(profileId, slug))
+  },
+
+  /** Shader Guard — real GPU/driver assessment + manual disable (anti-crash). */
+  shaders: {
+    support: (profileId?: string) =>
+      unwrap<ShaderSupport & { recentCrashes?: { profileId: string; profileName: string; cause: string; at: string }[] }>(
+        window.reimagined.shaders.support(profileId)
+      ),
+    disable: (profileId: string) => unwrap<boolean>(window.reimagined.shaders.disable(profileId))
   },
   
   future: {

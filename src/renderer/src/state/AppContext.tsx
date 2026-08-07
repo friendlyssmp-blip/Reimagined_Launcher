@@ -371,6 +371,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // closed. Surface it immediately with analysis and suggestions.
           setModals({ crash: e.payload as CrashReport })
           break
+        case 'shaders:auto-disabled':
+          // Shader Guard auto-recovery — the previous session crashed with
+          // shaders enabled, so this session started with them off. Tell the
+          // user clearly so they understand why and can re-enable later.
+          {
+            const payload = e.payload as { message?: string; profileId?: string }
+            notify('info', 'Shaders disabled for this session', payload.message ?? 'Shaders were disabled because the game crashed with them enabled last time.')
+          }
+          break
         default:
           break
       }

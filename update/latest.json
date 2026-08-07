@@ -1,5 +1,5 @@
 {
-  "version": "1.0.11",
-  "notes": "v1.0.11: Game console timers (chronometer + Minecraft opened time), install confirmation with real dependency tree (Install Only / with Dependencies, Shift-click bypass), cancellable downloads with cleanup, specific download labels, fixed stuck-at-100% animation, fixed false Launching state on Home, fixed FPS Boost enchantment glint bug, fixed Update Available comparison, profile card cleanup (RAM/Resolution removed, Playtime kept, red Stop button)",
-  "installer": "dist/Reimagined-Setup-1.0.11.exe"
+  "version": "1.0.12",
+  "notes": "v1.0.12 — Anti-Crash System (Shader Guard) + FPS Boost pushed further. Shader Guard: real GPU/driver assessment before shader sessions, VRAM-aware render distance auto-reduction, auto-recovery after a shader crash (next session launches with shaders disabled + clear message), shader-pattern detection in the Crash Assistant, new Stability section in Settings. FPS: LOD for distant chunks, async chunk upload, overdraw reduction, texture-atlas batching, and a new Turbo preset (max FPS trade-off, never default).",
+  "installer": "dist/Reimagined-Setup-1.0.12.exe"
 }

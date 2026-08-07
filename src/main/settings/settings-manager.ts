@@ -24,6 +24,10 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // Reimagined Performance Engine: auto-tune by default, engine-chosen tier.
   perfAutoTune: true,
   perfTier: 'auto',
+  // Shader / crash safety (v1.0.12): auto-reduce render distance on low VRAM
+  // when shaders are enabled, and auto-disable shaders after a shader crash.
+  shaderAutoReduceRd: true,
+  autoDisableShadersOnCrash: true,
   recentActivity: [],
   audioEnabled: true,
   audioVolume: 0.7,
