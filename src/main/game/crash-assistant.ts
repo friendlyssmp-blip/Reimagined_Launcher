@@ -21,9 +21,86 @@ const MAX_AGE_MS = 10 * 60_000
 const SHADER_PATTERNS =
   /iris|shader|glsl|spirv|glCompileShader|glLinkProgram|shadercompile|shader.*compile|shader.*error|glslang|opengl.*version|pixelformat|no.*pixel|glfw.*error/i
 
+/** Sodium/Iris GPU-synchronization crash ("Cannot wait on a fence…") — the
+ *  fence is being awaited while its submission is still the current one; a
+ *  known Sodium ↔ Iris renderer lifecycle conflict (V2 investigation). */
+const FENCE_PATTERNS =
+  /fence|awaitsubmit|stagingbuffer|rendermay|regionmanager|sodium.*render|iris.*shadow|shadowrenderer|glcommandencoder/i
+
 /** True when a crash report looks like a shader-pipeline failure. */
 export function isShaderCrash(text: string): boolean {
   return SHADER_PATTERNS.test(text)
+}
+
+/* ------------------------------ V2 structured analysis ------------------------------ */
+
+/** The exception type + first message from the head of the report. */
+function extractException(raw: string): string | undefined {
+  // Vanilla head: "java.lang.NullPointerException: message" or
+  // "Exception: ..." — take the first line that names an exception type.
+  const m = raw.match(/^([a-zA-Z_][\w$.]*(?:Exception|Error|Throwable)):\s*(.*)$/m)
+  if (!m) return undefined
+  const msg = (m[2] ?? '').trim()
+  return msg ? `${m[1]}: ${msg.slice(0, 220)}` : m[1]
+}
+
+/** The "Caused by:" chain line (root of the cause), if present. */
+function extractCausedBy(raw: string): string | undefined {
+  const m = raw.match(/Caused by:\s*([^\n]+)/)
+  return m ? m[1].trim().slice(0, 220) : undefined
+}
+
+/** Top of the stack trace — the first 4 "at …" frames. */
+function extractStackTop(raw: string): string[] {
+  const frames: string[] = []
+  const re = /^\s*at ([\w$.]+)\.([\w$<>]+)\([^)]*\)$/gm
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw)) && frames.length < 4) {
+    frames.push(`${m[1]}.${m[2]}`)
+  }
+  return frames
+}
+
+/** Non-vanilla classes in the stack → short mod-ish names (evidence-based). */
+function extractResponsibleMods(raw: string): string[] {
+  const vanilla = /^(net\.minecraft|com\.mojang|java\.|javax\.|sun\.|jdk\.|org\.lwjgl|org\.apache|com\.google|org\.slf4j|com\.ibm|it\.unimi|org\.objectweb|com\.fasterxml|org\.apache\.logging|net\.fabricmc|net\.fabric|net\.neoforged|net\.minecraftforge|cpw\.mods|com\.kikugj|net\.caffeinemc\.mixin)/
+  const seen = new Map<string, number>()
+  const re = /^\s*at (([a-z][\w]*)(?:\.[a-z][\w]*)?(?:\.(?:[A-Z][\w$]*))*)\.[\w$<>]+\(/gm
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw))) {
+    const cls = m[1]
+    if (vanilla.test(cls)) continue
+    const parts = cls.split('.')
+    // Short name = first two non-generic segments, e.g. me.jellysquid → me.jellysquid
+    const name = parts.length >= 2 ? parts.slice(0, 2).join('.') : cls
+    seen.set(name, (seen.get(name) ?? 0) + 1)
+  }
+  return [...seen.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name]) => name)
+}
+
+/** Tail of the instance's latest.log — what happened right before the crash. */
+async function extractLogTail(profile: Profile): Promise<string[]> {
+  try {
+    const logPath = path.join(paths.games, profile.gameDir, 'logs', 'latest.log')
+    if (!fs.existsSync(logPath)) return []
+    const st = await fsp.stat(logPath)
+    // Only fresh logs (written around the crash) — never stale context.
+    if (Date.now() - st.mtimeMs > 60 * 60_000) return []
+    const raw = await fsp.readFile(logPath, 'utf-8')
+    return raw.split('\n').filter(Boolean).slice(-30)
+  } catch {
+    return []
+  }
+}
+
+/** Evidence-based confidence: real exception + non-vanilla frames = high. */
+function confidenceFor(exception: string | undefined, mods: string[], shader: boolean): 'high' | 'medium' | 'low' {
+  if (exception && (mods.length > 0 || shader)) return 'high'
+  if (exception) return 'medium'
+  return 'low'
 }
 
 /** Human suggestions derived from the report's content. */
@@ -34,6 +111,13 @@ function suggestFor(text: string): string[] {
   if (SHADER_PATTERNS.test(lower)) {
     out.push('This looks like a shader crash. The launcher will start the next session with shaders disabled so the game can run — re-enable them from the in-game shader menu when you\'re ready.')
     out.push('If shaders keep crashing, update your GPU drivers or try a different shader pack. Older/low-VRAM GPUs often need render distance lowered.')
+  }
+  // Sodium ↔ Iris fence/staging-buffer conflict (V2): the renderer destroys
+  // GPU resources while their submission is still current, usually during a
+  // reload/dimension change with shadow rendering active.
+  if (FENCE_PATTERNS.test(lower) && /sodium|iris/.test(lower)) {
+    out.push('This is a GPU synchronization conflict between Sodium and Iris (a GPU fence was awaited while its submission was still current — usually during a reload or dimension change with shadow rendering active).')
+    out.push('Update Sodium and Iris to their latest versions for this Minecraft version, and try lowering or disabling Iris shadows (shadow resolution). If it persists, disable shaders for this profile in Settings → Performance → Shader Guard.')
   }
   // Render-frame failures — an exception escaped during the per-frame render
   // call (vanilla Description: "Failed to render frame", stack in the Render
@@ -118,6 +202,15 @@ export async function detectCrashReport(profile: Profile): Promise<CrashReport |
     if (actualCause?.[1]) cause = actualCause[1].trim().split('\n')[0].slice(0, 240) || cause
   }
 
+  // V2 structured analysis — real evidence, never invented.
+  const exception = extractException(raw)
+  const causedBy = extractCausedBy(raw)
+  const stackTop = extractStackTop(raw)
+  const responsibleMods = extractResponsibleMods(raw)
+  const shader = isShaderCrash(raw)
+  const logTail = await extractLogTail(profile)
+  const confidence = confidenceFor(exception, responsibleMods, shader)
+
   return {
     profileId: profile.id,
     profileName: profile.name,
@@ -125,7 +218,13 @@ export async function detectCrashReport(profile: Profile): Promise<CrashReport |
     cause,
     snippet: raw.slice(0, 6000),
     suggestions: suggestFor(raw),
-    at: new Date().toISOString()
+    at: new Date().toISOString(),
+    exception,
+    causedBy,
+    stackTop,
+    responsibleMods,
+    confidence,
+    logTail
   }
 }
 

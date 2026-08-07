@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import { IconSearch, IconTerminal, IconSettings, IconBell } from './icons'
 import type { Page } from '../App'
 
-export function TopBar({ onNavigate, scale, setScale }: { onNavigate: (p: Page) => void; scale: number; setScale: (v: number) => void }) {
+export function TopBar({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const { account, activeProfile, running, setModals, notify } = useApp()
 
   return (
@@ -49,18 +49,6 @@ export function TopBar({ onNavigate, scale, setScale }: { onNavigate: (p: Page) 
       </div>
 
       <div className="topbar-actions">
-        <select
-          className="select ui-scale-select"
-          title="UI scale"
-          value={scale}
-          onChange={(e) => setScale(Number(e.target.value))}
-        >
-          {[100, 125, 150, 175, 200].map((v) => (
-            <option key={v} value={v}>
-              {v}%
-            </option>
-          ))}
-        </select>
         <button
           className="btn-icon"
           title="Notifications"

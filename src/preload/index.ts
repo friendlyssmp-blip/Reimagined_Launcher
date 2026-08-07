@@ -174,6 +174,13 @@ const api = {
     support: (profileId?: string): Promise<unknown> => ipcRenderer.invoke(IPC.shadersSupport, profileId),
     disable: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shadersDisable, profileId)
   },
+
+  /** Reimagined FPS Boost — manual install/remove (V2). */
+  fpsboost: {
+    status: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostStatus, profileId),
+    install: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostInstall, profileId),
+    remove: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostRemove, profileId)
+  },
   
   /** Subscribe to main-process push events. Returns an unsubscribe fn. */
   onEvent: (cb: (event: AppEvent) => void): (() => void) => {

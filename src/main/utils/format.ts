@@ -28,12 +28,28 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
+/**
+ * Human-readable duration, the same format everywhere playtime/durations are
+ * shown (V2 pass): `45s` → `5m` → `15h 4m` → `1d 8h 6m`. Zero units are
+ * never rendered, and durations are rounded up to the nearest minute so a
+ * 1-second session never shows a confusing "0m".
+ */
 export function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  const m = Math.floor(seconds / 60)
-  if (m < 60) return `${m}m ${Math.round(seconds % 60)}s`
-  const h = Math.floor(m / 60)
-  return `${h}h ${m % 60}m`
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s}s`
+  const totalM = Math.ceil(s / 60)
+  const totalH = Math.floor(totalM / 60)
+  const totalD = Math.floor(totalH / 24)
+  if (totalD > 0) {
+    const h = totalH % 24
+    const m = totalM % 60
+    return m > 0 ? `${totalD}d ${h}h ${m}m` : h > 0 ? `${totalD}d ${h}h` : `${totalD}d`
+  }
+  if (totalH > 0) {
+    const m = totalM % 60
+    return m > 0 ? `${totalH}h ${m}m` : `${totalH}h`
+  }
+  return `${totalM}m`
 }
 
 export function compactNumber(n: number): string {

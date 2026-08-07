@@ -509,6 +509,33 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return true
   })
 
+  /* ------------------------------ Reimagined FPS Boost ------------------------------ */
+
+  // Manual install/remove of the bundled FPS Boost (V2) — per profile.
+  on(IPC.fpsBoostStatus, async (profileId: string) => {
+    const { fpsBoostCompatible, fpsBoostInstalled } = await import('./mods/fps-boost')
+    const { profileManager } = await import('./profiles/profile-manager')
+    const profile = await profileManager.get(profileId)
+    if (!profile) throw new Error('Profile not found.')
+    const installed = profile.mods.some((m) => m.id === 'reimagined-fps-boost')
+    const compatible = fpsBoostCompatible(profile.minecraftVersion)
+    return { installed, compatible, version: installed ? profile.mods.find((m) => m.id === 'reimagined-fps-boost')?.versionNumber ?? null : null, mcVersion: profile.minecraftVersion }
+  })
+
+  on(IPC.fpsBoostInstall, async (profileId: string) => {
+    const { installFpsBoost } = await import('./mods/fps-boost')
+    const res = await installFpsBoost(profileId)
+    eventBus.emit('mods:changed', { profileId, action: 'fpsboost-installed' })
+    return res
+  })
+
+  on(IPC.fpsBoostRemove, async (profileId: string) => {
+    const { removeFpsBoost } = await import('./mods/fps-boost')
+    const res = await removeFpsBoost(profileId)
+    eventBus.emit('mods:changed', { profileId, action: 'fpsboost-removed' })
+    return res
+  })
+
   /* ------------------------------ shader / crash safety ------------------------------ */
 
   // Real GPU/driver assessment for the shader rendering path (anti-crash).

@@ -8,6 +8,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { api, ApiError, friendlyError } from '../lib/api'
+import { humanDuration } from '../lib/format'
 import type {
   AppInfo,
   LauncherSettings,
@@ -91,7 +92,8 @@ interface AppContextValue {
   setModals: (patch: Partial<ModalState>) => void
   runGuarded: (label: string, fn: () => Promise<unknown>) => Promise<void>
   updateInfo: UpdateInfo | null
-  checkForUpdates: (silent?: boolean) => Promise<UpdateInfo | null>
+  /** silent = no toast on failure; force = bypass the 30-min cache. */
+  checkForUpdates: (silent?: boolean, force?: boolean) => Promise<UpdateInfo | null>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -369,7 +371,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'launch:exit': {
           const p = e.payload as { code: number | null; duration: number }
           if (p.code !== 0) notify('info', 'Game closed', `Exited with code ${p.code ?? 'unknown'}`)
-          else notify('success', 'Game closed', `Played for ${Math.round(p.duration)}s`)
+          else notify('success', 'Game closed', `Played for ${humanDuration(p.duration)}`)
           setLaunch((prev) => ({ ...prev, phase: 'idle', percent: null }))
           void refreshProfiles()
           break

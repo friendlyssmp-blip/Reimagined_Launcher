@@ -133,7 +133,12 @@ export const IPC = {
 
   // Shader / crash safety (v1.0.12 anti-crash system)
   shadersSupport: 'shaders:support',
-  shadersDisable: 'shaders:disable'
+  shadersDisable: 'shaders:disable',
+
+  // Reimagined FPS Boost — manual install/remove (V2), per profile
+  fpsBoostStatus: 'fpsboost:status',
+  fpsBoostInstall: 'fpsboost:install',
+  fpsBoostRemove: 'fpsboost:remove'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

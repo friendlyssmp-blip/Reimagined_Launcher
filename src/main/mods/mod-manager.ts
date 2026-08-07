@@ -13,6 +13,7 @@ import { logger } from '../logs/logger'
 import { eventBus } from '../core/event-bus'
 import { LauncherError, Errors } from '../core/errors'
 import { runDownloadBatch } from '../minecraft/downloader'
+import { runQueued } from '../downloads/queue'
 import { modrinth, type ProjectType } from './modrinth'
 import { curseforge } from './curseforge'
 import { profileManager } from '../profiles/profile-manager'
@@ -52,9 +53,30 @@ class ModManager {
     return path.join(paths.games, profile.gameDir, folderFor(projectType))
   }
 
+  /**
+   * List a profile's installed items — VERIFIED against the real filesystem
+   * (V2): a tracked item whose file no longer exists on disk (deleted by the
+   * user outside the launcher) is dropped from the list and the persisted
+   * metadata, so the UI always reflects reality and never shows ghosts.
+   */
   async list(profileId: string): Promise<ProfileMod[]> {
     const profile = await profileManager.get(profileId)
-    return profile?.mods ?? []
+    if (!profile) return []
+    let changed = false
+    const verified = (profile.mods ?? []).filter((mod) => {
+      const dir = this.modsDir(profile, mod.projectType ?? 'mod')
+      const activeName = mod.filename.endsWith('.disabled')
+        ? mod.filename.slice(0, -'.disabled'.length)
+        : mod.filename
+      const present = exists(path.join(dir, mod.filename)) || exists(path.join(dir, `${activeName}.disabled`))
+      if (!present) changed = true
+      return present
+    })
+    if (changed) {
+      await profileManager.update(profileId, { mods: verified })
+      eventBus.emit('mods:changed', { profileId, action: 'reconciled' })
+    }
+    return verified
   }
 
   /**
@@ -98,7 +120,14 @@ class ModManager {
     return curseforge.searchMods({ query, mcVersion: profile.minecraftVersion, sort, projectType: projectType ?? 'mod' })
   }
 
+  /** Every install runs inside the global queue (V2): the user's
+   *  `downloadConcurrency` (1/3/5) decides how many installs download at once.
+   *  Nested installs (installWithDeps → installVersion) run inline — no deadlock. */
   async install(profileId: string, projectId: string, projectType: ProjectType = 'mod'): Promise<ProfileMod> {
+    return runQueued(() => this.installQueued(profileId, projectId, projectType))
+  }
+
+  private async installQueued(profileId: string, projectId: string, projectType: ProjectType = 'mod'): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mc = profile.minecraftVersion
     const loader: LoaderType = profile.loader.type
@@ -164,6 +193,16 @@ class ModManager {
    * loader is enforced before anything is downloaded.
    */
   async installVersion(
+    profileId: string,
+    provider: 'modrinth' | 'curseforge',
+    projectId: string,
+    versionId: string,
+    projectType: ProjectType = 'mod'
+  ): Promise<ProfileMod> {
+    return runQueued(() => this.installVersionQueued(profileId, provider, projectId, versionId, projectType))
+  }
+
+  private async installVersionQueued(
     profileId: string,
     provider: 'modrinth' | 'curseforge',
     projectId: string,
@@ -267,6 +306,15 @@ class ModManager {
 
   /** Install a CurseForge mod (projectId is the numeric CurseForge id). */
   async installCurseforge(
+    profileId: string,
+    projectId: string,
+    meta?: { title?: string; iconUrl?: string; downloads?: number },
+    projectType: ProjectType = 'mod'
+  ): Promise<ProfileMod> {
+    return runQueued(() => this.installCurseforgeQueued(profileId, projectId, meta, projectType))
+  }
+
+  private async installCurseforgeQueued(
     profileId: string,
     projectId: string,
     meta?: { title?: string; iconUrl?: string; downloads?: number },
@@ -389,6 +437,10 @@ class ModManager {
 
   /** Update a mod to its latest compatible version (Modrinth or CurseForge). */
   async update(profileId: string, slug: string): Promise<ProfileMod> {
+    return runQueued(() => this.updateQueued(profileId, slug))
+  }
+
+  private async updateQueued(profileId: string, slug: string): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mod = profile.mods.find((m) => m.slug === slug)
     if (!mod) throw new LauncherError('MOD_MISSING', 'Mod not found in this profile.')
@@ -438,6 +490,10 @@ class ModManager {
    * leaving both versions installed or a half-swapped state.
    */
   async changeVersion(profileId: string, slug: string, versionId: string): Promise<ProfileMod> {
+    return runQueued(() => this.changeVersionQueued(profileId, slug, versionId))
+  }
+
+  private async changeVersionQueued(profileId: string, slug: string, versionId: string): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mod = profile.mods.find((m) => m.slug === slug)
     if (!mod) throw new LauncherError('MOD_MISSING', 'Mod not found in this profile.')
@@ -680,6 +736,15 @@ class ModManager {
    * failures on individual dependencies are reported, not fatal to the rest.
    */
   async installWithDeps(
+    profileId: string,
+    projectId: string,
+    versionId?: string,
+    projectType: ProjectType = 'mod'
+  ): Promise<InstallWithDepsResult> {
+    return runQueued(() => this.installWithDepsQueued(profileId, projectId, versionId, projectType))
+  }
+
+  private async installWithDepsQueued(
     profileId: string,
     projectId: string,
     versionId?: string,

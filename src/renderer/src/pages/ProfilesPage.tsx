@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApp } from '../state/AppContext'
 import { Button, Badge, EmptyState, ProfileGlyph } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
+import { humanDuration } from '../lib/format'
 import { IconFolder, IconPlay, IconStop, IconDots, IconShare, IconPencil, IconCopy, IconTrash, IconArchive } from '../components/icons'
 import type { Page } from '../App'
 import type { Profile } from '@shared/types'
@@ -152,7 +153,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
                   just don't clutter the default card display. */}
               <div className="profile-stats">
                 <div className="profile-stat">
-                  <b>{p.playtimeSeconds > 0 ? Math.round(p.playtimeSeconds / 60) + 'm' : '---'}</b>
+                  <b>{p.playtimeSeconds > 0 ? humanDuration(p.playtimeSeconds) : '---'}</b>
                   <span>Playtime</span>
                 </div>
               </div>

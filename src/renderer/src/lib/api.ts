@@ -221,6 +221,18 @@ export const api = {
       ),
     disable: (profileId: string) => unwrap<boolean>(window.reimagined.shaders.disable(profileId))
   },
+
+  /** Reimagined FPS Boost — manual install/remove (V2), version-gated. */
+  fpsboost: {
+    status: (profileId: string) =>
+      unwrap<{ installed: boolean; compatible: boolean; version: string | null; mcVersion: string }>(
+        window.reimagined.fpsboost.status(profileId)
+      ),
+    install: (profileId: string) =>
+      unwrap<{ installed: boolean; version: string; message: string }>(window.reimagined.fpsboost.install(profileId)),
+    remove: (profileId: string) =>
+      unwrap<{ removed: boolean; message: string }>(window.reimagined.fpsboost.remove(profileId))
+  },
   
   future: {
     modpackExport: (profileId: string) => unwrap<never>(window.reimagined.future.modpackExport(profileId)),

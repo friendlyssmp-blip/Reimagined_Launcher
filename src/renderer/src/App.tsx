@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Sidebar } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
@@ -47,15 +46,13 @@ function Shell() {
   /* Splash shows once per session (skippable, never blocks init). */
   const [splash, setSplash] = useState(() => sessionStorage.getItem('reimagined:splash') !== '1')
 
-  /* UI scale (100–200%), persisted — applied as CSS zoom on the app root so
-   * every pixel texture stays crisp at any scale. */
-  const [scale, setScale] = useState(() => {
-    const v = Number(localStorage.getItem('reimagined:ui-scale'))
-    return v >= 100 && v <= 200 ? v : 100
-  })
+  /* UI is permanently rendered at 100% logical scale (V2) — no user-facing
+   * scale option. The layout stays responsive and adapts to the window size;
+   * zoom-based scaling was removed so nothing ever blurs or clips.
+   */
   useEffect(() => {
-    localStorage.setItem('reimagined:ui-scale', String(scale))
-  }, [scale])
+    localStorage.removeItem('reimagined:ui-scale')
+  }, [])
 
   /* Wire the premium sound library to the launcher's audio settings — every
    * change in Settings applies immediately. */
@@ -141,11 +138,11 @@ function Shell() {
   }
 
   return (
-    <div className="app" data-theme={theme} style={{ zoom: scale / 100 } as CSSProperties}>
+    <div className="app" data-theme={theme}>
       <Sidebar page={page} onNavigate={setPage} />
       <div className="main">
         <TitleBar />
-        <TopBar onNavigate={setPage} scale={scale} setScale={setScale} />
+        <TopBar onNavigate={setPage} />
         {/* The scroll surface is NOT keyed (scroll position survives nav); the
            keyed ErrorBoundary remounts the page subtree, so .page-enter inside
            replays the page-level entrance animation on every section switch. */}

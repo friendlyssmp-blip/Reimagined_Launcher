@@ -33,7 +33,7 @@ const LEVEL_SHORT: Record<string, string> = {
 }
 
 export function LogsPage() {
-  const { notify } = useApp()
+  const { notify, setModals } = useApp()
   const [lines, setLines] = useState<LogLine[]>([])
   const [files, setFiles] = useState<string[]>([])
   const [query, setQuery] = useState('')
@@ -110,7 +110,26 @@ export function LogsPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <Button onClick={copyAll}><IconCopy style={{ width: 14, height: 14 }} /> Copy</Button>
           <Button onClick={() => api.logs.openFolder()}><IconFolder style={{ width: 14, height: 14 }} /> Open Folder</Button>
-          <Button variant="danger" onClick={async () => { await api.logs.clear(); notify('success', 'Logs cleared'); refresh() }}>
+          <Button
+            variant="danger"
+            onClick={() =>
+              setModals({
+                confirm: {
+                  title: 'Clear this log?',
+                  message: 'The on-disk launcher log will be emptied. This cannot be undone.',
+                  confirmLabel: 'Clear',
+                  danger: true,
+                  onConfirm: async () => {
+                    await api.logs.clear()
+                    notify('success', 'Logs cleared')
+                    // The viewer must become empty immediately — no stale lines.
+                    setLines([])
+                    void refresh()
+                  }
+                }
+              })
+            }
+          >
             <IconTrash style={{ width: 14, height: 14 }} /> Clear
           </Button>
         </div>

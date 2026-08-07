@@ -2,6 +2,7 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner, ProfileGlyph } from '../components/ui'
 import { SkinHeadPreview } from '../components/SkinHead'
 import { IconPlay, IconGrid, IconPuzzle, IconSparkle, IconGamepad } from '../components/icons'
+import { humanDuration, timeAgo } from '../lib/format'
 import type { Page } from '../App'
 
 function Greeting() {
@@ -10,24 +11,6 @@ function Greeting() {
   if (h < 12) return 'Good morning'
   if (h < 18) return 'Good afternoon'
   return 'Good evening'
-}
-
-function fmtPlaytime(seconds: number): string {
-  if (seconds <= 0) return 'Not played yet'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
 }
 
 const activityIcons: Record<string, typeof IconSparkle> = {
@@ -40,10 +23,15 @@ const activityIcons: Record<string, typeof IconSparkle> = {
 }
 
 export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
-  const { account, activeProfile, profiles, launchProfile, running, setModals, setActiveProfile, settings } = useApp()
+  const { account, activeProfile, profiles, launchProfile, launch, setModals, setActiveProfile, settings } = useApp()
 
   const signedIn = account.status !== 'offline'
   const recent = settings.recentActivity ?? []
+  /* Real launch state (v1.0.16): "Launching…" only while the pipeline is
+   * actually starting the game; "Playing" once the process is confirmed up;
+   * fully idle otherwise — never a stale/false launching state. */
+  const starting = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
+  const playing = launch.phase === 'running'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -54,8 +42,8 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
           <p>Create, manage, and launch your perfect Minecraft experience with a premium launcher built for modders.</p>
           <div className="hero-actions">
             {signedIn && activeProfile ? (
-              <Button variant="play" disabled={running} onClick={() => launchProfile(activeProfile.id)}>
-                {running ? <><Spinner /> Launching…</> : <><IconPlay style={{ width: 16, height: 16 }} /> Play Minecraft</>}
+              <Button variant="play" disabled={starting || playing} onClick={() => launchProfile(activeProfile.id)}>
+                {starting ? <><Spinner /> Launching…</> : playing ? <><IconGamepad style={{ width: 16, height: 16 }} /> Playing…</> : <><IconPlay style={{ width: 16, height: 16 }} /> Play Minecraft</>}
               </Button>
             ) : signedIn ? (
               // Signed in but no profiles yet — never show a login prompt here.
@@ -146,7 +134,7 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                       <span className="muted">Playtime</span>
-                      <b>{fmtPlaytime(activeProfile.playtimeSeconds)}</b>
+                      <b>{activeProfile.playtimeSeconds > 0 ? humanDuration(activeProfile.playtimeSeconds) : 'Not played yet'}</b>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                       <span className="muted">Last played</span>
@@ -157,8 +145,8 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
                       <b>{activeProfile.mods.length}</b>
                     </div>
                   </div>
-                  <Button variant="play" style={{ width: '100%', marginTop: 16 }} disabled={running} onClick={() => launchProfile(activeProfile.id)}>
-                    {running ? <><Spinner /> Launching…</> : <><IconPlay style={{ width: 15, height: 15 }} /> Play {activeProfile.name}</>}
+                  <Button variant="play" style={{ width: '100%', marginTop: 16 }} disabled={starting || playing} onClick={() => launchProfile(activeProfile.id)}>
+                    {starting ? <><Spinner /> Launching…</> : playing ? <><IconGamepad style={{ width: 15, height: 15 }} /> Playing…</> : <><IconPlay style={{ width: 15, height: 15 }} /> Play {activeProfile.name}</>}
                   </Button>
                 </>
               ) : (

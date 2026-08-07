@@ -2,32 +2,16 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import { IconPlay, IconStop, IconTerminal, IconLog, IconFolder } from '../components/icons'
+import { humanDuration, timeAgo } from '../lib/format'
 import type { Page } from '../App'
-
-function fmtPlaytime(seconds: number): string {
-  if (seconds <= 0) return 'Not played yet'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function timeAgo(iso: string | null): string {
-  if (!iso) return 'Never'
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
 
 /** The primary launch experience — big play button, live launch progress,
  *  and the selected instance's full setup at a glance. */
 export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const { profiles, activeProfile, setActiveProfile, launchProfile, stopLaunch, launch, running, settings, refreshProfiles, notify } = useApp()
 
+  /* Real launch state (v1.0.16): busy = actually starting; playing = the
+   * process is confirmed up. Never a stale/false launching state. */
   const busy = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
 
   const setRam = async (v: number) => {
@@ -137,7 +121,7 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
                 ['Java', settings.javaPath || 'Auto (latest installed)'],
                 ['Resolution', `${activeProfile.resolution.width}×${activeProfile.resolution.height}${activeProfile.resolution.fullscreen ? ' · fullscreen' : ''}`],
                 ['Installed mods', String(activeProfile.mods.length)],
-                ['Playtime', fmtPlaytime(activeProfile.playtimeSeconds)],
+                ['Playtime', activeProfile.playtimeSeconds > 0 ? humanDuration(activeProfile.playtimeSeconds) : 'Not played yet'],
                 ['Last played', timeAgo(activeProfile.lastLaunched)]
               ].map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>

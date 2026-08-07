@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { Button, EmptyState, Spinner, AnimatedNumber } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
+import { humanDuration, fmtBytes } from '../lib/format'
 import { IconDownload, IconCheck, IconX, IconRefresh } from '../components/icons'
 
 interface Download {
@@ -14,13 +15,6 @@ interface Download {
   downloadedBytes: number
   totalBytes: number
   at: string
-}
-
-function fmtSize(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`
-  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(0)} KB`
-  return `${bytes} B`
 }
 
 const kindLabel: Record<string, string> = {
@@ -42,6 +36,9 @@ export function DownloadsPage() {
   /* Ids already announced as done — plays the completion chime only once. */
   const announced = useRef<Set<string>>(new Set())
   const seeded = useRef(false)
+  /* Previous poll's bytes per active id → real download speed (bytes/s). */
+  const prevBytes = useRef<Record<string, { bytes: number; at: number }>>({})
+  const [speedMap, setSpeedMap] = useState<Record<string, number>>({})
 
   const refresh = useCallback(async () => {
     try {
@@ -61,6 +58,24 @@ export function DownloadsPage() {
           sound.download()
         }
       }
+      /* Real speed: delta of downloaded bytes between the last two polls. */
+      const now = performance.now()
+      const speeds: Record<string, number> = {}
+      for (const d of next) {
+        if (d.status !== 'downloading') continue
+        const prev = prevBytes.current[d.id]
+        if (prev) {
+          const dt = (now - prev.at) / 1000
+          if (dt > 0.5) speeds[d.id] = Math.max(0, (d.downloadedBytes - prev.bytes) / dt)
+        }
+        prevBytes.current[d.id] = { bytes: d.downloadedBytes, at: now }
+      }
+      /* Forget entries that are no longer active. */
+      const activeIds = new Set(next.filter((d) => d.status === 'downloading').map((d) => d.id))
+      for (const id of Object.keys(prevBytes.current)) {
+        if (!activeIds.has(id)) delete prevBytes.current[id]
+      }
+      setSpeedMap(speeds)
       setHistory(next)
     } finally {
       setLoading(false)
@@ -97,6 +112,13 @@ export function DownloadsPage() {
     ? { label: dlActive.label, percent: dlActive.percent, id: dlActive.id }
     : launchActive
 
+  /* ETA — derived from the real measured speed, only while actually moving. */
+  const activeSpeed = active?.id ? (speedMap[active.id] ?? 0) : 0
+  const activeRemaining = active?.id && dlActive
+    ? Math.max(0, (dlActive.totalBytes || 0) - dlActive.downloadedBytes)
+    : 0
+  const activeEta = activeSpeed > 0 ? activeRemaining / activeSpeed : null
+
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spinner /></div>
   }
@@ -106,7 +128,7 @@ export function DownloadsPage() {
       <div className="section-head">
         <div>
           <h2 className="page-title">Downloads</h2>
-          <p className="page-sub">Installs and updates, live</p>
+          <p className="page-sub">Installs and updates, live — real progress from the actual download state</p>
         </div>
         <Button onClick={refresh}><IconRefresh style={{ width: 14, height: 14 }} /> Refresh</Button>
       </div>
@@ -128,8 +150,15 @@ export function DownloadsPage() {
         {active && (
           <>
             <div className="progress"><span style={{ width: `${Math.max(3, active.percent)}%` }} /></div>
-            <div className="dl-meta">
+            <div className="dl-meta" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <span>Progress <AnimatedNumber value={active.percent} format={(v) => `${Math.round(v)}%`} /></span>
+              {dlActive && dlActive.totalBytes > 0 && (
+                <span>{fmtBytes(dlActive.downloadedBytes)} / {fmtBytes(dlActive.totalBytes)}</span>
+              )}
+              {activeSpeed > 0 && <span>{fmtBytes(activeSpeed)}/s</span>}
+              {activeEta !== null && activeEta < 3600 && (
+                <span>~{humanDuration(activeEta)} left</span>
+              )}
             </div>
           </>
         )}
@@ -142,36 +171,44 @@ export function DownloadsPage() {
           <EmptyState title="Nothing downloaded yet" sub="Version and mod installs will be tracked here." />
         ) : (
           <div className="dl-history">
-            {history.map((d) => (
-              <div key={d.id} className="dl-row">
-                <div className={`dl-status ${d.status === 'done' ? 'done' : d.status === 'failed' ? 'error' : ''}`}>
-                  {d.status === 'done' ? <IconCheck /> : d.status === 'failed' ? <IconX /> : <Spinner />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Specific label — the real item/dependency name + version,
-                      never a generic "Mods" placeholder. */}
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{d.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                    {kindLabel[d.kind] ?? d.kind}
-                    {' · '}{d.status === 'done' ? `Complete · ${fmtSize(d.totalBytes)}` : d.status === 'failed' ? 'Failed' : 'In progress'}
-                    {' · '}{new Date(d.at).toLocaleTimeString()}
+            {history.map((d) => {
+              const speed = speedMap[d.id] ?? 0
+              const remaining = Math.max(0, (d.totalBytes || 0) - d.downloadedBytes)
+              const eta = speed > 0 ? remaining / speed : null
+              return (
+                <div key={d.id} className="dl-row">
+                  <div className={`dl-status ${d.status === 'done' ? 'done' : d.status === 'failed' ? 'error' : ''}`}>
+                    {d.status === 'done' ? <IconCheck /> : d.status === 'failed' ? <IconX /> : <Spinner />}
                   </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Specific label — the real item/dependency name + version,
+                        never a generic "Mods" placeholder. */}
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{d.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      {kindLabel[d.kind] ?? d.kind}
+                      {' · '}{d.status === 'done' ? `Complete · ${fmtBytes(d.totalBytes)}` : d.status === 'failed' ? 'Failed' : 'In progress'}
+                      {d.status === 'downloading' && d.totalBytes > 0 && ` · ${fmtBytes(d.downloadedBytes)} / ${fmtBytes(d.totalBytes)}`}
+                      {d.status === 'downloading' && speed > 0 && ` · ${fmtBytes(speed)}/s`}
+                      {d.status === 'downloading' && eta !== null && eta < 3600 && ` · ~${humanDuration(eta)} left`}
+                      {' · '}{new Date(d.at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  {d.status === 'downloading' && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => void cancel(d)}
+                      title="Stop this download and remove partial files"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <span className={`badge ${d.status === 'done' ? 'badge-success' : d.status === 'failed' ? 'badge-danger' : ''}`}>
+                    {d.status}
+                  </span>
                 </div>
-                {d.status === 'downloading' && (
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => void cancel(d)}
-                    title="Stop this download and remove partial files"
-                  >
-                    Cancel
-                  </Button>
-                )}
-                <span className={`badge ${d.status === 'done' ? 'badge-success' : d.status === 'failed' ? 'badge-danger' : ''}`}>
-                  {d.status}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

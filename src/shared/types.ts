@@ -75,6 +75,15 @@ export interface LauncherSettings {
   autoInstallUpdates: boolean
   /** How often (seconds) the launcher re-checks GitHub while it is open. */
   updateCheckIntervalSec: number
+
+  /* ------------------------------ Downloads ------------------------------ */
+
+  /**
+   * How many install/download operations may run AT THE SAME TIME (V2
+   * queue). 1 (default) = strict queue, one install at a time; 3 and 5 allow
+   * parallel installs for fast connections. Real installs queue behind this.
+   */
+  downloadConcurrency: 1 | 3 | 5
 }
 
 export interface RecentActivity {
@@ -201,6 +210,9 @@ export interface Profile {
   lastLaunched: string | null
   playtimeSeconds: number
   icon: string | null
+  /** User explicitly removed the bundled FPS Boost (V2) — auto-ensure skips it
+   * until they click "Install FPS Booster" again. */
+  fpsBoostOptOut?: boolean
 }
 
 /* ------------------------------ Profile share / import ------------------------------ */
@@ -369,6 +381,19 @@ export interface CrashReport {
   /** Concrete, actionable suggestions. */
   suggestions: string[]
   at: string
+  /* ---- V2 structured analysis (evidence-based, never invented) ---- */
+  /** The actual exception type + first message (e.g. "NullPointerException: …"). */
+  exception?: string
+  /** The "Caused by:" chain line if the report has one. */
+  causedBy?: string
+  /** Top of the stack trace (first 4 frames) — what was running when it died. */
+  stackTop?: string[]
+  /** Non-vanilla classes in the stack, mapped to short mod-ish names. */
+  responsibleMods?: string[]
+  /** How sure the analysis is: high = clear exception + mod frames, low = generic. */
+  confidence?: 'high' | 'medium' | 'low'
+  /** Tail of the game's latest.log before the crash (context). */
+  logTail?: string[]
 }
 
 export interface ModrinthFile {

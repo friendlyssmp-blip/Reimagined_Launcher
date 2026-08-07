@@ -115,7 +115,7 @@ export function ProjectDetail({
   onClose: () => void
   onInstalledChange: (mod: ProfileMod | null) => void
 }) {
-  const { activeProfile, notify } = useApp()
+  const { activeProfile, notify, setModals } = useApp()
   const [detail, setDetail] = useState<ProjectDetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -302,7 +302,7 @@ export function ProjectDetail({
     }
   }
 
-  const removeInstalled = async () => {
+  const doRemoveInstalled = async () => {
     if (!activeProfile || !installed) return
     setBusy('remove')
     try {
@@ -314,6 +314,24 @@ export function ProjectDetail({
     } finally {
       setBusy(null)
     }
+  }
+
+  /** Remove always asks first unless the user holds SHIFT (immediate). */
+  const removeInstalled = (e?: React.MouseEvent) => {
+    if (!activeProfile || !installed) return
+    if (e?.shiftKey) {
+      void doRemoveInstalled()
+      return
+    }
+    setModals({
+      confirm: {
+        title: 'Remove item',
+        message: `Are you sure you want to remove “${installed.title}”? This deletes its file from the instance (hold Shift next time to skip this confirmation).`,
+        confirmLabel: 'Remove',
+        danger: true,
+        onConfirm: () => void doRemoveInstalled()
+      }
+    })
   }
 
   const openFolder = async () => {
@@ -470,7 +488,13 @@ export function ProjectDetail({
               <Button variant="ghost" size="sm" onClick={openFolder} title="Open instance folder">
                 <IconFolder style={{ width: 13, height: 13 }} />
               </Button>
-              <Button variant="danger" size="sm" onClick={removeInstalled} disabled={busy === 'remove'}>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={(e) => removeInstalled(e)}
+                disabled={busy === 'remove'}
+                title="Remove (hold Shift to remove immediately)"
+              >
                 {busy === 'remove' ? <Spinner /> : 'Remove'}
               </Button>
             </div>

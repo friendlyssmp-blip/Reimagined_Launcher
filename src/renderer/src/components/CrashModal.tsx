@@ -23,6 +23,16 @@ export function CrashModal() {
     }
   }
 
+  const copyLog = async () => {
+    try {
+      const lines = report.logTail ?? []
+      await navigator.clipboard.writeText(lines.join('\n') || '(No game log lines were captured before this crash.)')
+      notify('success', 'Log tail copied', 'The last game log lines before the crash are on your clipboard.')
+    } catch {
+      notify('error', 'Could not copy', 'Clipboard access was blocked.')
+    }
+  }
+
   const openFolder = async () => {
     try {
       await api.content.openFolder(report.profileId, 'crash-reports')
@@ -41,8 +51,11 @@ export function CrashModal() {
           <Button variant="ghost" onClick={() => setModals({ crash: null })}>
             Dismiss
           </Button>
+          <Button variant="ghost" onClick={copyLog}>
+            Copy Log
+          </Button>
           <Button variant="ghost" onClick={copyReport}>
-            Copy report
+            Copy Crash Report
           </Button>
           <Button variant="ghost" onClick={openFolder}>
             Open crash folder
@@ -67,8 +80,19 @@ export function CrashModal() {
         </span>
       </div>
 
+      {/* Confidence — honest about how sure the analysis is */}
+      {report.confidence && (
+        <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--text-3)' }}>
+          Analysis confidence:{' '}
+          <b style={{ color: report.confidence === 'high' ? 'var(--green, #34d399)' : report.confidence === 'medium' ? 'var(--yellow, #fbbf24)' : 'var(--text-2)' }}>
+            {report.confidence === 'high' ? 'high — clear exception and stack evidence' : report.confidence === 'medium' ? 'medium — exception identified, cause not pinned down' : 'low — cause uncertain'}
+          </b>
+          {report.confidence === 'low' && <span> — the report is generic; see the evidence below.</span>}
+        </div>
+      )}
+
       <div style={{ marginTop: 14 }}>
-        <div className="panel-title">What happened</div>
+        <div className="panel-title">Crash summary</div>
         <p
           className="mono"
           style={{
@@ -87,8 +111,62 @@ export function CrashModal() {
         </p>
       </div>
 
-      <div style={{ marginTop: 14 }}>
-        <div className="panel-title">Suggested fixes</div>
+      {(report.exception || report.causedBy) && (
+        <div style={{ marginTop: 12 }}>
+          <div className="panel-title">Root cause</div>
+          <p className="mono" style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6, lineHeight: 1.5, wordBreak: 'break-word' }}>
+            {report.exception ?? ''}
+            {report.causedBy ? <span style={{ color: 'var(--danger, #f87171)' }}>{'\n'}Caused by: {report.causedBy}</span> : null}
+          </p>
+        </div>
+      )}
+
+      {report.responsibleMods && report.responsibleMods.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="panel-title">Likely responsible</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            {report.responsibleMods.map((m) => (
+              <span key={m} className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-3)', fontWeight: 600 }}>{m}</span>
+            ))}
+          </div>
+          <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 6 }}>
+            Non-vanilla classes found in the crash stack — a strong hint, not a verdict.
+          </p>
+        </div>
+      )}
+
+      {report.stackTop && report.stackTop.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="panel-title">Technical details</div>
+          <pre style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5, color: 'var(--text-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {report.stackTop.map((f) => `  at ${f}`).join('\n')}
+          </pre>
+        </div>
+      )}
+
+      {report.logTail && report.logTail.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="panel-title">Right before the crash (game log)</div>
+          <pre
+            style={{
+              marginTop: 6,
+              maxHeight: 120,
+              overflow: 'auto',
+              fontSize: 10.5,
+              lineHeight: 1.45,
+              color: 'var(--text-3)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontFamily: 'Consolas, Menlo, monospace'
+            }}
+          >
+            {report.logTail.join('\n')}
+          </pre>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <div className="panel-title">Possible solution</div>
         <ul style={{ margin: '8px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 7 }}>
           {report.suggestions.map((s, i) => (
             <li key={i} style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>{s}</li>

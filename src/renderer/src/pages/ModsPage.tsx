@@ -77,7 +77,7 @@ const typeForInst: Record<InstTab, ContentType | null> = {
 const PAGE_SIZE = 24
 
 export function ModsPage() {
-  const { activeProfile, notify, runGuarded } = useApp()
+  const { activeProfile, notify, runGuarded, setModals } = useApp()
   const [tab, setTab] = useState<SourceTab>('installed')
   const [contentType, setContentType] = useState<ContentType>('mod')
   const [query, setQuery] = useState('')
@@ -114,6 +114,9 @@ export function ModsPage() {
   const [instTab, setInstTab] = useState<InstTab>('mods')
   const [worlds, setWorlds] = useState<{ name: string; folder: string; sizeBytes: number; lastModified: string | null }[]>([])
   const [worldsLoading, setWorldsLoading] = useState(false)
+  // Reimagined FPS Boost — manual install/remove (V2), version-gated.
+  const [fpsBoost, setFpsBoost] = useState<{ installed: boolean; compatible: boolean; version: string | null }>({ installed: false, compatible: false, version: null })
+  const [fpsBoostBusy, setFpsBoostBusy] = useState(false)
 
   const modrinthIndex = sort === 'updated' ? 'updated' : sort === 'newest' ? 'newest' : sort === 'name' ? 'relevance' : sort === 'downloads' ? 'downloads' : 'relevance'
 
@@ -126,8 +129,16 @@ export function ModsPage() {
     if (activeProfile && tab === 'installed') {
       api.mods.localFiles(activeProfile.id).then(setManualFiles).catch(() => setManualFiles([]))
     }
+    // FPS Boost status follows the live installed list (local slug id).
+    if (activeProfile) {
+      setFpsBoost({
+        installed: activeProfile.mods.some((m) => m.id === 'reimagined-fps-boost' || m.slug === 'reimagined-fps-boost'),
+        compatible: /^26\.2/.test(activeProfile.minecraftVersion),
+        version: activeProfile.mods.find((m) => m.id === 'reimagined-fps-boost' || m.slug === 'reimagined-fps-boost')?.versionNumber ?? null
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProfile, tab])
+  }, [activeProfile, tab, installed])
 
   /* Stale-response guard: with auto-search firing on every keystroke, a slow
    * earlier response must never overwrite a newer one. First-page searches
@@ -254,7 +265,9 @@ export function ModsPage() {
     }
   }
 
-  const removeMod = async (slug: string) => {
+  /* Remove confirmations (V2): every removal asks first unless the user holds
+   * SHIFT (immediate remove). Consistent across mods, manual files, packs. */
+  const doRemove = async (slug: string) => {
     if (!activeProfile) return
     await runGuarded('Remove', async () => {
       await api.mods.remove(activeProfile.id, slug)
@@ -262,7 +275,42 @@ export function ModsPage() {
     })
   }
 
-  const removeManual = async (filename: string) => {
+  const removeMod = (slug: string, e?: React.MouseEvent) => {
+    if (!activeProfile) return
+    if (e?.shiftKey) {
+      void doRemove(slug)
+      return
+    }
+    const m = installed.find((x) => x.slug === slug)
+    setModals({
+      confirm: {
+        title: 'Remove item',
+        message: `Are you sure you want to remove “${m?.title ?? slug}”? This deletes its file from the instance (hold Shift next time to skip this confirmation).`,
+        confirmLabel: 'Remove',
+        danger: true,
+        onConfirm: () => void doRemove(slug)
+      }
+    })
+  }
+
+  const removeManual = (filename: string, e?: React.MouseEvent) => {
+    if (!activeProfile) return
+    if (e?.shiftKey) {
+      void doRemoveManual(filename)
+      return
+    }
+    setModals({
+      confirm: {
+        title: 'Remove file',
+        message: `Are you sure you want to remove “${filename}”? This deletes the file from the mods folder (hold Shift next time to skip this confirmation).`,
+        confirmLabel: 'Remove',
+        danger: true,
+        onConfirm: () => void doRemoveManual(filename)
+      }
+    })
+  }
+
+  const doRemoveManual = async (filename: string) => {
     if (!activeProfile) return
     await runGuarded('Remove', async () => {
       await api.mods.removeLocalFile(activeProfile.id, filename)
@@ -279,25 +327,12 @@ export function ModsPage() {
     })
   }
 
-  /** Part 7 — Update All: sequentially update every updatable mod. */
-  const updateAll = async () => {
-    if (!activeProfile) return
-    const updatable = installed.filter((m) => m.updateAvailable)
-    if (updatable.length === 0) {
-      notify('info', 'All up to date', 'No updates available for this profile.')
-      return
-    }
-    setUpdatingAll(true)
-    try {
-      for (const m of updatable) {
-        notify('info', 'Updating', `${m.title} → ${m.updateAvailable!.versionNumber}`)
-        await api.mods.update(activeProfile.id, m.slug).catch((err) => notify('error', `Update failed: ${m.title}`, friendlyError(err)))
-      }
-      setInstalled(await api.mods.list(activeProfile.id))
-      notify('success', 'Updates finished', `${updatable.length} mod(s) updated.`)
-    } finally {
-      setUpdatingAll(false)
-    }
+  /** Update list detail shown inside the Update All confirmation. */
+  const updateAllDetail = (): string => {
+    const updatable = installed.filter((m) => m.updateAvailable).slice(0, 8)
+    if (updatable.length === 0) return ''
+    return updatable.map((m) => `• ${m.title}: ${m.versionNumber} → ${m.updateAvailable!.versionNumber}`).join('\n') +
+      (installed.filter((m) => m.updateAvailable).length > 8 ? '\n…and more' : '')
   }
 
   /** Part 4 — load other compatible versions of an installed item on demand. */
@@ -367,6 +402,39 @@ export function ModsPage() {
   }
 
   /** Open the folder of the ACTIVE Installed sub-tab (mods/, saves/, …). */
+  /** Install/remove the bundled Reimagined FPS Boost (V2) — manual, per profile. */
+  const toggleFpsBoost = async () => {
+    if (!activeProfile) return
+    setFpsBoostBusy(true)
+    try {
+      if (fpsBoost.installed) {
+        setModals({
+          confirm: {
+            title: 'Remove Reimagined FPS Boost?',
+            message: 'Removing it deletes the mod file from this instance. The launcher keeps the bundle, so you can reinstall it anytime from this button (hold Shift next time to remove immediately).',
+            confirmLabel: 'Remove',
+            danger: true,
+            onConfirm: async () => {
+              await api.fpsboost.remove(activeProfile.id)
+              const fresh = await api.mods.list(activeProfile.id)
+              setInstalled(fresh)
+              notify('info', 'FPS Boost removed', 'The Reimagined FPS Boost was removed from this instance.')
+            }
+          }
+        })
+      } else {
+        const res = await api.fpsboost.install(activeProfile.id)
+        const fresh = await api.mods.list(activeProfile.id)
+        setInstalled(fresh)
+        notify('success', 'FPS Boost installed', `${res.version} is ready — it activates on the next launch.`)
+      }
+    } catch (err) {
+      notify('error', 'FPS Boost action failed', friendlyError(err))
+    } finally {
+      setFpsBoostBusy(false)
+    }
+  }
+
   const openInstTabFolder = async () => {
     if (!activeProfile) return
     try {
@@ -584,7 +652,12 @@ export function ModsPage() {
           <IconChevronDown style={{ width: 13, height: 13 }} /> Versions
         </Button>
       )}
-      <Button size="sm" variant="danger" onClick={() => removeMod(m.slug)}>
+      <Button
+        size="sm"
+        variant="danger"
+        onClick={(e) => removeMod(m.slug, e)}
+        title="Remove (hold Shift to remove immediately)"
+      >
         Remove
       </Button>
     </div>
@@ -786,12 +859,53 @@ export function ModsPage() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="ghost" onClick={openInstTabFolder}>
               <IconFolder style={{ width: 14, height: 14 }} /> Open Folder
             </Button>
+            {/* Reimagined FPS Boost — aligned with the section header, only for
+                versions we have a build for (26.2.x today). Removable and
+                reinstallable — never permanent. */}
+            {instTab === 'mods' && fpsBoost.compatible && (
+              <Button
+                variant={fpsBoost.installed ? 'ghost' : 'primary'}
+                disabled={fpsBoostBusy}
+                onClick={() => void toggleFpsBoost()}
+                title={fpsBoost.installed ? `Remove Reimagined FPS Boost v${fpsBoost.version ?? ''} from this instance` : 'Install the bundled Reimagined FPS Boost into this instance'}
+              >
+                {fpsBoostBusy ? <Spinner /> : fpsBoost.installed ? <IconRefresh style={{ width: 13, height: 13 }} /> : <IconDownload style={{ width: 13, height: 13 }} />}
+                {fpsBoostBusy ? 'Working…' : fpsBoost.installed ? `Remove FPS Boost` : 'Install FPS Booster'}
+              </Button>
+            )}
             {instTab !== 'worlds' && (
-              <Button variant="primary" disabled={updatingAll || !installed.some((m) => m.updateAvailable)} onClick={updateAll}>
+              <Button
+                variant="primary"
+                disabled={updatingAll || !installed.some((m) => m.updateAvailable)}
+                onClick={() => {
+                  // Always ask first — show the exact update list.
+                  setModals({
+                    confirm: {
+                      title: 'Update all available?',
+                      message: `${installed.filter((m) => m.updateAvailable).length} update(s) are available. Updates are manual — nothing installs until you confirm.\n\n${updateAllDetail()}`, 
+                      confirmLabel: 'Update All',
+                      onConfirm: async () => {
+                        setUpdatingAll(true)
+                        try {
+                          const updatable = installed.filter((m) => m.updateAvailable)
+                          for (const m of updatable) {
+                            notify('info', 'Updating', `${m.title} → ${m.updateAvailable!.versionNumber}`)
+                            await api.mods.update(activeProfile.id, m.slug).catch((err) => notify('error', `Update failed: ${m.title}`, friendlyError(err)))
+                          }
+                          setInstalled(await api.mods.list(activeProfile.id))
+                          notify('success', 'Updates finished', `${updatable.length} mod(s) updated.`)
+                        } finally {
+                          setUpdatingAll(false)
+                        }
+                      }
+                    }
+                  })
+                }}
+              >
                 {updatingAll ? <><Spinner /> Updating…</> : `Update All (${installed.filter((m) => m.updateAvailable).length})`}
               </Button>
             )}
@@ -889,7 +1003,12 @@ export function ModsPage() {
                         Manual — dropped into the mods folder
                       </div>
                     </div>
-                    <Button size="sm" variant="danger" onClick={() => removeManual(f)}>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={(e) => removeManual(f, e)}
+                      title="Remove (hold Shift to remove immediately)"
+                    >
                       Remove
                     </Button>
                   </div>

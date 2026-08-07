@@ -4,7 +4,7 @@ import { Button, Field, TextInput, Toggle, Slider, Select, Spinner } from '../co
 import { api, friendlyError } from '../lib/api'
 import { sound, SOUND_PACKS } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
-import { IconSettings, IconGamepad, IconShield, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconMoon, IconCrystal, IconLeaf } from '../components/icons'
+import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconMoon, IconCrystal, IconLeaf } from '../components/icons'
 
 const IconBolt = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -34,22 +34,70 @@ const themes: { id: ThemeId; label: string; colors: string[] }[] = [
 const sections = [
   { id: 'general', label: 'General', icon: IconSettings },
   { id: 'minecraft', label: 'Minecraft', icon: IconGamepad },
-  { id: 'java', label: 'Java', icon: IconShield },
   { id: 'performance', label: 'Performance', icon: IconBolt },
   { id: 'downloads', label: 'Downloads', icon: IconDownload },
   { id: 'updates', label: 'Updates', icon: IconRefresh },
-  { id: 'stability', label: 'Stability', icon: IconShield },
   { id: 'appearance', label: 'Appearance', icon: IconImage },
   { id: 'audio', label: 'Audio', icon: IconVolume },
-  { id: 'about', label: 'About', icon: IconSparkle },
   { id: 'advanced', label: 'Advanced', icon: IconGauge }
 ] as const
 
 type SectionId = (typeof sections)[number]['id']
 
+/** Settings search index (V2) — every searchable setting with its category
+ *  and a short description. The search box in Settings filters this live and
+ *  clicking a result jumps straight to that category. */
+const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc: string }[] = [
+  { query: ['close on launch', 'hide launcher', 'game starts'], section: 'general', label: 'Hide launcher when game starts', desc: 'Close the launcher window when a game starts' },
+  { query: ['console', 'game console', 'window on launch'], section: 'general', label: 'Open game console window on launch', desc: 'Open the detached game console when launching' },
+  { query: ['ram', 'memory', 'default ram'], section: 'general', label: 'Default RAM', desc: 'Memory applied to new profiles' },
+  { query: ['log level', 'logs', 'keep logs'], section: 'general', label: 'Logs', desc: 'Log level and how many days logs are kept' },
+  { query: ['snapshots', 'beta', 'versions'], section: 'minecraft', label: 'Show snapshots & beta versions', desc: 'Include snapshots and pre-releases in the version picker' },
+  { query: ['microsoft', 'account', 'sign in', 'logout'], section: 'minecraft', label: 'Microsoft account', desc: 'Sign in / sign out of your Microsoft account' },
+  { query: ['java', 'java path', 'runtime'], section: 'minecraft', label: 'Java', desc: 'Custom java.exe path (leave empty for auto-detect)' },
+  { query: ['performance engine', 'rpe', 'auto optimize', 'tier', 'preset'], section: 'performance', label: 'Performance Engine', desc: 'Hardware detection, auto-optimization and presets' },
+  { query: ['fps cap', 'unlimited fps', 'frame rate'], section: 'performance', label: 'Frame rate', desc: 'Safe FPS cap by default; unlimited is a warned opt-in' },
+  { query: ['shaders', 'shader guard', 'vram', 'crash'], section: 'performance', label: 'Shader Guard', desc: 'GPU/driver shader assessment and crash auto-recovery' },
+  { query: ['vsync', 'render distance', 'recommendations'], section: 'performance', label: 'Recommendations', desc: 'Hardware-based suggestions you choose to apply' },
+  { query: ['downloads', 'concurrency', 'parallel', 'queue'], section: 'downloads', label: 'Download queue', desc: 'How many downloads run at the same time (1 / 3 / 5)' },
+  { query: ['cache', 'download cache'], section: 'downloads', label: 'Download cache', desc: 'Minecraft files cached for reuse across profiles' },
+  { query: ['updates', 'check for updates', 'auto install'], section: 'updates', label: 'Updates', desc: 'Check for updates and auto-install on start' },
+  { query: ['theme', 'colors', 'appearance'], section: 'appearance', label: 'Theme', desc: 'The launcher color identity' },
+  { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
+  { query: ['preset', 'potato', 'balanced', 'high', 'turbo'], section: 'appearance', label: 'Performance preset', desc: 'How aggressively optimizations apply' },
+  { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
+  { query: ['sound pack', 'customize sounds', 'preview sounds'], section: 'audio', label: 'Customize sounds', desc: 'Pick a sound pack and preview each action' },
+  { query: ['about', 'version', 'credits'], section: 'advanced', label: 'About', desc: 'Version, credits and data directory' },
+  { query: ['reset', 'clean release', 'danger'], section: 'advanced', label: 'Clean Release Reset', desc: 'Restore the launcher to a fresh installation' }
+]
+
 export function SettingsPage() {
-  const { settings, updateSettings, notify, info, account, logout, setModals, updateInfo } = useApp()
+  const { settings, updateSettings, notify, info, account, logout, setModals, updateInfo, checkForUpdates } = useApp()
   const [section, setSection] = useState<SectionId>('general')
+  /* Settings search (V2): filters the index below and jumps to the result. */
+  const [settingsQuery, setSettingsQuery] = useState('')
+  /* Check for updates (V2) — async, never blocks the UI. */
+  const [checkState, setCheckState] = useState<'idle' | 'checking' | 'uptodate' | 'available' | 'failed'>('idle')
+
+  const doCheckForUpdates = async () => {
+    setCheckState('checking')
+    const res = await checkForUpdates(false, true)
+    if (res === null) setCheckState('failed')
+    else setCheckState(res.hasUpdate ? 'available' : 'uptodate')
+  }
+
+  const results = settingsQuery.trim()
+    ? SETTINGS_INDEX.filter((s) =>
+        s.label.toLowerCase().includes(settingsQuery.toLowerCase()) ||
+        s.desc.toLowerCase().includes(settingsQuery.toLowerCase()) ||
+        s.query.some((q) => q.toLowerCase().includes(settingsQuery.toLowerCase()))
+      ).slice(0, 12)
+    : []
+
+  const goToSection = (id: SectionId) => {
+    setSection(id)
+    setSettingsQuery('')
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -59,6 +107,59 @@ export function SettingsPage() {
           <p className="page-sub">Launcher configuration</p>
         </div>
       </div>
+
+      {/* Settings search — searches settings instead of mods while in Settings */}
+      <div className="mod-search">
+        <input
+          className="input"
+          value={settingsQuery}
+          onChange={(e) => setSettingsQuery(e.target.value)}
+          placeholder="Search settings… (e.g. VSync, RAM, sound, updates)"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setSettingsQuery('')
+          }}
+        />
+      </div>
+
+      {settingsQuery.trim() && (
+        <div className="panel">
+          <div className="panel-title">Search results ({results.length})</div>
+          <p className="panel-sub">Click a result to jump to that setting.</p>
+          {results.length === 0 ? (
+            <p style={{ color: 'var(--text-3)', fontSize: 13, marginTop: 8 }}>No settings match “{settingsQuery}”.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              {results.map((r) => (
+                <button
+                  key={r.label}
+                  onClick={() => goToSection(r.section)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    background: 'var(--bg-2)',
+                    border: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'border-color 0.15s ease'
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-3)', flexShrink: 0 }}>
+                    {r.section}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: 13, display: 'block' }}>{r.label}</b>
+                    <small style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{r.desc}</small>
+                  </span>
+                  <span style={{ color: 'var(--text-3)', fontSize: 13 }}>→</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="settings-layout">
         <nav className="settings-nav">
@@ -102,7 +203,22 @@ export function SettingsPage() {
                 </div>
                 <div className="row" style={{ marginTop: 12, gap: 10 }}>
                   <Button variant="ghost" onClick={() => api.logs.openFolder()}>Open Log Folder</Button>
-                  <Button variant="danger" onClick={() => api.logs.clear().then(() => notify('success', 'Logs cleared'))}>Clear Logs</Button>
+                  <Button
+                    variant="danger"
+                    onClick={() =>
+                      setModals({
+                        confirm: {
+                          title: 'Clear this log?',
+                          message: 'The on-disk launcher log will be emptied. This cannot be undone.',
+                          confirmLabel: 'Clear',
+                          danger: true,
+                          onConfirm: () => void api.logs.clear().then(() => notify('success', 'Logs cleared'))
+                        }
+                      })
+                    }
+                  >
+                    Clear Logs
+                  </Button>
                 </div>
               </div>
             </>
@@ -176,7 +292,7 @@ export function SettingsPage() {
             </div>
           )}
 
-          {section === 'java' && (
+          {section === 'minecraft' && (
             <div className="panel">
               <div className="panel-title">Java</div>
               <p className="panel-sub">Leave empty for auto-detection. The launcher finds compatible runtimes automatically.</p>
@@ -192,23 +308,58 @@ export function SettingsPage() {
             </div>
           )}
 
-          {section === 'performance' && <PerformanceSection />}
-
-          {section === 'stability' && <StabilitySection />}
+          {section === 'performance' && (
+            <>
+              <PerformanceSection />
+              <StabilitySection />
+            </>
+          )}
 
           {section === 'downloads' && (
-            <div className="panel">
-              <div className="panel-title">Downloads</div>
-              <p className="panel-sub">Version, library and asset download behavior</p>
-              <div className="row" style={{ marginTop: 8 }}>
-                <Button onClick={() => notify('info', 'Download cache', 'All Minecraft files are cached in data/games for reuse across profiles.')}>
-                  Clear download cache
-                </Button>
+            <>
+              <div className="panel">
+                <div className="panel-title">Download queue</div>
+                <p className="panel-sub">How many installs/downloads may run at the same time. 1 = strict queue (everything waits its turn); 3 or 5 speed up batch installs on fast connections.</p>
+                <div className="row" style={{ marginTop: 12, gap: 8 }}>
+                  {([1, 3, 5] as const).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => void updateSettings({ downloadConcurrency: n })}
+                      style={{
+                        flex: 1,
+                        maxWidth: 140,
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: `1px solid ${(settings.downloadConcurrency ?? 1) === n ? 'var(--accent-3)' : 'var(--border)'}`,
+                        background: (settings.downloadConcurrency ?? 1) === n ? 'var(--accent-soft, rgba(139,92,246,0.12))' : 'var(--bg-2)',
+                        color: (settings.downloadConcurrency ?? 1) === n ? 'var(--accent-3)' : 'var(--text-2)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {n} {n === 1 ? 'at a time' : 'at a time'}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 12, lineHeight: 1.5 }}>
+                  When you click Install on several items they are added to the queue and processed according to this setting — real tasks only, no phantom downloads.
+                </p>
               </div>
-              <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 14, lineHeight: 1.5 }}>
-                Files already downloaded are skipped on future installs, so reinstalling versions is instant.
-              </p>
-            </div>
+              <div className="panel">
+                <div className="panel-title">Cache</div>
+                <p className="panel-sub">Version, library and asset download behavior</p>
+                <div className="row" style={{ marginTop: 8 }}>
+                  <Button onClick={() => notify('info', 'Download cache', 'All Minecraft files are cached in data/games for reuse across profiles.')}>
+                    Clear download cache
+                  </Button>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 14, lineHeight: 1.5 }}>
+                  Files already downloaded are skipped on future installs, so reinstalling versions is instant.
+                </p>
+              </div>
+            </>
           )}
 
           {section === 'updates' && (
@@ -264,11 +415,20 @@ export function SettingsPage() {
                     <span className="muted"> — you are up to date</span>
                   )}
                 </span>
-                {updateInfo?.hasUpdate && (
-                  <Button variant="primary" size="sm" onClick={() => setModals({ update: true })}>
-                    Update now
-                  </Button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                <Button variant="primary" size="sm" onClick={() => void doCheckForUpdates()} disabled={checkState === 'checking'}>
+                  {checkState === 'checking' ? <><Spinner /> Checking…</> : 'Check for Updates'}
+                </Button>
+                {checkState === 'checking' && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Contacting GitHub…</span>}
+                {checkState === 'uptodate' && <span style={{ fontSize: 12.5, color: 'var(--green, #34d399)' }}>You are up to date</span>}
+                {checkState === 'available' && updateInfo?.hasUpdate && (
+                  <>
+                    <span style={{ fontSize: 12.5, color: 'var(--accent-3)', fontWeight: 700 }}>Update available — v{updateInfo.latestVersion}</span>
+                    <Button variant="ghost" size="sm" onClick={() => setModals({ update: true })}>Update now</Button>
+                  </>
                 )}
+                {checkState === 'failed' && <span style={{ fontSize: 12.5, color: 'var(--danger, #f87171)' }}>Check failed — could not reach GitHub</span>}
               </div>
             </div>
           )}
@@ -400,65 +560,32 @@ export function SettingsPage() {
             </>
           )}
 
-          {section === 'about' && (
-            <div className="panel" style={{ textAlign: 'center', padding: '36px 28px' }}>
-              <BrandLogo height={40} style={{ margin: '0 auto 18px' }} />
-              <h3 style={{ fontSize: 18, marginBottom: 4 }}>Reimagined Launcher</h3>
-              <p className="muted" style={{ marginBottom: 20 }}>Version {info?.version ?? 'Unknown'} · {info?.platform ?? ''}</p>
-              <div className="about-section" style={{ textAlign: 'left', maxWidth: 460, margin: '0 auto', gap: 10 }}>
-                <div className="about-item">
-                  <div className="about-dot" />
-                  <div className="about-text">
-                    <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Credits</h4>
-                    <p><span style={{ color: 'var(--accent-3)', fontWeight: 600 }}>@MoustachePetit</span> — creator</p>
-                  </div>
-                </div>
-                <div className="about-item">
-                  <div className="about-dot" />
-                  <div className="about-text">
-                    <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Description</h4>
-                    <p>A modern Minecraft management platform for creating, managing, and launching your perfect Minecraft experience.</p>
-                  </div>
-                </div>
-                <div className="about-item">
-                  <div className="about-dot" />
-                  <div className="about-text">
-                    <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Data directory</h4>
-                    <p className="mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{info?.dataRoot ?? ''}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {section === 'advanced' && (
             <>
-              <div className="panel">
-                <div className="panel-title">About Reimagined</div>
-                <div className="about-section" style={{ marginTop: 10 }}>
+              <div className="panel" style={{ textAlign: 'center', padding: '36px 28px' }}>
+                <BrandLogo height={40} style={{ margin: '0 auto 18px' }} />
+                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Reimagined Launcher</h3>
+                <p className="muted" style={{ marginBottom: 20 }}>Version {info?.version ?? 'Unknown'} · {info?.platform ?? ''}</p>
+                <div className="about-section" style={{ textAlign: 'left', maxWidth: 460, margin: '0 auto', gap: 10 }}>
                   <div className="about-item">
                     <div className="about-dot" />
                     <div className="about-text">
-                      <h4>Version</h4>
-                      <p>{info?.version ?? 'Unknown'} · {info?.platform ?? 'Unknown'}</p>
+                      <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Credits</h4>
+                      <p><span style={{ color: 'var(--accent-3)', fontWeight: 600 }}>@MoustachePetit</span> — creator</p>
                     </div>
                   </div>
                   <div className="about-item">
                     <div className="about-dot" />
                     <div className="about-text">
-                      <h4>Credits</h4>
-                      <p>
-                        <span style={{ color: 'var(--accent-3)', fontWeight: 600 }}>@MoustachePetit</span>
-                        <span style={{ margin: '0 6px', color: 'var(--text-3)' }}>|</span>
-                        The creator
-                      </p>
-                    </div>
-                  </div>
-                  <div className="about-item">
-                    <div className="about-dot" />
-                    <div className="about-text">
-                      <h4>Description</h4>
+                      <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Description</h4>
                       <p>A modern Minecraft management platform for creating, managing, and launching your perfect Minecraft experience.</p>
+                    </div>
+                  </div>
+                  <div className="about-item">
+                    <div className="about-dot" />
+                    <div className="about-text">
+                      <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Data directory</h4>
+                      <p className="mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{info?.dataRoot ?? ''}</p>
                     </div>
                   </div>
                 </div>
@@ -467,7 +594,22 @@ export function SettingsPage() {
                 <div className="panel-title">Danger Zone</div>
                 <p className="panel-sub">Actions that cannot be undone</p>
                 <div className="row" style={{ flexWrap: 'wrap' }}>
-                  <Button variant="danger" onClick={() => api.logs.clear().then(() => notify('success', 'Logs cleared'))}>Clear all logs</Button>
+                  <Button
+                    variant="danger"
+                    onClick={() =>
+                      setModals({
+                        confirm: {
+                          title: 'Clear all logs?',
+                          message: 'The on-disk launcher log will be emptied. This cannot be undone.',
+                          confirmLabel: 'Clear',
+                          danger: true,
+                          onConfirm: () => void api.logs.clear().then(() => notify('success', 'Logs cleared'))
+                        }
+                      })
+                    }
+                  >
+                    Clear all logs
+                  </Button>
                   <Button
                     variant="danger"
                     onClick={() =>
