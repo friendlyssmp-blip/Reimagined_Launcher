@@ -328,3 +328,37 @@
 ### App icon
 - The .exe icon was regenerated from Logo.png with a smaller, centered fit so
   it never looks cut off in the taskbar.
+
+## v1.0.23 — Manual detection for ALL content types + FPS Boost 1.0.5 (adaptive chunk-load stabilizer)
+
+### Manual detection for resource packs, shaders and data packs (same as mods)
+- Dropping a .zip (or a folder) into resourcepacks/ shaderpacks/ or datapacks/
+  is now detected like manual mods were in v1.0.22: the launcher reads the
+  REAL identity from inside the pack — `pack.mcmeta` (pack.description) and
+  `shaders/shaders.json` (name) for shaders — and shows the pack's name, not
+  the file name, with its icon (matched to Modrinth by exact title when
+  possible, otherwise the Reimagined logo).
+- They are registered as installed: Browse marks them "Installed" (button
+  disabled) so you can't re-download something you already have, and they
+  can be removed (Shift skips the confirmation) right from the Installed tab.
+
+### Reimagined FPS Boost 1.0.5 — adaptive chunk-load stabilizer
+- New adaptive chunk-build worker pool: sized by your hardware preset, it
+  scales with burst chunk work while exploring, idles back down, and NEVER
+  loses a task (a deep 512-task buffer absorbs chunks storms; the render
+  thread is never dragged into mesh work).
+- New ChunkStabilizer: watches the REAL per-frame delta every frame — when a
+  run of slow frames (a chunk storm from generating/loading many chunks)
+  appears, it eases the pool and keeps slightly fewer particles until frame
+  time stabilizes, then restores everything. Protected by the SafetyGate
+  (auto-disables itself if it ever fails — the render frame always survives)
+  and fully reversible.
+- Profiler upgraded: the 10s diagnostic now reports P95/P99 frame times and
+  a spike count (frames over 50 ms), so exploration stutter is measurable
+  instead of hidden by the average FPS. The FPS overlay shows a small "EASE"
+  marker while the stabilizer is actively throttling.
+- New settings: "Chunk Stabilizer" toggle (default ON) + explicit
+  chunk-build thread cap (0 = auto by preset). Sodium still owns chunk
+  threading when installed — Reimagined stands down on that one system only.
+- Existing profiles are upgraded to the 1.0.5 jar automatically on the next
+  launch (the old 1.0.4 bundle was removed).

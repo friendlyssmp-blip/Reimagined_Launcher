@@ -85,10 +85,11 @@ const api = {
       ipcRenderer.invoke(IPC.modsRemove, { profileId, slug }),
     checkUpdates: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsCheckUpdates, profileId),
     update: (profileId: string, slug: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsUpdate, { profileId, slug }),
-    localFiles: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsLocalFiles, profileId),
+    localFiles: (profileId: string, projectType?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsLocalFiles, profileId, projectType ?? 'mod'),
     identifyManual: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsIdentifyManual, profileId),
-    removeLocalFile: (profileId: string, filename: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsRemoveLocalFile, { profileId, filename }),
+    removeLocalFile: (profileId: string, filename: string, projectType?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsRemoveLocalFile, { profileId, filename, projectType: projectType ?? 'mod' }),
     searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsSearchCurseforge, { profileId, query, sort, projectType }),
     installCurseforge: (profileId: string, projectId: string, meta?: unknown, projectType?: string): Promise<unknown> =>

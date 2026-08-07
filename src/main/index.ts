@@ -483,6 +483,49 @@ async function runSmokeTest(): Promise<void> {
     }
   })
 
+  await ok('manual packs: resource pack + shader identified by their real names', async () => {
+    const { modManager } = await import('./mods/mod-manager')
+    const { zipCreate } = await import('./utils/zip')
+    const { mkdirp } = await import('./utils/fs')
+    const fsp = await import('node:fs/promises')
+    const pathMod = await import('node:path')
+    const p = await profileManager.create({
+      name: 'Manual Pack Smoke',
+      minecraftVersion: '1.21.4',
+      loader: { type: 'vanilla', version: null }
+    })
+    try {
+      // A resource pack named only by its FILE — its real name lives in pack.mcmeta.
+      mkdirp(pathMod.join(paths.games, p.gameDir, 'resourcepacks'))
+      const rp = zipCreate([
+        { name: 'pack.mcmeta', data: JSON.stringify({ pack: { pack_format: 34, description: 'My Fancy Texture Pack' } }) }
+      ])
+      await fsp.writeFile(pathMod.join(paths.games, p.gameDir, 'resourcepacks', 'random-rp-name.zip'), rp)
+      // A shader pack whose real name lives in shaders/shaders.json (Iris format).
+      mkdirp(pathMod.join(paths.games, p.gameDir, 'shaderpacks'))
+      const sh = zipCreate([
+        { name: 'pack.mcmeta', data: JSON.stringify({ pack: { pack_format: 34, description: 'x' } }) },
+        { name: 'shaders/shaders.json', data: JSON.stringify({ name: 'My Cinematic Shader' }) }
+      ])
+      await fsp.writeFile(pathMod.join(paths.games, p.gameDir, 'shaderpacks', 'random-sh-name.zip'), sh)
+
+      const res = await modManager.identifyManualMods(p.id)
+      if (res.identified < 2) throw new Error(`expected 2 identified, got ${res.identified}`)
+      const profile = await profileManager.get(p.id)
+      const mods = profile?.mods ?? []
+      const rpMod = mods.find((m) => m.projectType === 'resourcepack' && m.filename === 'random-rp-name.zip')
+      const shMod = mods.find((m) => m.projectType === 'shader' && m.filename === 'random-sh-name.zip')
+      if (!rpMod) throw new Error('resource pack was not registered as installed')
+      if (!shMod) throw new Error('shader pack was not registered as installed')
+      if (rpMod.title !== 'My Fancy Texture Pack') throw new Error(`RP name is the FILE name: "${rpMod.title}"`)
+      if (shMod.title !== 'My Cinematic Shader') throw new Error(`shader name is the FILE name: "${shMod.title}"`)
+      if (shMod.source !== 'local') throw new Error(`wrong source ${shMod.source}`)
+      logger.info('Manual pack identification OK (resource pack + shader → real names, registered installed)')
+    } finally {
+      await profileManager.delete(p.id).catch(() => {})
+    }
+  })
+
   const summary = `Smoke test results\n${checks.join('\n')}`
   logger.info(summary)
   console.log('=== SMOKE TEST ===')

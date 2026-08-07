@@ -1,7 +1,7 @@
 {
-  "version": "1.0.22",
-  "notes": "v1.0.22 — (1) MODS MANUALES DETECTADOS: si metes un .jar directo en la carpeta mods, el launcher lee su identidad real (fabric.mod.json / mods.toml) y muestra el NOMBRE del mod (no el del archivo) con su icono; queda marcado como Instalado en Modrinth (no puedes re-descargarlo). (2) Modpacks: nueva pestaña Includes con el contenido real del pack (mods/resourcepacks/datapacks). (3) Progreso real de descarga: imports de CurseForge con MB/s y ETA en vivo, y cancelar import aborta la descarga al instante. (4) Imagenes en resolucion completa (nada se downscalea) y proyectos sin icono muestran el logo de Reimagined. (5) Icono del .exe mas pequeno y centrado para que no se corte en la taskbar.",
-  "installer": "dist/Reimagined-Setup-1.0.22.exe",
+  "version": "1.0.23",
+  "notes": "v1.0.23 — (1) DETECCIÓN MANUAL PARA TODO: resource packs, shaders y data packs metidos a mano (zip o carpeta) ahora se detectan como los mods — lee pack.mcmeta / shaders.json, muestra el NOMBRE real del pack (no el del archivo) con su ícono, quedan marcados como Instalado en Modrinth (no re-descargables) y se pueden quitar desde Installed (Shift = sin confirmar). (2) FPS BOOST 1.0.5 — estabilizador adaptativo de carga de chunks: pool de chunk-build adaptativo (escala con ráfagas, nunca pierde tareas), ChunkStabilizer que detecta tormentas de chunks por frame-time real y suaviza el pool + partículas hasta que el frame time se estabiliza, profiler con P95/P99 y conteo de spikes, marcador EASE en el overlay, todo protegido por SafetyGate y compatible con Sodium. Los perfiles existentes se actualizan al 1.0.5 automáticamente.",
+  "installer": "dist/Reimagined-Setup-1.0.23.exe",
   "checksum": "SHA256SUMS.txt",
-  "publishedAt": "2026-08-07T15:10:00.000Z"
+  "publishedAt": "2026-08-07T15:56:00.000Z"
 }

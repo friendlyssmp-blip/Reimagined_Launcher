@@ -21,6 +21,7 @@ import { getFabricLoaders, latestFabricLoader } from './minecraft/loaders/fabric
 import { getForgeVersions, recommendedForgeVersion } from './minecraft/loaders/forge'
 import { profileManager } from './profiles/profile-manager'
 import { modManager } from './mods/mod-manager'
+import type { ProjectType } from './mods/modrinth'
 import { launcher } from './minecraft/launcher'
 import { futureSystems } from './mods/placeholders'
 import { shareService } from './share/share'
@@ -281,9 +282,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsRemove, (payload) => modManager.remove(payload.profileId, payload.slug))
   on(IPC.modsCheckUpdates, (profileId) => modManager.checkUpdates(profileId))
   on(IPC.modsUpdate, (payload) => modManager.update(payload.profileId, payload.slug))
-  on(IPC.modsLocalFiles, (profileId) => modManager.localModFiles(profileId))
+  on(IPC.modsLocalFiles, (profileId: string, projectType?: string) => modManager.localModFiles(profileId, (projectType ?? 'mod') as ProjectType))
   on(IPC.modsIdentifyManual, (profileId) => modManager.identifyManualMods(profileId))
-  on(IPC.modsRemoveLocalFile, (payload) => modManager.removeLocalFile(payload.profileId, payload.filename))
+  on(IPC.modsRemoveLocalFile, (payload: { profileId: string; filename: string; projectType?: string }) =>
+    modManager.removeLocalFile(payload.profileId, payload.filename, (payload.projectType ?? 'mod') as ProjectType))
   on(IPC.modsSearchCurseforge, (payload) =>
     modManager.searchCurseforge(payload.profileId, payload.query ?? '', payload.sort ?? undefined, payload.projectType ?? 'mod')
   )

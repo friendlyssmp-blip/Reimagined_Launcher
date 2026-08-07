@@ -83,7 +83,8 @@ export function ModsPage() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ProviderResult[]>([])
   const [installed, setInstalled] = useState<ProfileMod[]>(activeProfile?.mods ?? [])
-  const [manualFiles, setManualFiles] = useState<string[]>([])
+  /* v1.0.23: untracked manual files per content type (mods / packs / shaders / datapacks). */
+  const [manualFiles, setManualFiles] = useState<Record<string, string[]>>({})
   const [searching, setSearching] = useState(false)
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [category, setCategory] = useState<string | null>(null)
@@ -127,7 +128,11 @@ export function ModsPage() {
   useEffect(() => {
     setInstalled(activeProfile?.mods ?? [])
     if (activeProfile && tab === 'installed') {
-      api.mods.localFiles(activeProfile.id).then(setManualFiles).catch(() => setManualFiles([]))
+      const type = typeForInst[instTab] ?? 'mod'
+      api.mods
+        .localFiles(activeProfile.id, type)
+        .then((files) => setManualFiles((prev) => ({ ...prev, [type]: files })))
+        .catch(() => setManualFiles((prev) => ({ ...prev, [type]: [] })))
     }
     // FPS Boost status follows the live installed list (local slug id).
     if (activeProfile) {
@@ -138,7 +143,7 @@ export function ModsPage() {
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProfile, tab, installed])
+  }, [activeProfile, tab, installed, instTab])
 
   /* Stale-response guard: with auto-search firing on every keystroke, a slow
    * earlier response must never overwrite a newer one. First-page searches
@@ -299,10 +304,13 @@ export function ModsPage() {
       void doRemoveManual(filename)
       return
     }
+    const type = typeForInst[instTab] ?? 'mod'
     setModals({
       confirm: {
         title: 'Remove file',
-        message: `Are you sure you want to remove “${filename}”? This deletes the file from the mods folder (hold Shift next time to skip this confirmation).`,
+        message: `Are you sure you want to remove “${filename}”? This deletes it from the ${
+          type === 'mod' ? 'mods folder' : type === 'resourcepack' ? 'resource packs folder' : type === 'shader' ? 'shader packs folder' : 'data packs folder'
+        } (hold Shift next time to skip this confirmation).`,
         confirmLabel: 'Remove',
         danger: true,
         onConfirm: () => void doRemoveManual(filename)
@@ -312,9 +320,10 @@ export function ModsPage() {
 
   const doRemoveManual = async (filename: string) => {
     if (!activeProfile) return
+    const type = typeForInst[instTab] ?? 'mod'
     await runGuarded('Remove', async () => {
-      await api.mods.removeLocalFile(activeProfile.id, filename)
-      setManualFiles((prev) => prev.filter((f) => f !== filename))
+      await api.mods.removeLocalFile(activeProfile.id, filename, type)
+      setManualFiles((prev) => ({ ...prev, [type]: (prev[type] ?? []).filter((f) => f !== filename) }))
       notify('success', 'File removed', filename)
     })
   }
@@ -474,6 +483,9 @@ export function ModsPage() {
   const visible = results
   /** Installed items shown in the active sub-tab (by project type). */
   const instItems = installed.filter((m) => (m.projectType ?? 'mod') === (typeForInst[instTab] ?? 'mod'))
+  /* v1.0.23: untracked manual files for the ACTIVE sub-tab (all 4 content types). */
+  const curType = typeForInst[instTab] ?? 'mod'
+  const currentManual = manualFiles[curType] ?? []
   /* Installed check matches by real project id OR slug — so the Fabric API
    * (stored under the 'fabric-api' slug on older profiles) shows as
    * "Installed" in Modrinth results and can never be double-installed. */
@@ -553,7 +565,11 @@ export function ModsPage() {
       if (cancelled) return
       // After identification, freshly-registered mods must appear immediately.
       setInstalled(await api.mods.list(activeProfile.id).catch(() => []))
-      api.mods.localFiles(activeProfile.id).then(setManualFiles).catch(() => setManualFiles([]))
+      const type = typeForInst[instTab] ?? 'mod'
+      api.mods
+        .localFiles(activeProfile.id, type)
+        .then((files) => setManualFiles((prev) => ({ ...prev, [type]: files })))
+        .catch(() => setManualFiles((prev) => ({ ...prev, [type]: [] })))
       api.mods
         .checkUpdates(activeProfile.id)
         .then((fresh) => {
@@ -564,7 +580,7 @@ export function ModsPage() {
     return () => {
       cancelled = true
     }
-  }, [tab, activeProfile])
+  }, [tab, instTab, activeProfile])
 
   const renderRow = (r: ProviderResult) => (
     <div key={r.projectId} className="mod-row card" onClick={() => openDetail(r)} role="button" tabIndex={0}>
@@ -905,7 +921,7 @@ export function ModsPage() {
       {/* Tabs — Modrinth only (CurseForge removed from this launcher). */}
       <TabBar
         tabs={[
-          { id: 'installed', label: `Installed (${installed.length + manualFiles.length})` },
+          { id: 'installed', label: `Installed (${installed.length + currentManual.length})` },
           { id: 'modrinth', label: 'Modrinth' }
         ]}
         active={tab}
@@ -997,7 +1013,7 @@ export function ModsPage() {
               </Button>
             )}
             <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 'auto' }}>
-              {instTab === 'mods' && manualFiles.length > 0 && `${manualFiles.length} manual file(s) detected`}
+              {currentManual.length > 0 && `${currentManual.length} manual file(s) detected`}
             </span>
           </div>
 
@@ -1047,7 +1063,7 @@ export function ModsPage() {
                 ))}
               </div>
             )
-          ) : instItems.length === 0 && manualFiles.length === 0 ? (
+          ) : instItems.length === 0 && currentManual.length === 0 ? (
             <EmptyState
               icon={<IconPuzzle style={{ width: 40, height: 40 }} />}
               title={`No ${INST_TABS.find((t) => t.id === instTab)?.label.toLowerCase() ?? 'items'} installed yet`}
@@ -1070,8 +1086,7 @@ export function ModsPage() {
           ) : (
             <div>
               {instItems.map((m) => renderInstalledRow(m))}
-              {instTab === 'mods' &&
-                manualFiles.map((f) => (
+              {currentManual.map((f) => (
                   <div key={f} className="installed-row">
                     <div style={{
                       width: 38,
@@ -1088,9 +1103,16 @@ export function ModsPage() {
                       {f.charAt(0)}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{f.replace(/\.jar$/i, '')}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{f.replace(/\.(jar|zip)$/i, '')}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                        Manual — dropped into the mods folder
+                        Manual —{' '}
+                        {curType === 'mod'
+                          ? 'dropped into the mods folder'
+                          : curType === 'resourcepack'
+                            ? 'dropped into the resource packs folder'
+                            : curType === 'shader'
+                              ? 'dropped into the shader packs folder'
+                              : 'dropped into the data packs folder'}
                       </div>
                     </div>
                     <button

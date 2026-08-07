@@ -85,6 +85,80 @@ function readModMetadata(buf: Buffer, filename: string): ModMeta {
   return { name: filename.replace(/\.jar$/i, '') }
 }
 
+/* ---------------- manual content metadata (v1.0.23) ---------------- */
+
+/** Strip Minecraft § color codes from a pack description. */
+function stripMcCodes(s: string): string {
+  return s.replace(/§[0-9a-fk-or]/gi, '').replace(/§./g, '').trim()
+}
+
+/**
+ * Read a resource-pack-style identity out of a zip buffer:
+ * `pack.mcmeta` → pack.description (plain string or text component), and for
+ * shader packs `shaders/shaders.json` → name. Falls back to the file name.
+ */
+function readPackMetadata(packMcmeta: Buffer | null, shadersJson: Buffer | null, filename: string): ModMeta {
+  if (shadersJson) {
+    try {
+      const j = JSON.parse(shadersJson.toString('utf-8')) as { name?: unknown }
+      if (j && typeof j.name === 'string' && j.name.trim()) {
+        return { name: stripMcCodes(j.name) }
+      }
+    } catch {
+      /* fall through to pack.mcmeta */
+    }
+  }
+  if (packMcmeta) {
+    try {
+      const j = JSON.parse(packMcmeta.toString('utf-8')) as { pack?: { description?: unknown } }
+      const d = j?.pack?.description
+      if (typeof d === 'string') {
+        const clean = stripMcCodes(d)
+        if (clean) return { name: clean }
+      } else if (d && typeof d === 'object') {
+        const text = (d as { text?: unknown }).text
+        if (typeof text === 'string') {
+          const clean = stripMcCodes(text)
+          if (clean) return { name: clean }
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return { name: filename.replace(/\.(zip|jar)$/i, '') }
+}
+
+/** "My_Cool_Pack-1.2.zip" → "My Cool Pack-1.2" for the fallback name. */
+function prettifyLocalName(filename: string): string {
+  const base = filename.replace(/\.(zip|jar)$/i, '').replace(/_/g, ' ').trim()
+  return base || filename
+}
+
+/**
+ * Best-effort Modrinth match for PACKS by EXACT normalized title — never the
+ * first search hit blindly. Lets a manually-installed resource pack / shader /
+ * data pack show as "Installed" in Browse with its real icon and slug.
+ */
+async function matchPackByName(
+  name: string,
+  projectType: ProjectType,
+  mc: string,
+  loader: LoaderType
+): Promise<{ id: string; slug: string; title: string; iconUrl?: string } | null> {
+  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const target = norm(name)
+  if (!target) return null
+  try {
+    const res = await modrinth.searchMods({ query: name, projectType, mcVersion: mc, loader, limit: 24 })
+    const hit = res.items.find((i) => norm(i.title) === target)
+    if (!hit) return null
+    return { id: hit.projectId, slug: hit.slug, title: hit.title, iconUrl: hit.iconUrl }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Reduce a provider-supplied file name to a safe single component so it can
  * never escape the instance folder via `..` or absolute paths.
@@ -506,14 +580,34 @@ class ModManager {
   }
 
   /** Local-only mods (dropped in the mods folder manually) not tracked in JSON. */
-  async localModFiles(profileId: string): Promise<string[]> {
+  async localModFiles(profileId: string, projectType: ProjectType = 'mod'): Promise<string[]> {
     const profile = await this.requireProfile(profileId)
-    const dir = this.modsDir(profile)
+    const dir = this.modsDir(profile, projectType)
     if (!exists(dir)) return []
     const { listDir } = await import('../utils/fs')
-    const files = await listDir(dir)
-    const tracked = new Set(profile.mods.map((m) => m.filename))
-    return files.filter((f) => f.endsWith('.jar') && !tracked.has(f))
+    const fsp = await import('node:fs/promises')
+    const entries = await listDir(dir)
+    // Track per-type so the same file name in two folders (e.g. foo.zip in
+    // resourcepacks/ AND shaderpacks/) never hides the other copy.
+    const tracked = new Set(
+      profile.mods.filter((m) => (m.projectType ?? 'mod') === projectType).map((m) => m.filename)
+    )
+    const out: string[] = []
+    for (const f of entries) {
+      if (tracked.has(f)) continue
+      if (projectType === 'mod') {
+        if (f.endsWith('.jar')) out.push(f)
+        continue
+      }
+      if (f.endsWith('.zip')) {
+        out.push(f)
+        continue
+      }
+      // Folder packs count as manual content too.
+      const st = await fsp.stat(path.join(dir, f)).catch(() => null)
+      if (st?.isDirectory()) out.push(f)
+    }
+    return out
   }
 
   /**
@@ -523,52 +617,77 @@ class ModManager {
    * search marks them "Installed" and reinstalling is blocked — a manually
    * installed mod can never be double-installed from the catalog.
    */
+  /**
+   * v1.0.23 — scan ALL content folders (mods, resourcepacks, shaderpacks,
+   * datapacks) for untracked files/folders and register them as installed
+   * with their REAL identity (fabric.mod.json / mods.toml for mods,
+   * pack.mcmeta / shaders.json for packs), matched to Modrinth when possible.
+   */
   async identifyManualMods(profileId: string): Promise<{ identified: number; matched: number }> {
     const profile = await this.requireProfile(profileId)
-    const dir = this.modsDir(profile)
-    if (!exists(dir)) return { identified: 0, matched: 0 }
-    const { listDir } = await import('../utils/fs')
     const fsp = await import('node:fs/promises')
-    const files = await listDir(dir)
-    const tracked = new Set(profile.mods.map((m) => m.filename))
-    const candidates = files.filter((f) => f.endsWith('.jar') && !tracked.has(f))
-    if (candidates.length === 0) return { identified: 0, matched: 0 }
-
+    const { listDir } = await import('../utils/fs')
+    const projectTypes: ProjectType[] = ['mod', 'resourcepack', 'shader', 'datapack']
     let identified = 0
     let matched = 0
     const additions: ProfileMod[] = []
-    for (const filename of candidates) {
-      try {
-        const meta = readModMetadata(await fsp.readFile(path.join(dir, filename)), filename)
-        // Best-effort Modrinth match by the mod id (usually the slug).
-        let project: { id: string; slug: string; title: string; iconUrl?: string } | null = null
-        if (meta.id) {
-          try {
-            const p = await modrinth.getProject(meta.id)
-            project = { id: p.id, slug: p.slug, title: p.title, iconUrl: p.icon_url }
-          } catch {
-            project = null
+
+    for (const projectType of projectTypes) {
+      const dir = this.modsDir(profile, projectType)
+      if (!exists(dir)) continue
+      const tracked = new Set(
+        profile.mods.filter((m) => (m.projectType ?? 'mod') === projectType).map((m) => m.filename)
+      )
+      const entries = await listDir(dir)
+      for (const filename of entries) {
+        if (tracked.has(filename)) continue
+        if (projectType === 'mod' && !filename.endsWith('.jar')) continue
+        try {
+          const p = path.join(dir, filename)
+          const st = await fsp.stat(p).catch(() => null)
+          if (!st) continue
+          if (projectType !== 'mod' && !st.isDirectory() && !filename.endsWith('.zip')) continue
+          let meta: ModMeta
+          if (projectType === 'mod') {
+            meta = readModMetadata(await fsp.readFile(p), filename)
+          } else if (st.isDirectory()) {
+            const mcmeta = await fsp.readFile(path.join(p, 'pack.mcmeta')).catch(() => null)
+            meta = readPackMetadata(mcmeta, null, filename)
+          } else {
+            const buf = await fsp.readFile(p)
+            meta = readPackMetadata(zipReadEntry(buf, 'pack.mcmeta'), zipReadEntry(buf, 'shaders/shaders.json'), filename)
           }
+          let project: { id: string; slug: string; title: string; iconUrl?: string } | null = null
+          if (projectType === 'mod' && meta.id) {
+            try {
+              const pr = await modrinth.getProject(meta.id)
+              project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+            } catch {
+              project = null
+            }
+          } else if (projectType !== 'mod' && meta.name) {
+            project = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
+          }
+          const entry: ProfileMod = {
+            id: project?.id ?? meta.id ?? filename,
+            slug: project?.slug ?? meta.id ?? filename,
+            title: project?.title ?? meta.name ?? prettifyLocalName(filename),
+            filename,
+            versionId: '',
+            versionNumber: meta.version || 'manual',
+            downloads: 0,
+            iconUrl: project?.iconUrl,
+            source: 'local',
+            projectType,
+            installedAt: iso(),
+            updateAvailable: null
+          }
+          additions.push(entry)
+          identified++
+          if (project) matched++
+        } catch {
+          /* unreadable — leave it in the manual list */
         }
-        const entry: ProfileMod = {
-          id: project?.id ?? meta.id ?? filename,
-          slug: project?.slug ?? meta.id ?? filename,
-          title: project?.title ?? meta.name ?? filename.replace(/\.jar$/i, ''),
-          filename,
-          versionId: '',
-          versionNumber: meta.version || 'manual',
-          downloads: 0,
-          iconUrl: project?.iconUrl,
-          source: 'local',
-          projectType: 'mod',
-          installedAt: iso(),
-          updateAvailable: null
-        }
-        additions.push(entry)
-        identified++
-        if (project) matched++
-      } catch {
-        /* unreadable jar — leave it in the manual list */
       }
     }
 
@@ -576,23 +695,26 @@ class ModManager {
       await profileManager.update(profileId, { mods: [...profile.mods, ...additions] })
       eventBus.emit('mods:changed', { profileId, action: 'manual-identified', count: additions.length })
       logger.info(
-        `Identified ${additions.length} manually-installed mod(s) (${matched} matched to Modrinth) in "${profile.name}"`
+        `Identified ${additions.length} manually-installed item(s) (${matched} matched to Modrinth) in "${profile.name}"`
       )
     }
     return { identified, matched }
   }
 
   /** Delete a manually-dropped jar from the profile's mods folder. */
-  async removeLocalFile(profileId: string, filename: string): Promise<void> {
+  async removeLocalFile(profileId: string, filename: string, projectType: ProjectType = 'mod'): Promise<void> {
     const profile = await this.requireProfile(profileId)
-    const dir = this.modsDir(profile)
+    const dir = this.modsDir(profile, projectType)
     const dest = path.join(dir, filename)
-    if (!filename.endsWith('.jar') || path.dirname(dest) !== path.resolve(dir)) {
+    const base = path.basename(filename)
+    const fsp = await import('node:fs/promises')
+    const isDir = await fsp.stat(dest).then((s) => s.isDirectory()).catch(() => false)
+    if (base !== filename || (!filename.endsWith('.jar') && !filename.endsWith('.zip') && !isDir)) {
       throw new LauncherError('INVALID_FILE', 'Invalid file name.')
     }
-    if (!exists(dest)) throw new LauncherError('MOD_MISSING', 'File not found in the mods folder.')
+    if (!exists(dest)) throw new LauncherError('MOD_MISSING', 'File not found in the content folder.')
     await remove(dest)
-    logger.info(`Local mod file removed: ${filename}`)
+    logger.info(`Local ${projectType} file removed: ${filename}`)
   }
 
   /**
