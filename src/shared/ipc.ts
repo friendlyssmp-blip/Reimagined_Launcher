@@ -55,6 +55,7 @@ export const IPC = {
   modsLocalFiles: 'mods:local-files',
   modsRemoveLocalFile: 'mods:remove-local-file',
   modsIdentifyManual: 'mods:identify-manual',
+  modsEnsureIcons: 'mods:ensure-icons',
   modsChangeVersion: 'mods:change-version',
   modsSetEnabled: 'mods:set-enabled',
   modsAvailableVersions: 'mods:available-versions',

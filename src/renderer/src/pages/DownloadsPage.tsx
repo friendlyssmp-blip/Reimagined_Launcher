@@ -15,6 +15,7 @@ interface Download {
   downloadedBytes: number
   totalBytes: number
   at: string
+  iconUrl?: string
 }
 
 const kindLabel: Record<string, string> = {
@@ -104,7 +105,9 @@ export function DownloadsPage() {
    * a real task), falling back to the launch pipeline's progress. The moment
    * the underlying task resolves, its entry stops being 'downloading', so the
    * bar + spinner can never sit frozen at 100%. */
-  const dlActive = history.find((d) => d.status === 'downloading') ?? null
+  /* v1.0.24 — an entry at 100% is COMPLETE, never active: the terminal record
+   * always lands on the visible entry now, so a full bar can't sit forever. */
+  const dlActive = history.find((d) => d.status === 'downloading' && d.percent < 100) ?? null
   const launchActive = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
     ? { label: launch.message || 'Working…', percent: launch.percent ?? 0, id: undefined as string | undefined }
     : null

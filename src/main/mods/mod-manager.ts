@@ -284,7 +284,8 @@ class ModManager {
     logger.info(`Installing mod ${projectId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: `${project.title} — ${version.versionNumber}`
+      label: `${project.title} — ${version.versionNumber}`,
+      iconUrl: project.icon_url
     })
 
     const mod: ProfileMod = {
@@ -468,7 +469,8 @@ class ModManager {
     logger.info(`Installing CurseForge mod ${projectId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: file.filename
+      label: file.filename,
+      iconUrl: meta?.iconUrl
     })
 
     const mod: ProfileMod = {
@@ -699,6 +701,41 @@ class ModManager {
       )
     }
     return { identified, matched }
+  }
+
+  /**
+   * v1.0.24 — backfill missing Modrinth icons for already-installed items
+   * (installed before icons were stored, or packs installed through older
+   * paths). Fire-and-forget from the Installed tab; emits mods:changed once
+   * resolved so the UI refreshes with the real icons.
+   */
+  async ensureIcons(profileId: string): Promise<void> {
+    const profile = await this.requireProfile(profileId)
+    const missing = profile.mods.filter((m) => m.source === 'modrinth' && !m.iconUrl)
+    if (missing.length === 0) return
+    const resolved = await Promise.all(
+      missing.map(async (m) => {
+        try {
+          const p = await modrinth.getProject(m.id)
+          if (p?.icon_url) return { key: `${m.id}|${m.filename}`, iconUrl: p.icon_url }
+        } catch {
+          /* project gone — keep as-is */
+        }
+        return null
+      })
+    )
+    const map = new Map<string, string>()
+    for (const r of resolved) {
+      if (r) map.set(r.key, r.iconUrl)
+    }
+    if (map.size === 0) return
+    const next = profile.mods.map((m) => {
+      const icon = map.get(`${m.id}|${m.filename}`)
+      return icon ? { ...m, iconUrl: icon } : m
+    })
+    await profileManager.update(profileId, { mods: next })
+    eventBus.emit('mods:changed', { profileId, action: 'icons-resolved', count: map.size })
+    logger.info(`Resolved ${map.size} missing project icon(s) for "${profile.name}"`)
   }
 
   /** Delete a manually-dropped jar from the profile's mods folder. */

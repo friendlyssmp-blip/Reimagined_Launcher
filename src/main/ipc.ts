@@ -284,6 +284,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsUpdate, (payload) => modManager.update(payload.profileId, payload.slug))
   on(IPC.modsLocalFiles, (profileId: string, projectType?: string) => modManager.localModFiles(profileId, (projectType ?? 'mod') as ProjectType))
   on(IPC.modsIdentifyManual, (profileId) => modManager.identifyManualMods(profileId))
+  on(IPC.modsEnsureIcons, (profileId: string) => modManager.ensureIcons(profileId))
   on(IPC.modsRemoveLocalFile, (payload: { profileId: string; filename: string; projectType?: string }) =>
     modManager.removeLocalFile(payload.profileId, payload.filename, (payload.projectType ?? 'mod') as ProjectType))
   on(IPC.modsSearchCurseforge, (payload) =>

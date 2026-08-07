@@ -74,7 +74,7 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
           <div key={section.label}>
             <div className="nav-section-label">{section.label}</div>
             {section.items.map(({ id, label, icon: Icon }) => (
-              <button key={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => onNavigate(id)} title={label}>
+              <button key={id} data-nav={id} className={`nav-item ${page === id ? 'active' : ''}`} onClick={() => onNavigate(id)} title={label}>
                 <Icon />
                 <span className="nav-label">{label}</span>
               </button>

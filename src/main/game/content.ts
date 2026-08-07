@@ -36,6 +36,8 @@ export interface DownloadEntry {
   downloadedBytes: number
   totalBytes: number
   at: string
+  /** Optional project icon — powers the fly-to-downloads animation (v1.0.24). */
+  iconUrl?: string
   /** Last time the entry was touched — stale 'downloading' entries die here. */
   updatedAt?: string
 }
@@ -124,15 +126,22 @@ let downloadSeq = 0
  * 'downloading' forever. Failures/completions now overwrite the same entry.
  */
 export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updatedAt'>): string {
-  const existing = downloadHistory.find(
-    (d) => d.status === 'downloading' && d.label === entry.label && d.kind === entry.kind
-  )
+  // v1.0.24 — a TERMINAL update (done/failed) must always land on the entry
+  // the user is looking at. Progress/start updates still match only live
+  // 'downloading' entries; a terminal update matches the MOST RECENT entry
+  // with the same label+kind regardless of status, so a 100% bar can never
+  // be left stuck on 'downloading' while a duplicate entry takes the 'done'.
+  const isTerminal = entry.status === 'done' || entry.status === 'failed'
+  const existing = isTerminal
+    ? downloadHistory.find((d) => d.label === entry.label && d.kind === entry.kind)
+    : downloadHistory.find((d) => d.status === 'downloading' && d.label === entry.label && d.kind === entry.kind)
   const now = new Date().toISOString()
   if (existing) {
     existing.status = entry.status
     existing.percent = entry.percent
     existing.downloadedBytes = entry.downloadedBytes
     existing.totalBytes = entry.totalBytes
+    if (entry.iconUrl !== undefined) existing.iconUrl = entry.iconUrl
     existing.updatedAt = now
     return existing.id
   }

@@ -87,7 +87,7 @@ export const api = {
   content: {
     worlds: (profileId: string) => unwrap<{ name: string; folder: string; sizeBytes: number; lastModified: string | null }[]>(window.reimagined.content.worlds(profileId)),
     packs: (profileId: string, kind: 'resourcepacks' | 'shaders') => unwrap<{ name: string; kind: 'folder' | 'zip'; sizeBytes: number }[]>(window.reimagined.content.packs(profileId, kind)),
-    downloads: () => unwrap<{ id: string; label: string; kind: string; status: 'downloading' | 'done' | 'failed'; percent: number; downloadedBytes: number; totalBytes: number; at: string }[]>(window.reimagined.content.downloads()),
+    downloads: () => unwrap<{ id: string; label: string; kind: string; status: 'downloading' | 'done' | 'failed'; percent: number; downloadedBytes: number; totalBytes: number; at: string; iconUrl?: string }[]>(window.reimagined.content.downloads()),
     cancelDownload: (id: string) => unwrap<boolean>(window.reimagined.content.cancelDownload(id)),
     openFolder: (profileId: string, sub?: string) => unwrap<void>(window.reimagined.content.openFolder(profileId, sub)),
     backupWorld: (profileId: string, world: string) => unwrap<{ destination: string }>(window.reimagined.content.backupWorld(profileId, world)),
@@ -142,6 +142,7 @@ export const api = {
     update: (profileId: string, slug: string) => unwrap<ProfileMod>(window.reimagined.mods.update(profileId, slug)),
     localFiles: (profileId: string, projectType?: string) => unwrap<string[]>(window.reimagined.mods.localFiles(profileId, projectType ?? 'mod')),
     identifyManual: (profileId: string) => unwrap<{ identified: number; matched: number }>(window.reimagined.mods.identifyManual(profileId)),
+    ensureIcons: (profileId: string) => unwrap<void>(window.reimagined.mods.ensureIcons(profileId)),
     removeLocalFile: (profileId: string, filename: string, projectType?: string) =>
       unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename, projectType ?? 'mod')),
     searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string) =>

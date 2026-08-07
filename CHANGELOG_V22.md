@@ -362,3 +362,33 @@
   threading when installed — Reimagined stands down on that one system only.
 - Existing profiles are upgraded to the 1.0.5 jar automatically on the next
   launch (the old 1.0.4 bundle was removed).
+
+## v1.0.24 — Installed icons, Installed search, fly-to-downloads animation & downloads history fix
+
+### Installed icons fixed
+- The Installed tab now ALWAYS renders the real icon: the project icon
+  (matched from Modrinth in the background for older items that lacked one,
+  via the new ensureIcons backfill) or the Reimagined logo as fallback. No
+  more broken/blank images for resource packs, some mods, shaders or data
+  packs in the Installed section.
+
+### Search inside Installed
+- You can now search your INSTALLED content with the same search bar
+  mechanic: installed mods, resource packs, data packs, shaders AND worlds
+  are filtered live as you type, with a proper no-matches empty state.
+
+### Satisfying fly-to-downloads animation
+- The moment a real download hits 100%, the item icon flies from the center
+  of the launcher into the Downloads button in the sidebar, as if the file
+  were dropping into the Downloads folder. Triggered only by actual content
+  downloads (kind mods — mods/resource packs/shaders/data packs/modpacks/
+  imports), throttled per item (3 s) so batches do not spam. The MC launch
+  pipeline (assets/libraries/loader) NEVER triggers it.
+
+### Downloads 100% to history fixed
+- A download that reaches 100% now always lands in the history section and
+  no active downloads shows correctly. Terminal done/failed updates match the
+  exact entry the user is looking at (label+kind), so a finished bar can
+  never stay stuck at 100% while a duplicate entry takes the done state.
+- Live progress persists into the stored entry (throttled) so the Downloads
+  section moves in real time.

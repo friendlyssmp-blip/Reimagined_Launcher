@@ -3282,3 +3282,30 @@ select.select:hover {
   height: 100%;
   object-fit: cover;
 }
+
+/* v1.0.24 — fly-to-downloads completion animation. */
+.fly-item {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border, #333), 0 0 18px rgba(157, 110, 255, 0.45);
+  animation: fly-to-downloads 0.9s cubic-bezier(0.22, 0.7, 0.3, 1) forwards;
+}
+@keyframes fly-to-downloads {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.28) rotate(-8deg);
+    opacity: 0.15;
+  }
+}

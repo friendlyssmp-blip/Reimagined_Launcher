@@ -71,6 +71,8 @@ export interface BatchProgress {
   totalBytes: number
   percent: number
   currentFile: string
+  /** Optional project icon — powers the fly-to-downloads animation (v1.0.24). */
+  iconUrl?: string
 }
 
 export interface DownloadBatchOptions {
@@ -79,6 +81,8 @@ export interface DownloadBatchOptions {
   concurrency?: number
   /** Stable id so the Downloads section can cancel THIS batch individually. */
   batchId?: string
+  /** Optional project icon for the Downloads UI / fly animation. */
+  iconUrl?: string
 }
 
 export async function runDownloadBatch(
@@ -97,9 +101,13 @@ export async function runDownloadBatch(
   inflight.add(batchCtrl)
   const batchId = opts.batchId ?? `dl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   batchControllers.set(batchId, batchCtrl)
-  const entryId = recordDownload({ label: opts.label, kind: opts.kind, status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes })
+  const entryId = recordDownload({ label: opts.label, kind: opts.kind, status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes, iconUrl: opts.iconUrl })
   batchControllers.set(entryId || batchId, batchCtrl)
 
+  // v1.0.24 — persist live progress into the stored entry (throttled) so the
+  // Downloads section moves in real time and never sits frozen at 100%: the
+  // final terminal record lands on the SAME entry the bar is showing.
+  let lastRecorded = 0
   const emit = (): void => {
     const progress: BatchProgress = {
       kind: opts.kind,
@@ -109,9 +117,23 @@ export async function runDownloadBatch(
       received,
       totalBytes,
       percent: items.length === 0 ? 100 : Math.min(100, (done + (totalBytes ? received / totalBytes : 0)) * 100 / items.length),
-      currentFile
+      currentFile,
+      iconUrl: opts.iconUrl
     }
     eventBus.emit('download:progress', progress)
+    const nowMs = Date.now()
+    if (nowMs - lastRecorded >= 250) {
+      lastRecorded = nowMs
+      recordDownload({
+        label: opts.label,
+        kind: opts.kind,
+        status: 'downloading',
+        percent: progress.percent,
+        downloadedBytes: received,
+        totalBytes,
+        iconUrl: opts.iconUrl
+      })
+    }
   }
 
   if (items.length === 0) {
@@ -187,11 +209,11 @@ export async function runDownloadBatch(
   try {
     await Promise.all(workers)
     logger.info(`[${opts.label}] downloaded ${items.length - skipped}/${items.length} file(s)`)
-    recordDownload({ label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: totalBytes, totalBytes })
+    recordDownload({ label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: totalBytes, totalBytes, iconUrl: opts.iconUrl })
     return { downloaded: items.length - skipped, skipped }
   } catch (err) {
     // Never leave the entry stuck in 'downloading' — mark it failed.
-    recordDownload({ label: opts.label, kind: opts.kind, status: 'failed', percent: 0, downloadedBytes: received, totalBytes })
+    recordDownload({ label: opts.label, kind: opts.kind, status: 'failed', percent: 0, downloadedBytes: received, totalBytes, iconUrl: opts.iconUrl })
     throw err
   } finally {
     // A cancelled batch must never keep its controller registered.

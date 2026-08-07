@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Sidebar } from './components/Sidebar'
+import { DownloadFlyover } from './components/DownloadFlyover'
 import { TitleBar } from './components/TitleBar'
 import { TopBar } from './components/TopBar'
 import { Toasts } from './components/ui'
@@ -190,6 +191,7 @@ function Shell() {
 
       {/* Overlays */}
       <ProgressOverlay />
+      <DownloadFlyover />
       {modals.login && <LoginModal />}
       {modals.profile && <ProfileModal mode={modals.profile.mode} profile={modals.profile.profile} />}
       {modals.duplicate && <DuplicateModal profile={modals.duplicate.profile} />}

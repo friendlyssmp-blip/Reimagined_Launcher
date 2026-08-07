@@ -486,6 +486,16 @@ export function ModsPage() {
   /* v1.0.23: untracked manual files for the ACTIVE sub-tab (all 4 content types). */
   const curType = typeForInst[instTab] ?? 'mod'
   const currentManual = manualFiles[curType] ?? []
+  /* v1.0.24 — the search bar also filters the Installed panel: items, manual
+     files and worlds, with the same live-typing behavior as Modrinth search. */
+  const installedQ = query.trim().toLowerCase()
+  const filteredInstItems = installedQ
+    ? instItems.filter((m) =>
+        `${m.title} ${m.filename} ${m.versionNumber ?? ''}`.toLowerCase().includes(installedQ)
+      )
+    : instItems
+  const filteredManual = installedQ ? currentManual.filter((f) => f.toLowerCase().includes(installedQ)) : currentManual
+  const filteredWorlds = installedQ ? worlds.filter((w) => w.name.toLowerCase().includes(installedQ)) : worlds
   /* Installed check matches by real project id OR slug — so the Fabric API
    * (stored under the 'fabric-api' slug on older profiles) shows as
    * "Installed" in Modrinth results and can never be double-installed. */
@@ -565,6 +575,9 @@ export function ModsPage() {
       if (cancelled) return
       // After identification, freshly-registered mods must appear immediately.
       setInstalled(await api.mods.list(activeProfile.id).catch(() => []))
+      // v1.0.24 — backfill missing Modrinth icons (fire-and-forget; emits
+      // mods:changed when resolved, which re-runs this effect with the icons).
+      api.mods.ensureIcons(activeProfile.id).catch(() => {})
       const type = typeForInst[instTab] ?? 'mod'
       api.mods
         .localFiles(activeProfile.id, type)
@@ -633,24 +646,10 @@ export function ModsPage() {
    *  version. Disable/Enable, Change Version and Remove are always available. */
   const renderInstalledRow = (m: ProfileMod) => (
     <div key={m.slug} className={'installed-row' + (m.disabled ? ' disabled' : '')}>
-      {m.iconUrl ? (
-        <ModIcon src={m.iconUrl} style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover', opacity: m.disabled ? 0.45 : 1 }} />
-      ) : (
-        <div style={{
-          width: 38,
-          height: 38,
-          borderRadius: 9,
-          background: 'var(--bg-4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--text-3)',
-          fontSize: 14,
-          fontWeight: 700
-        }}>
-          {m.title.charAt(0)}
-        </div>
-      )}
+      {/* v1.0.24 — ALWAYS show an icon: the real Modrinth icon when the item
+          has one, otherwise ModIcon falls back to the Reimagined logo (never
+          a bare letter placeholder). */}
+      <ModIcon src={m.iconUrl} style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover', opacity: m.disabled ? 0.45 : 1 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
@@ -1017,18 +1016,37 @@ export function ModsPage() {
             </span>
           </div>
 
+          {/* v1.0.24 — the same live search bar also filters what's installed
+              (items, manual files and worlds). Escape clears it. */}
+          <div className="mod-search">
+            <TextInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={
+                instTab === 'worlds'
+                  ? 'Search worlds…'
+                  : `Search ${INST_TABS.find((t) => t.id === instTab)?.label.toLowerCase() ?? 'installed items'}…`
+              }
+              onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            />
+          </div>
+
           {instTab === 'worlds' ? (
             worldsLoading ? (
               <div className="row" style={{ justifyContent: 'center', padding: '28px 0' }}><Spinner /></div>
-            ) : worlds.length === 0 ? (
+            ) : filteredWorlds.length === 0 ? (
               <EmptyState
                 icon={<IconArchive style={{ width: 38, height: 38 }} />}
-                title="No worlds yet"
-                sub="Worlds appear here after you play this instance once. Each world stays inside this profile — open the saves folder to manage the files."
+                title={installedQ ? 'No matches' : 'No worlds yet'}
+                sub={
+                  installedQ
+                    ? `Nothing matches “${query.trim()}” in this instance's saves.`
+                    : 'Worlds appear here after you play this instance once. Each world stays inside this profile — open the saves folder to manage the files.'
+                }
               />
             ) : (
               <div>
-                {worlds.map((w) => (
+                {filteredWorlds.map((w) => (
                   <div key={w.folder} className="installed-row">
                     <div style={{
                       width: 38,
@@ -1063,30 +1081,36 @@ export function ModsPage() {
                 ))}
               </div>
             )
-          ) : instItems.length === 0 && currentManual.length === 0 ? (
+          ) : filteredInstItems.length === 0 && filteredManual.length === 0 ? (
             <EmptyState
               icon={<IconPuzzle style={{ width: 40, height: 40 }} />}
-              title={`No ${INST_TABS.find((t) => t.id === instTab)?.label.toLowerCase() ?? 'items'} installed yet`}
-              sub={`Browse Modrinth to install ${instTab === 'mods' ? 'mods' : 'content'} into this profile, or drop files in via Open Folder.`}
+              title={installedQ ? 'No matches' : `No ${INST_TABS.find((t) => t.id === instTab)?.label.toLowerCase() ?? 'items'} installed yet`}
+              sub={
+                installedQ
+                  ? `Nothing in this profile matches “${query.trim()}”.`
+                  : `Browse Modrinth to install ${instTab === 'mods' ? 'mods' : 'content'} into this profile, or drop files in via Open Folder.`
+              }
               action={
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    // Part 7 — an explicit "Browse <type>" choice is as good as
-                    // a manual one: it wins and is never overridden again.
-                    contentTypeUserSet.current = true
-                    setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
-                    setTab('modrinth')
-                  }}
-                >
-                  Browse {INST_TABS.find((t) => t.id === instTab)?.label ?? 'Modrinth'}
-                </Button>
+                installedQ ? undefined : (
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      // Part 7 — an explicit "Browse <type>" choice is as good as
+                      // a manual one: it wins and is never overridden again.
+                      contentTypeUserSet.current = true
+                      setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
+                      setTab('modrinth')
+                    }}
+                  >
+                    Browse {INST_TABS.find((t) => t.id === instTab)?.label ?? 'Modrinth'}
+                  </Button>
+                )
               }
             />
           ) : (
             <div>
-              {instItems.map((m) => renderInstalledRow(m))}
-              {currentManual.map((f) => (
+              {filteredInstItems.map((m) => renderInstalledRow(m))}
+              {filteredManual.map((f) => (
                   <div key={f} className="installed-row">
                     <div style={{
                       width: 38,

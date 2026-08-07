@@ -88,6 +88,7 @@ const api = {
     localFiles: (profileId: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsLocalFiles, profileId, projectType ?? 'mod'),
     identifyManual: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsIdentifyManual, profileId),
+    ensureIcons: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsEnsureIcons, profileId),
     removeLocalFile: (profileId: string, filename: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsRemoveLocalFile, { profileId, filename, projectType: projectType ?? 'mod' }),
     searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string): Promise<unknown> =>

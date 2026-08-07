@@ -1,7 +1,5 @@
 {
-  "version": "1.0.23",
-  "notes": "v1.0.23 — (1) DETECCIÓN MANUAL PARA TODO: resource packs, shaders y data packs metidos a mano (zip o carpeta) ahora se detectan como los mods — lee pack.mcmeta / shaders.json, muestra el NOMBRE real del pack (no el del archivo) con su ícono, quedan marcados como Instalado en Modrinth (no re-descargables) y se pueden quitar desde Installed (Shift = sin confirmar). (2) FPS BOOST 1.0.5 — estabilizador adaptativo de carga de chunks: pool de chunk-build adaptativo (escala con ráfagas, nunca pierde tareas), ChunkStabilizer que detecta tormentas de chunks por frame-time real y suaviza el pool + partículas hasta que el frame time se estabiliza, profiler con P95/P99 y conteo de spikes, marcador EASE en el overlay, todo protegido por SafetyGate y compatible con Sodium. Los perfiles existentes se actualizan al 1.0.5 automáticamente.",
-  "installer": "dist/Reimagined-Setup-1.0.23.exe",
-  "checksum": "SHA256SUMS.txt",
-  "publishedAt": "2026-08-07T15:56:00.000Z"
+  "version": "1.0.24",
+  "notes": "v1.0.24 — (1) ICONOS EN INSTALLED: la pestaña Installed ahora siempre muestra el icono real del proyecto (backfill de Modrinth para items viejos) o el logo de Reimagined como fallback. (2) BUSQUEDA EN INSTALLED: puedes buscar entre tus mods, resource packs, datapacks, shaders y worlds instalados con la misma barra de busqueda, con filtrado en vivo. (3) ANIMACION FLY-TO-DOWNLOADS: al completarse una descarga real al 100%, el icono del item vuela desde el centro hacia el boton de Downloads de la barra lateral, como si entrara a la carpeta; solo con descargas de contenido (no con el pipeline de lanzamiento de MC) y throttled por item. (4) DOWNLOADS AL 100% A HISTORY: una descarga terminada ya siempre pasa a history (no active downloads se muestra bien) — el update terminal hace match con la entrada exacta label+kind para que la barra nunca se quede congelada en 100%.
+  "sha256": "fa3de3e6c0ef2d0a32f49647cf2621f61aab467637875cf82a3931327c510315"
 }
