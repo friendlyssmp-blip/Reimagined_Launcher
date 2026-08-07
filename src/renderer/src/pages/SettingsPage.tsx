@@ -772,6 +772,16 @@ function PerformanceSection() {
           </div>
         </div>
 
+        {/* v1.0.26 — recording/streaming guidance (borderless fullscreen is
+            applied automatically by the in-game FPS Boost for capture-hook
+            compatibility; hardware encoding is a user-side choice). */}
+        <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 12, lineHeight: 1.5, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <b>Recording / streaming:</b> the in-game FPS Boost uses borderless windowed fullscreen (not exclusive)
+          so capture tools like OBS Game Capture hook cleanly and grab frames via shared GPU textures — no extra FPS cost.
+          If you still lose FPS while recording, check that OBS is using <b>hardware encoding</b> (NVENC / AMF / QuickSync)
+          instead of software x264, which competes with the game for CPU. That is a setting on your capture tool, not the launcher.
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
           <div
             style={{

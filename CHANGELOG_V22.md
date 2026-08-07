@@ -432,3 +432,46 @@
 Verification: mod compiled against the 26.2 merged jar (all signatures
   javap-verified, incl. Window.handle() and instanceof ItemEntity), launcher
   typechecks 0/0, smoke 10/10.
+
+## v1.0.26 — Stop que SI mata el juego, mods manuales disable + match SHA1, explosiones TNT, compat OBS
+
+### Stop button now REALLY closes the game (escalating force-close)
+- Stop is an emergency exit: it first sends a graceful close request
+  (WM_CLOSE — the game saves the world and exits), waits up to 4s, then
+  force-kills the whole process tree (/T /F), verifies the PID is truly gone
+  and retries once if it is still alive. Works even on a frozen/crash-looping
+  game. Logs which path it took (graceful vs force) and the exit confirmation.
+- UI state clears the moment the process is confirmed closed (reattached
+  sessions are cleared immediately with no double playtime recording).
+
+### Manual mods: Disable now works + SHA1 hash identification against Modrinth
+- BUG FIX: manually-dropped mods could not be toggled off — the Disable
+  toggle was hidden for local-source items. It now shows for EVERY installed
+  mod and toggles the real file on disk (.disabled suffix), same as any other.
+- Manual mods are now identified by EXACT SHA1 hash against Modrinth
+  (GET /version_file/{hash}?algorithm=sha1, the same method real launchers
+  use): a match upgrades the entry to a fully tracked Modrinth item (real
+  name, icon, version, Update + Change Version support). No match keeps the
+  item as Manual with its real name from its own metadata — fully
+  removable/disableable either way. Every attempt is logged.
+- The scan processes files with a 4-way concurrency cap so a bulk folder
+  drop stays snappy.
+
+### TNT / explosion bursts (FPS Boost 1.0.7)
+- Particle burst cap: when more than 400 particles arrive in a 750ms window
+  (a multi-TNT chain), only 2/8 are kept until the burst settles — the exact
+  scenario that cratered FPS. Purely visual; explosion damage/drops/timing
+  are untouched (vanilla simulation).
+
+### OBS / recording compatibility (FPS Boost 1.0.7 + launcher)
+- The game now prefers BORDERLESS WINDOWED fullscreen (exclusive fullscreen
+  is disabled by default) so OBS Game Capture hooks the swap chain cleanly
+  instead of falling back to slow Display Capture. Toggle in the K menu.
+- Settings shows a recording/streaming tip: borderless is applied
+  automatically; if FPS still drops while recording, use hardware encoding
+  (NVENC/AMF/QuickSync) in OBS instead of software x264 (that is an OBS
+  setting, not the launcher).
+
+Verification: mod compiled against the 26.2 merged jar (exclusiveFullscreen
+  javap-verified), launcher typechecks 0/0, smoke 10/10, code review applied
+ (reattached flag, concurrency cap, half-upgrade protection).

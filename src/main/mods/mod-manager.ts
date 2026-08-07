@@ -641,10 +641,20 @@ class ModManager {
         profile.mods.filter((m) => (m.projectType ?? 'mod') === projectType).map((m) => m.filename)
       )
       const entries = await listDir(dir)
-      for (const filename of entries) {
-        if (tracked.has(filename)) continue
-        if (projectType === 'mod' && !filename.endsWith('.jar')) continue
-        try {
+      // v1.0.26 — process files with a small concurrency cap (SHA1 + Modrinth
+      // lookups are IO/network-bound; 4 in parallel keeps a bulk folder drop
+      // snappy without hammering the API). Per-file work is fully independent.
+      const pending = entries.filter((f) => {
+        if (tracked.has(f)) return false
+        if (projectType === 'mod' && !f.endsWith('.jar')) return false
+        return true
+      })
+      let pendingIdx = 0
+      const scanOne = async (): Promise<void> => {
+        while (pendingIdx < pending.length) {
+          const filename = pending[pendingIdx++]
+          if (!filename) continue
+          try {
           const p = path.join(dir, filename)
           const st = await fsp.stat(p).catch(() => null)
           if (!st) continue
@@ -660,14 +670,43 @@ class ModManager {
             meta = readPackMetadata(zipReadEntry(buf, 'pack.mcmeta'), zipReadEntry(buf, 'shaders/shaders.json'), filename)
           }
           let project: { id: string; slug: string; title: string; iconUrl?: string } | null = null
-          if (projectType === 'mod' && meta.id) {
+          let source: ProfileMod['source'] = 'local'
+          let versionId = ''
+          let versionNumber = meta.version || 'manual'
+          if (projectType === 'mod') {
+            // v1.0.26 — exact SHA1 hash match first: Modrinth's
+            // /version_file/{hash}?algorithm=sha1 endpoint returns the exact
+            // version that ships this file (same approach real launchers use
+            // to recognize manually-dropped mods). A match upgrades the entry
+            // to a full Modrinth-tracked one (name/icon/version/update support).
             try {
-              const pr = await modrinth.getProject(meta.id)
-              project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+              const { createHash } = await import('node:crypto')
+              const sha1 = createHash('sha1').update(await fsp.readFile(p)).digest('hex')
+              const hit = await modrinth.lookupVersionByHash(sha1)
+              if (hit) {
+                const pr = await modrinth.getProject(hit.projectId)
+                source = 'modrinth'
+                versionId = hit.version.id
+                versionNumber = hit.version.versionNumber
+                project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+                logger.info(
+                  `Manual mod "${filename}" matched to Modrinth project "${pr.slug}" (${pr.title}) by sha1 ${sha1.slice(0, 10)}… — now fully tracked.`
+                )
+              } else {
+                logger.info(`Manual mod "${filename}" has no Modrinth match by hash (sha1 ${sha1.slice(0, 10)}…) — keeping it as a manual item.`)
+              }
             } catch {
-              project = null
+              /* hash lookup is best-effort */
             }
-          } else if (projectType !== 'mod' && meta.name) {
+            if (!project && meta.id) {
+              try {
+                const pr = await modrinth.getProject(meta.id)
+                project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+              } catch {
+                project = null
+              }
+            }
+          } else if (meta.name) {
             project = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
           }
           const entry: ProfileMod = {
@@ -675,11 +714,11 @@ class ModManager {
             slug: project?.slug ?? meta.id ?? filename,
             title: project?.title ?? meta.name ?? prettifyLocalName(filename),
             filename,
-            versionId: '',
-            versionNumber: meta.version || 'manual',
+            versionId,
+            versionNumber,
             downloads: 0,
             iconUrl: project?.iconUrl,
-            source: 'local',
+            source,
             projectType,
             installedAt: iso(),
             updateAvailable: null
@@ -687,10 +726,12 @@ class ModManager {
           additions.push(entry)
           identified++
           if (project) matched++
-        } catch {
-          /* unreadable — leave it in the manual list */
+          } catch {
+            /* unreadable — leave it in the manual list */
+          }
         }
       }
+      await Promise.all(Array.from({ length: Math.min(4, pending.length) }, () => scanOne()))
     }
 
     if (additions.length > 0) {

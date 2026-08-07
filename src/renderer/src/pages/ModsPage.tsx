@@ -709,13 +709,14 @@ export function ModsPage() {
           <IconRefresh style={{ width: 13, height: 13 }} />
         </button>
       )}
-      {m.source !== 'local' && (
-        <Toggle
-          checked={!m.disabled}
-          onChange={(v) => void setEnabled(m, v)}
-          label=""
-        />
-      )}
+      {/* v1.0.26 — Disable/Enable works for EVERY installed mod: the backend
+          toggles the real file on disk (.disabled suffix), so a manually-
+          dropped mod toggles exactly like a launcher-installed one. */}
+      <Toggle
+        checked={!m.disabled}
+        onChange={(v) => void setEnabled(m, v)}
+        label=""
+      />
       {m.source !== 'local' && (
         <Button
           size="sm"

@@ -68,6 +68,9 @@ interface GameSession {
   logTailFile: string | null
   logTailOffset: number
   logTailTimer: ReturnType<typeof setInterval> | null
+  /** v1.0.26 — true for sessions reconnected after a launcher restart (no
+   * child 'close' event exists; state must be cleared manually on stop). */
+  reattached: boolean
 }
 
 class Launcher {
@@ -151,7 +154,8 @@ class Launcher {
       windowOpenedAt: 0,
       logTailFile: null,
       logTailOffset: 0,
-      logTailTimer: null
+      logTailTimer: null,
+      reattached: false
     }
     this.sessions.set(profileId, session)
 
@@ -668,6 +672,13 @@ class Launcher {
    * threads + subprocesses). Without a profileId, stops EVERY running
    * instance (used on app shutdown / clean release reset).
    */
+  /**
+   * Stop a game — an EMERGENCY EXIT that must close the process no matter
+   * what (v1.0.26): graceful close request first (lets the game save the
+   * world), then escalating OS-level force-kill with real exit verification
+   * and a retry. Works even if the game is frozen, and regardless of any
+   * other launcher state (update in progress, etc.).
+   */
   async stop(profileId?: string): Promise<void> {
     const targets: GameSession[] = profileId
       ? this.sessions.has(profileId)
@@ -689,19 +700,65 @@ class Launcher {
           /* best-effort */
         }
       }
-      logger.info(`Stopping game process for "${profile?.name ?? profileId ?? '?'}"`)
+      const pid = child.pid ?? 0
+      if (pid <= 0) continue
+      logger.info(`Stopping game process for "${profile?.name ?? profileId ?? '?'}" (pid ${pid})`)
       this.emitLog('system', 'Stopping game…')
+
+      // 1) GRACEFUL FIRST — a clean close request (WM_CLOSE on Windows; the
+      // game saves the world and exits on its own). Short window only.
+      let path: 'graceful' | 'force' | 'force-retry' = 'graceful'
       if (process.platform === 'win32') {
-        await new Promise<void>((resolve) => {
-          const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
-          killer.on('close', () => resolve())
-          killer.on('error', () => {
-            child.kill('SIGTERM')
-            resolve()
-          })
-        })
+        await taskkillPid(pid, false)
       } else {
-        child.kill('SIGTERM')
+        try {
+          child.kill('SIGTERM')
+        } catch {
+          /* process may already be gone */
+        }
+      }
+      if (!(await waitForPidExit(pid, 4000))) {
+        // 2) FORCE — OS-level kill of the whole process tree.
+        path = 'force'
+        this.emitLog('system', 'Game did not close on its own — force-stopping…')
+        if (process.platform === 'win32') {
+          await taskkillPid(pid, true)
+        } else {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!(await waitForPidExit(pid, 3000))) {
+          // 3) RETRY the force-kill once — the game may be mid-crash-loop.
+          path = 'force-retry'
+          if (process.platform === 'win32') {
+            await taskkillPid(pid, true)
+          } else {
+            try {
+              child.kill('SIGKILL')
+            } catch {
+              /* ignore */
+            }
+          }
+          await waitForPidExit(pid, 2000)
+        }
+      }
+      const gone = !pidAlive(pid)
+      logger.info(`Stop for "${profile?.name ?? profileId ?? '?'}": ${path} path, pid ${pid} ${gone ? 'confirmed exited' : 'STILL ALIVE'}`)
+
+      // 4) VERIFY + CLEAR UI STATE IMMEDIATELY. Spawned sessions get their
+      // 'close' event -> onExit which clears everything; reattached sessions
+      // (survived a launcher restart) have no 'close' event, so clear their
+      // state right now instead of waiting up to 3 s for the watch poll.
+      if (gone && session.reattached && this.sessions.get(session.profile.id) === session) {
+        this.stopWindowWatch(session)
+        this.sessions.delete(session.profile.id)
+        eventBus.emit('launch:status', { profileId: session.profile.id, running: false })
+        const duration = Math.max(0, (Date.now() - session.startedAt) / 1000)
+        eventBus.emit('launch:exit', { code: null, signal: null, duration, profileId: session.profile.id })
+        void profileManager.recordLaunch(session.profile.id, duration, false).catch(() => {})
       }
     }
   }
@@ -732,7 +789,8 @@ class Launcher {
       windowOpenedAt: 0,
       logTailFile: null,
       logTailOffset: 0,
-      logTailTimer: null
+      logTailTimer: null,
+      reattached: true
     }
     this.sessions.set(profileId, session)
     logger.info(`Reconnected to running Minecraft for "${profile.name}" (pid ${pid}) after a launcher restart`)
@@ -816,6 +874,29 @@ export function pidAlive(pid: number): boolean {
   } catch (err) {
     return (err as NodeJS.ErrnoException).code !== 'ESRCH'
   }
+}
+
+/**
+ * v1.0.26 — run taskkill for one PID. `force` false = graceful close request
+ * (WM_CLOSE), `force` true = /T /F kill of the whole process tree.
+ */
+function taskkillPid(pid: number, force: boolean): Promise<void> {
+  const args = ['/pid', String(pid), ...(force ? ['/T', '/F'] : [])]
+  return new Promise<void>((resolve) => {
+    const killer = spawn('taskkill', args, { windowsHide: true })
+    killer.on('close', () => resolve())
+    killer.on('error', () => resolve())
+  })
+}
+
+/** Poll pidAlive until the process is gone or the timeout elapses. */
+async function waitForPidExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!pidAlive(pid)) return true
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  return !pidAlive(pid)
 }
 
 export const launcher = new Launcher()

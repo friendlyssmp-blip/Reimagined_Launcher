@@ -409,6 +409,8 @@ export interface ModrinthVersion {
   loaders: string[]
   files: ModrinthFile[]
   datePublished: string
+  /** Populated by the /version_file/{hash} lookup (v1.0.26). */
+  projectId?: string
 }
 
 

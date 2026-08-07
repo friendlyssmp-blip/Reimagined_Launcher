@@ -109,6 +109,29 @@ export async function getProject(projectId: string): Promise<ProjectResponse> {
   return getJson<ProjectResponse>(`${API}/project/${projectId}`, { headers: headers(), timeoutMs: 15_000 })
 }
 
+/**
+ * v1.0.26 — identify an unknown local file by its exact SHA1 hash.
+ *
+ * Modrinth's /version_file/{hash}?algorithm=sha1 endpoint returns the exact
+ * version that ships that file — the same approach real launchers use to
+ * recognize manually-dropped mods. Returns null when no version carries that
+ * hash (404 or any failure): a private/uncommon mod is simply not on Modrinth.
+ */
+export async function lookupVersionByHash(sha1: string): Promise<{ projectId: string; version: ModrinthVersion } | null> {
+  if (!/^[0-9a-f]{40}$/i.test(sha1)) return null
+  try {
+    const version = await getJson<ModrinthVersion & { project_id?: string }>(
+      `${API}/version_file/${encodeURIComponent(sha1)}?algorithm=sha1`,
+      { headers: headers(), timeoutMs: 15_000 }
+    )
+    const projectId = version.project_id
+    if (!projectId) return null
+    return { projectId, version }
+  } catch {
+    return null
+  }
+}
+
 interface TagResponse {
   name: string
   header: string
@@ -262,4 +285,4 @@ export async function listVersions(projectId: string, _projectType: ProjectType 
   }))
 }
 
-export const modrinth = { searchMods, getProject, getCategories, latestVersionFor, getProjectFull, listVersions }
+export const modrinth = { searchMods, getProject, getCategories, latestVersionFor, getProjectFull, listVersions, lookupVersionByHash }
