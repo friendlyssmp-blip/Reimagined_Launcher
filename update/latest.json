@@ -1,5 +1,5 @@
 {
-  "version": "1.0.10",
-  "notes": "Polish + cleanup pass: every OS emoji in the UI was replaced with custom Reimagined vector icons (profile presets, performance tiers, sound packs, worlds, share, console); profile icons are now custom SVGs with automatic mapping for old emoji choices; tab bars have a sliding active indicator; toggle switches got a springy settle; percentages and the RAM slider count smoothly; context menus open scale+fade anchored at the click point; pages fade-rise on navigation; long lists (mods, downloads, logs, installed) now skip rendering offscreen rows; mod icons go through a bounded evicting cache; removed 8 unused icons and dead code. No functionality changed.",
-  "installer": "dist/Reimagined-Setup-1.0.10.exe"
+  "version": "1.0.11",
+  "notes": "v1.0.11: Game console timers (chronometer + Minecraft opened time), install confirmation with real dependency tree (Install Only / with Dependencies, Shift-click bypass), cancellable downloads with cleanup, specific download labels, fixed stuck-at-100% animation, fixed false Launching state on Home, fixed FPS Boost enchantment glint bug, fixed Update Available comparison, profile card cleanup (RAM/Resolution removed, Playtime kept, red Stop button)",
+  "installer": "dist/Reimagined-Setup-1.0.11.exe"
 }
