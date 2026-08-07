@@ -322,15 +322,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'launch:status': {
           const p = e.payload as { running: boolean; error?: string; pid?: number; code?: number | null }
           if (!p.running) {
+            // The launch flow is over — whether the game exited, was stopped,
+            // or the launch FAILED. Always go idle and clear the progress so
+            // the download panel can never stay stuck at 100% forever.
             setLaunch((prev) => ({
               ...prev,
-              phase: prev.phase === 'running' || prev.phase === 'launching' ? 'idle' : prev.phase,
+              phase: 'idle',
               running: false,
+              percent: null,
               pid: undefined
             }))
             if (p.error) notify('error', 'Launch failed', p.error)
           } else {
-            setLaunch((prev) => ({ ...prev, phase: 'running', pid: p.pid }))
+            setLaunch((prev) => ({ ...prev, phase: 'running', percent: null, pid: p.pid }))
           }
           break
         }

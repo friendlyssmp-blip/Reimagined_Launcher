@@ -1,5 +1,5 @@
 {
-  "version": "1.0.8",
-  "notes": "Settings → Updates cleanup: the 'Check for updates automatically' toggle is gone — update checking is now always on with no way to disable it, and the 'Auto-install updates on start' toggle no longer overlaps its description text.",
-  "installer": "dist/Reimagined-Setup-1.0.8.exe"
+  "version": "1.0.9",
+  "notes": "Phantom downloads fixed: progress now matches the real bytes downloaded (the % no longer jumps to 100 mid-download), downloads that finish are removed from the active queue instantly, failed launches no longer leave the instance stuck in 'preparing', and the active download panel no longer keeps animating at 100% while the game runs.",
+  "installer": "dist/Reimagined-Setup-1.0.9.exe"
 }

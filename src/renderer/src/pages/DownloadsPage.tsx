@@ -73,7 +73,10 @@ export function DownloadsPage() {
     return () => clearInterval(t)
   }, [refresh])
 
-  const active = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching' || launch.phase === 'running'
+  /* The "active downloads" panel reflects REAL downloads only — once the
+   * game is running (phase 'running') there is nothing downloading, so the
+   * bar and spinner must disappear instead of sitting frozen at 100%. */
+  const active = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
     ? { label: launch.message || 'Working…', percent: launch.percent ?? 0 }
     : null
 

@@ -120,10 +120,12 @@ export async function runDownloadBatch(
         inflight.add(ctrl)
         try {
           let lastReported = 0
+          let fileReported = 0
           await downloadFile(item.url, item.dest, (p: DownloadProgress) => {
             // p.received is cumulative for this file — add only the delta.
             received += p.received - lastReported
             lastReported = p.received
+            fileReported = p.received
             emit()
           }, 120_000, ctrl.signal)
           if (item.expectedSha1) {
@@ -132,7 +134,12 @@ export async function runDownloadBatch(
               throw new Error('Downloaded file failed its sha1 verification')
             }
           }
-          received += item.expectedSize ?? 0
+          // Progress callbacks already counted every byte of this file, so
+          // NEVER re-add its size here (that double-counted bytes and pushed
+          // the bar to 100% at ~halfway — the "phantom download"). Only top
+          // up the known size when the server sent no content-length and the
+          // callback never fired for this file.
+          received += Math.max(0, (item.expectedSize ?? 0) - fileReported)
           break
         } catch (err) {
           // Clean up the partial/corrupt file before retrying.
