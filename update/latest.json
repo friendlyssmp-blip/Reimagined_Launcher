@@ -1,5 +1,5 @@
 {
-  "version": "1.0.9",
-  "notes": "Phantom downloads fixed: progress now matches the real bytes downloaded (the % no longer jumps to 100 mid-download), downloads that finish are removed from the active queue instantly, failed launches no longer leave the instance stuck in 'preparing', and the active download panel no longer keeps animating at 100% while the game runs.",
-  "installer": "dist/Reimagined-Setup-1.0.9.exe"
+  "version": "1.0.10",
+  "notes": "Polish + cleanup pass: every OS emoji in the UI was replaced with custom Reimagined vector icons (profile presets, performance tiers, sound packs, worlds, share, console); profile icons are now custom SVGs with automatic mapping for old emoji choices; tab bars have a sliding active indicator; toggle switches got a springy settle; percentages and the RAM slider count smoothly; context menus open scale+fade anchored at the click point; pages fade-rise on navigation; long lists (mods, downloads, logs, installed) now skip rendering offscreen rows; mod icons go through a bounded evicting cache; removed 8 unused icons and dead code. No functionality changed.",
+  "installer": "dist/Reimagined-Setup-1.0.10.exe"
 }

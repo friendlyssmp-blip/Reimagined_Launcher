@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
-import { Button, EmptyState, Spinner } from '../components/ui'
+import { Button, EmptyState, Spinner, AnimatedNumber } from '../components/ui'
 import { api } from '../lib/api'
 import { IconDownload, IconCheck, IconX, IconRefresh } from '../components/icons'
 
@@ -107,7 +107,7 @@ export function DownloadsPage() {
           <>
             <div className="progress"><span style={{ width: `${Math.max(3, active.percent)}%` }} /></div>
             <div className="dl-meta">
-              <span>Progress {active.percent.toFixed(0)}%</span>
+              <span>Progress <AnimatedNumber value={active.percent} format={(v) => `${Math.round(v)}%`} /></span>
             </div>
           </>
         )}

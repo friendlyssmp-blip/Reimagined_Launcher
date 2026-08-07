@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, Button, Field, Spinner } from './ui'
 import { api, friendlyError } from '../lib/api'
-import { IconDownload, IconGlobe } from './icons'
+import { IconDownload, IconGlobe, IconHourglass, IconCheck } from './icons'
 import type { Profile, ShareSnapshot } from '@shared/types'
 
 const TYPE_LABELS: Record<string, string> = {
@@ -176,8 +176,9 @@ export function ShareModal({ profile }: { profile: Profile }) {
                   <code className="share-code">{code}</code>
                   <Button onClick={copy}>Copy Code</Button>
                 </div>
-                <p style={{ color: 'var(--warning)', fontSize: 12, marginTop: 6 }}>
-                  ⏳ Expires {expiresAt ? expiryLabel(expiresAt) : 'in 7 days'}
+                <p style={{ color: 'var(--warning)', fontSize: 12, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconHourglass style={{ width: 13, height: 13, flex: '0 0 auto' }} />
+                  Expires {expiresAt ? expiryLabel(expiresAt) : 'in 7 days'}
                 </p>
                 <p style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>
                   This code is a fixed snapshot — editing “{profile.name}” later won't change what it resolves to.
@@ -189,8 +190,9 @@ export function ShareModal({ profile }: { profile: Profile }) {
             )}
 
             {exportPath && (
-              <p style={{ color: 'var(--success)', fontSize: 12.5 }}>
-                ✓ Saved to <span style={{ fontFamily: 'var(--mono)' }}>{exportPath}</span>
+              <p style={{ color: 'var(--success)', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconCheck style={{ width: 13, height: 13, flex: '0 0 auto' }} />
+                Saved to <span style={{ fontFamily: 'var(--mono)' }}>{exportPath}</span>
               </p>
             )}
           </>

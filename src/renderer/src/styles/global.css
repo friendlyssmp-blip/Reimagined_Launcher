@@ -185,6 +185,10 @@ textarea {
   60% { transform: scale(1.02); }
   100% { opacity: 1; transform: scale(1); }
 }
+@keyframes menuIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -243,6 +247,14 @@ textarea {
     radial-gradient(700px 300px at -8% 110%, rgba(139, 92, 246, 0.07), transparent 60%),
     var(--bg-1);
   animation: fadeIn var(--dur) ease;
+}
+
+/* Page-level entrance — App wraps each section in .page-enter (remounted per
+   page via the keyed ErrorBoundary), replaying a subtle fade + rise instead
+   of a hard cut. Height 100% so inner pages that use height:100% still fill. */
+.page-enter {
+  height: 100%;
+  animation: pageIn 0.24s var(--ease);
 }
 
 /* --------------------------------- titlebar --------------------------------- */
@@ -903,6 +915,7 @@ select.select option {
 /* ----------------------------------- tabs ----------------------------------- */
 
 .tabs {
+  position: relative;
   display: flex;
   gap: 2px;
   border-bottom: 1px solid var(--border);
@@ -927,16 +940,16 @@ select.select option {
   color: var(--accent-3);
   font-weight: 600;
 }
-.tab.active::after {
-  content: '';
+/* Sliding active-tab underline — positioned by TabBar, glides between tabs. */
+.tab-indicator {
   position: absolute;
-  left: 12px;
-  right: 12px;
   bottom: -1px;
   height: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent-glow);
+  pointer-events: none;
+  transition: left var(--dur) var(--ease), width var(--dur) var(--ease);
 }
 
 /* -------------------------------- segmented -------------------------------- */
@@ -1286,7 +1299,9 @@ select.select option {
   border: 1px solid var(--border-strong);
   border-radius: 11px;
   box-shadow: var(--shadow-2);
-  animation: popIn 0.14s var(--ease);
+  /* Anchored scale+fade — ProfilesPage sets --origin to the click point. */
+  transform-origin: var(--origin, top left);
+  animation: menuIn 0.13s var(--ease);
 }
 .ctx-menu button {
   display: flex;
@@ -1326,6 +1341,7 @@ select.select option {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
+  transform-origin: top right;
 }
 
 /* ---------------------------------- banner ---------------------------------- */
@@ -2021,6 +2037,27 @@ select.select option {
   opacity: 0.55;
 }
 
+/* ---------------------- list virtualization (memory) ---------------------- */
+/* Long lists (mod browsing, download history, installed items, log viewer)
+ * skip rendering for offscreen rows — a real memory/CPU win, zero JS, with
+ * per-row size hints so scrolling never jumps. */
+.mod-row,
+.dl-row,
+.log-line,
+.installed-row {
+  content-visibility: auto;
+}
+.mod-row {
+  contain-intrinsic-size: auto 84px;
+}
+.dl-row,
+.installed-row {
+  contain-intrinsic-size: auto 64px;
+}
+.log-line {
+  contain-intrinsic-size: auto 18px;
+}
+
 /* ------------------------------ project detail ------------------------------ */
 
 .detail-page {
@@ -2585,7 +2622,8 @@ select.select option {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  transition: transform 0.18s var(--ease);
+  /* Slight overshoot spring — a satisfying "settle" instead of a flat slide. */
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 /* Checked state — matches both the `on` class set by the component and the
    native `:checked` pseudo-class (belt and suspenders). */

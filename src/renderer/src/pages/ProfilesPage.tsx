@@ -201,7 +201,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
       {ctxMenu && (
         <div
           className="ctx-menu"
-          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          style={{ left: ctxMenu.x, top: ctxMenu.y, transformOrigin: '0 0' }}
           // Keep mousedown inside the menu from reaching the window-level
           // "close on outside click" listener (which would unmount the menu
           // before the button's click event can fire — the buttons' onClick

@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../state/AppContext'
-import { Modal, Button, Field, TextInput, Select, Slider } from './ui'
+import { Modal, Button, Field, TextInput, Select, Slider, ProfileGlyph } from './ui'
+import { PROFILE_ICONS } from './icons'
 import { api, friendlyError } from '../lib/api'
 import type { Profile, LoaderType } from '@shared/types'
-
-const ICON_CHOICES = ['⛏️', '🏰', '⚔️', '🐉', '🌲', '⛺', '🔮', '⚡', '🎮', '🗺️', '🌟', '🛡️']
 
 export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profile?: Profile }) {
   const { setModals, runGuarded, settings, notify, account } = useApp()
@@ -223,7 +222,7 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
               {iconPreview ? (
                 <img src={iconPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : icon ? (
-                <span>{icon}</span>
+                <ProfileGlyph icon={icon} name={name} />
               ) : (
                 <span style={{ color: 'var(--text-3)' }}>?</span>
               )}
@@ -245,9 +244,23 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
             </div>
           </div>
           <div className="segmented" style={{ flexWrap: 'wrap', gap: 4, padding: 6 }}>
-            <button className={icon === '' ? 'active' : ''} onClick={() => setIcon('')}>None</button>
-            {ICON_CHOICES.map((c) => (
-              <button key={c} className={icon === c ? 'active' : ''} onClick={() => setIcon(c)} style={{ fontSize: 15 }}>{c}</button>
+            <button
+              className={icon === '' ? 'active' : ''}
+              onClick={() => setIcon('')}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '6px 10px' }}
+            >
+              None
+            </button>
+            {PROFILE_ICONS.map(({ id, Icon }) => (
+              <button
+                key={id}
+                className={icon === id ? 'active' : ''}
+                onClick={() => setIcon(id)}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '6px 9px' }}
+                title={id}
+              >
+                <Icon style={{ width: 16, height: 16 }} />
+              </button>
             ))}
           </div>
         </Field>

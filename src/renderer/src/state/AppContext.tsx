@@ -78,7 +78,6 @@ interface AppContextValue {
   toasts: Toast[]
   modals: ModalState
   profileOp: ProfileOp | null
-  setPage: (p: string) => void
   refreshProfiles: () => Promise<void>
   setActiveProfile: (id: string | null) => void
   updateSettings: (patch: Partial<LauncherSettings>) => Promise<void>
@@ -433,7 +432,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toasts,
     modals,
     profileOp,
-    setPage: () => {},
     refreshProfiles,
     setActiveProfile: (id) => {
       setActiveProfileId(id)

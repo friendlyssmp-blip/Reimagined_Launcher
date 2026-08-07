@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { Button, Badge, Spinner, EmptyState, Toggle } from './ui'
+import { Button, Badge, Spinner, EmptyState, Toggle, TabBar } from './ui'
+import { ModIcon } from './ModIcon'
 import { api, friendlyError } from '../lib/api'
 import {
   IconDownload,
   IconExternal,
   IconChevronLeft,
   IconChevronRight,
-  IconHeart,
   IconClock,
   IconFolder,
   IconX,
@@ -365,7 +365,7 @@ export function ProjectDetail({
       {/* Header: big icon, title/author, tagline, stat pills, actions */}
       <div className="detail-head">
         <div className="mod-icon detail-icon" style={{ width: 96, height: 96, borderRadius: 22 }}>
-          {detail.iconUrl ? <img src={detail.iconUrl} alt="" /> : <IconPuzzle style={{ width: 34, height: 34 }} />}
+          {detail.iconUrl ? <ModIcon src={detail.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <IconPuzzle style={{ width: 34, height: 34 }} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 26, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -467,16 +467,16 @@ export function ProjectDetail({
       )}
 
       {/* Tabs */}
-      <div className="tabs">
-        <button className={'tab' + (tab === 'overview' ? ' active' : '')} onClick={() => setTab('overview')}>Overview</button>
-        {showChangelogTab && (
-          <button className={'tab' + (tab === 'changelog' ? ' active' : '')} onClick={() => setTab('changelog')}>Changelog</button>
-        )}
-        <button className={'tab' + (tab === 'gallery' ? ' active' : '')} onClick={() => setTab('gallery')}>Gallery</button>
-        <button className={'tab' + (tab === 'versions' ? ' active' : '')} onClick={() => setTab('versions')}>
-          Versions ({versions.length})
-        </button>
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'overview', label: 'Overview' },
+          ...(showChangelogTab ? [{ id: 'changelog', label: 'Changelog' }] : []),
+          { id: 'gallery', label: 'Gallery' },
+          { id: 'versions', label: `Versions (${versions.length})` }
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
 
       <div key={tab} className="tab-fade">
         {tab === 'overview' && detail.description && (

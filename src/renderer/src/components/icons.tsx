@@ -1,5 +1,5 @@
 /** Lightweight inline SVG icon set (stroke style, 24×24 viewBox). */
-import type { SVGProps } from 'react'
+import type { SVGProps, CSSProperties } from 'react'
 
 type P = SVGProps<SVGSVGElement>
 
@@ -55,12 +55,6 @@ export const IconPlay = (p: P) => (
 export const IconStop = (p: P) => (
   <svg {...base(p)}>
     <rect x="5" y="5" width="14" height="14" rx="2" />
-  </svg>
-)
-
-export const IconPlus = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M12 5v14M5 12h14" />
   </svg>
 )
 
@@ -134,18 +128,6 @@ export const IconX = (p: P) => (
   </svg>
 )
 
-export const IconMinus = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M5 12h14" />
-  </svg>
-)
-
-export const IconSquare = (p: P) => (
-  <svg {...base(p)}>
-    <rect x="5" y="5" width="14" height="14" rx="2" />
-  </svg>
-)
-
 export const IconChevronDown = (p: P) => (
   <svg {...base(p)}>
     <path d="m6 9 6 6 6-6" />
@@ -159,13 +141,6 @@ export const IconGamepad = (p: P) => (
   </svg>
 )
 
-export const IconWarn = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-    <path d="M12 9v4M12 17h.01" />
-  </svg>
-)
-
 export const IconShield = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -175,13 +150,6 @@ export const IconShield = (p: P) => (
 export const IconSparkle = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
-  </svg>
-)
-
-export const IconLayers = (p: P) => (
-  <svg {...base(p)}>
-    <path d="m12 2 9 5-9 5-9-5 9-5Z" />
-    <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
   </svg>
 )
 
@@ -246,31 +214,6 @@ export const IconArchive = (p: P) => (
   </svg>
 )
 
-export const IconPause = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M10 4H6v16h4zM18 4h-4v16h4z" />
-  </svg>
-)
-
-export const IconShuffle = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
-  </svg>
-)
-
-export const IconEye = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-)
-
-export const IconHeart = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
-  </svg>
-)
-
 export const IconGauge = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 15l3.5-3.5M20.3 18a10 10 0 1 0-16.6 0" />
@@ -306,3 +249,167 @@ export const IconPencil = (p: P) => (
     <path d="m15 5 4 4" />
   </svg>
 )
+
+/* ---------------------- profile preset icons (Part 1) ---------------------- */
+
+export const IconPickaxe = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 15a8 8 0 0 1 8-8" />
+    <path d="m12 7 3-3 5 5-3 3-5-5Z" />
+    <path d="M17.5 10.5V21" />
+  </svg>
+)
+
+export const IconCastle = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 21V9l4 4V6l4 4 4-4v7l4-4v12" />
+    <path d="M2 21h20" />
+    <path d="M10 21v-5h4v5" />
+  </svg>
+)
+
+export const IconSword = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m4 20 8-8" />
+    <path d="m20 4-8 8" />
+    <path d="m8.5 8.5 3-3M15.5 15.5l-3 3" />
+    <path d="m4 20-2.5 2.5M20 4l2.5-2.5" />
+  </svg>
+)
+
+export const IconDragon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3c4 1.5 6 5 5.5 9-.3 2.5-2.2 4.6-4.5 5.5L14.6 21h-5.2l-1.4-3.5C5.7 16.6 4 14.5 3.7 12c-.5-4 1.5-7.5 5.5-9l1.3 3.2L12 3Z" />
+    <circle cx="8.8" cy="11.5" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+export const IconTree = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3 6.5 10h3L5 17h14l-4.5-7h3L12 3Z" />
+    <path d="M12 17v4" />
+  </svg>
+)
+
+export const IconTent = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m2 20 10-16 10 16" />
+    <path d="M4 20 12 8l8 12" />
+    <path d="M2 20h20" />
+    <path d="m9.5 14 2.5 3 2.5-3" />
+  </svg>
+)
+
+export const IconCrystal = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3 7 9l5 12 5-12-5-6Z" />
+    <path d="M12 3v18" />
+  </svg>
+)
+
+export const IconBolt = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+  </svg>
+)
+
+export const IconMap = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
+    <path d="M9 3v15M15 6v15" />
+  </svg>
+)
+
+export const IconRocket = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 2c3 1.5 5 4.5 5 8l-1 5-4 3-4-3-1-5c0-3.5 2-6.5 5-8Z" />
+    <circle cx="12" cy="10" r="2" />
+    <path d="M8 17l-3 4M12 18v4M16 17l3 4" />
+  </svg>
+)
+
+export const IconLeaf = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 20C4 10 10 4 20 4c0 10-6 16-16 16Z" />
+    <path d="M4 20c4-6 8-10 12-12" />
+  </svg>
+)
+
+export const IconMoon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" />
+    <path d="M17 3.5v4M15 5.5h4" />
+  </svg>
+)
+
+export const IconPotato = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M5 8.5c7-4 13 2 12.5 8.5C16.9 21.6 11.5 22 8.5 18.5 6.5 16.2 4 12.5 5 8.5Z" />
+    <circle cx="9" cy="12.5" r="1" fill="currentColor" stroke="none" />
+    <circle cx="13.5" cy="15.5" r="1" fill="currentColor" stroke="none" />
+    <path d="M9.5 7.5c-.4-1.5.4-2.8 1.8-3.4" />
+  </svg>
+)
+
+export const IconHourglass = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 3h12M6 21h12" />
+    <path d="M7 3v3.5L12 12l-5 5.5V21M17 3v3.5L12 12l5 5.5V21" />
+  </svg>
+)
+
+/* ------------------- profile preset icon registry ------------------- */
+
+/** Preset profile icons shown in the create/edit picker (replaces the old
+ *  emoji choices — these render identically on every OS/font config). */
+export const PROFILE_ICONS = [
+  { id: 'pickaxe', Icon: IconPickaxe },
+  { id: 'castle', Icon: IconCastle },
+  { id: 'sword', Icon: IconSword },
+  { id: 'dragon', Icon: IconDragon },
+  { id: 'tree', Icon: IconTree },
+  { id: 'tent', Icon: IconTent },
+  { id: 'crystal', Icon: IconCrystal },
+  { id: 'bolt', Icon: IconBolt },
+  { id: 'gamepad', Icon: IconGamepad },
+  { id: 'map', Icon: IconMap },
+  { id: 'star', Icon: IconStar },
+  { id: 'shield', Icon: IconShield }
+] as const
+
+export type ProfileIconId = (typeof PROFILE_ICONS)[number]['id']
+
+/** Maps the legacy emoji icons (stored by older launcher versions) to the new
+ *  custom icon ids so existing profiles keep their visual identity without
+ *  any reliance on the OS emoji font. */
+const LEGACY_EMOJI: Record<string, string> = {
+  '⛏️': 'pickaxe', '⛏': 'pickaxe',
+  '🏰': 'castle',
+  '⚔️': 'sword', '⚔': 'sword',
+  '🐉': 'dragon',
+  '🌲': 'tree',
+  '⛺': 'tent',
+  '🔮': 'crystal',
+  '⚡': 'bolt',
+  '🎮': 'gamepad',
+  '🗺️': 'map', '🗺': 'map',
+  '🌟': 'star',
+  '🛡️': 'shield', '🛡': 'shield'
+}
+
+/** Resolves any stored profile icon value to a preset icon id, or null when
+ *  it is a photo (data URL) / unknown — callers fall back to a letter then. */
+export function profileIconId(icon?: string | null): ProfileIconId | null {
+  if (!icon || icon.startsWith('data:')) return null
+  if (LEGACY_EMOJI[icon]) return LEGACY_EMOJI[icon] as ProfileIconId
+  return PROFILE_ICONS.some((p) => p.id === icon) ? (icon as ProfileIconId) : null
+}
+
+/** Renders one of the preset profile icons by id (used by the picker, the
+ *  profile cards and ProfileGlyph). */
+export function ProfileIcon({ id, size = 20, style }: { id: string; size?: number; style?: CSSProperties }) {
+  const entry = PROFILE_ICONS.find((p) => p.id === id)
+  if (!entry) return null
+  const I = entry.Icon
+  return <I style={{ width: size, height: size, ...style }} />
+}

@@ -1,9 +1,10 @@
 import { useState, useCallback, Fragment, useEffect, useRef } from 'react'
 import { useApp } from '../state/AppContext'
-import { Button, TextInput, Spinner, EmptyState, Badge, Toggle } from '../components/ui'
+import { Button, TextInput, Spinner, EmptyState, Badge, Toggle, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
-import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive } from '../components/icons'
+import { ModIcon } from '../components/ModIcon'
+import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
 
 type SourceTab = 'installed' | 'modrinth'
@@ -414,7 +415,7 @@ export function ModsPage() {
   const renderRow = (r: ProviderResult) => (
     <div key={r.projectId} className="mod-row card" onClick={() => openDetail(r)} role="button" tabIndex={0}>
       <div className="mod-icon">
-        {r.iconUrl ? <img src={r.iconUrl} alt="" /> : <IconPuzzle style={{ width: 20, height: 20 }} />}
+        {r.iconUrl ? <ModIcon src={r.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <IconPuzzle style={{ width: 20, height: 20 }} />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -457,7 +458,7 @@ export function ModsPage() {
   const renderInstalledRow = (m: ProfileMod) => (
     <div key={m.slug} className={'installed-row' + (m.disabled ? ' disabled' : '')}>
       {m.iconUrl ? (
-        <img src={m.iconUrl} style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover', opacity: m.disabled ? 0.45 : 1 }} alt="" />
+        <ModIcon src={m.iconUrl} style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover', opacity: m.disabled ? 0.45 : 1 }} />
       ) : (
         <div style={{
           width: 38,
@@ -715,14 +716,14 @@ export function ModsPage() {
       </div>
 
       {/* Tabs — Modrinth only (CurseForge removed from this launcher). */}
-      <div className="tabs">
-        <button className={'tab' + (tab === 'installed' ? ' active' : '')} onClick={() => setTab('installed')}>
-          Installed ({installed.length + manualFiles.length})
-        </button>
-        <button className={'tab' + (tab === 'modrinth' ? ' active' : '')} onClick={() => setTab('modrinth')}>
-          Modrinth
-        </button>
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'installed', label: `Installed (${installed.length + manualFiles.length})` },
+          { id: 'modrinth', label: 'Modrinth' }
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
 
       {/* Part 3 — Vanilla profiles can't run mods, but packs work fine. */}
       {tab === 'installed' && noModsLoader && contentType === 'mod' && (
@@ -791,9 +792,10 @@ export function ModsPage() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 16,
                       flexShrink: 0
-                    }} title="World">🌍</div>
+                    }} title="World">
+                      <IconGlobe style={{ width: 18, height: 18 }} />
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{w.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-3)' }}>

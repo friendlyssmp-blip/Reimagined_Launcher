@@ -146,17 +146,22 @@ function Shell() {
       <div className="main">
         <TitleBar />
         <TopBar onNavigate={setPage} scale={scale} setScale={setScale} />
+        {/* The scroll surface is NOT keyed (scroll position survives nav); the
+           keyed ErrorBoundary remounts the page subtree, so .page-enter inside
+           replays the page-level entrance animation on every section switch. */}
         <main className="content">
           <ErrorBoundary key={page} onHome={() => setPage('home')}>
-            {page === 'home' && <HomePage onNavigate={setPage} />}
-            {page === 'play' && <PlayPage onNavigate={setPage} />}
-            {page === 'profiles' && <ProfilesPage onNavigate={setPage} />}
-            {page === 'mods' && <ModsPage />}
-            {page === 'modpacks' && <ModpacksPage />}
-            {page === 'settings' && <SettingsPage />}
-            {page === 'downloads' && <DownloadsPage />}
-            {page === 'logs' && <LogsPage />}
-            {page === 'account' && <AccountPage onNavigate={setPage} />}
+            <div className="page-enter">
+              {page === 'home' && <HomePage onNavigate={setPage} />}
+              {page === 'play' && <PlayPage onNavigate={setPage} />}
+              {page === 'profiles' && <ProfilesPage onNavigate={setPage} />}
+              {page === 'mods' && <ModsPage />}
+              {page === 'modpacks' && <ModpacksPage />}
+              {page === 'settings' && <SettingsPage />}
+              {page === 'downloads' && <DownloadsPage />}
+              {page === 'logs' && <LogsPage />}
+              {page === 'account' && <AccountPage onNavigate={setPage} />}
+            </div>
           </ErrorBoundary>
         </main>
       </div>

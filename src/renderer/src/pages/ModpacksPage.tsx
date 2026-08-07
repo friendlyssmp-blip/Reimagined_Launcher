@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { Button, Badge, TextInput, Spinner, EmptyState, ProfileGlyph } from '../components/ui'
+import { Button, Badge, TextInput, Spinner, EmptyState, ProfileGlyph, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
-import { IconArchive, IconShare, IconDownload, IconPuzzle, IconX } from '../components/icons'
+import { ModIcon } from '../components/ModIcon'
+import { IconArchive, IconShare, IconDownload, IconPuzzle, IconX, IconCheck } from '../components/icons'
 import type { ModrinthSearchResult } from '@shared/types'
 
 function fmtDownloads(n: number): string {
@@ -146,14 +147,14 @@ export function ModpacksPage() {
         </div>
       </div>
 
-      <div className="tabs">
-        <button className={'tab' + (tab === 'browse' ? ' active' : '')} onClick={() => setTab('browse')}>
-          Browse Modrinth
-        </button>
-        <button className={'tab' + (tab === 'share' ? ' active' : '')} onClick={() => setTab('share')}>
-          Share & Import
-        </button>
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'browse', label: 'Browse Modrinth' },
+          { id: 'share', label: 'Share & Import' }
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
 
       {tab === 'browse' && (
         <div className="browse-layout">
@@ -241,7 +242,7 @@ export function ModpacksPage() {
               {results.map((r) => (
                 <div key={r.projectId} className="mod-row card" onClick={() => void openDetail(r)} role="button" tabIndex={0}>
                   <div className="mod-icon">
-                    {r.iconUrl ? <img src={r.iconUrl} alt="" /> : <IconPuzzle style={{ width: 20, height: 20 }} />}
+                    {r.iconUrl ? <ModIcon src={r.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <IconPuzzle style={{ width: 20, height: 20 }} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -269,7 +270,7 @@ export function ModpacksPage() {
                       disabled={installingId !== null}
                       onClick={() => (expanded?.projectId === r.projectId ? setExpanded(null) : void installPack(r))}
                     >
-                      {installingId === r.projectId ? <Spinner /> : expanded?.projectId === r.projectId ? 'Installed ✓' : 'Install'}
+                      {installingId === r.projectId ? <Spinner /> : expanded?.projectId === r.projectId ? <><IconCheck style={{ width: 13, height: 13 }} /> Installed</> : 'Install'}
                     </Button>
                   </div>
                 </div>

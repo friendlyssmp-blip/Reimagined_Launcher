@@ -4,7 +4,19 @@ import { Button, Field, TextInput, Toggle, Slider, Select, Spinner } from '../co
 import { api, friendlyError } from '../lib/api'
 import { sound, SOUND_PACKS } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
-import { IconSettings, IconGamepad, IconShield, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle } from '../components/icons'
+import { IconSettings, IconGamepad, IconShield, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconMoon, IconCrystal, IconLeaf } from '../components/icons'
+
+/** Custom tier icon — Potato / Balanced / High (no OS emoji rendering). */
+function PerfTierIcon({ tier, size = 14 }: { tier: string; size?: number }) {
+  const Icon = tier === 'potato' ? IconPotato : tier === 'high' ? IconRocket : IconGauge
+  return <Icon style={{ width: size, height: size, flex: '0 0 auto' }} />
+}
+
+/** Custom sound-pack icon — Aurora / Crystal / (leaf default). */
+function SoundPackIcon({ id, size = 26 }: { id: string; size?: number }) {
+  const Icon = id === 'aurora' ? IconMoon : id === 'crystal' ? IconCrystal : IconLeaf
+  return <Icon style={{ width: size, height: size }} />
+}
 import type { ThemeId, LauncherSettings, PerfStatus, PerfRecommendation, PerfModOption } from '@shared/types'
 
 const themes: { id: ThemeId; label: string; colors: string[] }[] = [
@@ -287,6 +299,10 @@ export function SettingsPage() {
                       onClick={() => updateSettings({ preset: p })}
                       style={{
                         flex: 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
                         padding: '9px 12px',
                         borderRadius: 10,
                         border: `1px solid ${settings.preset === p ? 'var(--accent-3)' : 'var(--border)'}`,
@@ -298,7 +314,8 @@ export function SettingsPage() {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      {p === 'potato' ? '🥔 Potato' : p === 'balanced' ? '⚖️ Balanced' : '🚀 High'}
+                      <PerfTierIcon tier={p} size={14} />
+                      {p === 'potato' ? 'Potato' : p === 'balanced' ? 'Balanced' : 'High'}
                     </button>
                   ))}
                 </div>
@@ -351,7 +368,9 @@ export function SettingsPage() {
                       style={{ cursor: 'pointer', textAlign: 'center', padding: '14px 12px' }}
                       onClick={() => updateSettings({ audioPack: pk.id })}
                     >
-                      <div style={{ fontSize: 22, marginBottom: 6 }}>{pk.id === 'aurora' ? '🌌' : pk.id === 'crystal' ? '🔮' : '🍃'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                        <SoundPackIcon id={pk.id} size={26} />
+                      </div>
                       <b style={{ fontSize: 13 }}>{pk.label}</b>
                       <small className="muted" style={{ display: 'block', marginTop: 3 }}>{pk.desc}</small>
                     </button>
@@ -565,7 +584,6 @@ function PerformanceSection() {
 
   const hw = status?.hardware
   const tierLabel = status?.tier === 'potato' ? 'Potato' : status?.tier === 'high' ? 'High' : 'Balanced'
-  const tierEmoji = status?.tier === 'potato' ? '🥔' : status?.tier === 'high' ? '🚀' : '⚖️'
 
   return (
     <>
@@ -602,7 +620,7 @@ function PerformanceSection() {
               fontWeight: 700
             }}
           >
-            {tierEmoji} {tierLabel} profile {status?.tierSource === 'auto' ? '(auto)' : '(manual)'}
+            <PerfTierIcon tier={status?.tier ?? 'balanced'} size={15} /> {tierLabel} profile {status?.tierSource === 'auto' ? '(auto)' : '(manual)'}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
             Recommended memory: <b>{Math.round((status?.recommendedMemoryMB ?? 4096) / 1024)} GB</b>
@@ -615,6 +633,10 @@ function PerformanceSection() {
                 key={t}
                 onClick={() => void setTier(t)}
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
                   padding: '6px 10px',
                   borderRadius: 8,
                   border: '1px solid var(--border)',
@@ -625,7 +647,8 @@ function PerformanceSection() {
                   fontWeight: 600
                 }}
               >
-                {t === 'auto' ? '✨ Auto' : t === 'potato' ? '🥔' : t === 'high' ? '🚀' : '⚖️'}
+                {t === 'auto' ? <IconSparkle style={{ width: 13, height: 13 }} /> : <PerfTierIcon tier={t} size={13} />}
+                {t === 'auto' ? 'Auto' : ''}
               </button>
             ))}
           </div>
