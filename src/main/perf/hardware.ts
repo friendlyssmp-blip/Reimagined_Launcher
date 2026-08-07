@@ -20,7 +20,19 @@ import { logger } from '../logs/logger'
 import { detectJavaRuntimes } from '../minecraft/java'
 import type { HardwareProfile } from '@shared/types'
 
-const CACHE_MS = 5 * 60_000
+// v1.0.28 — launch-time regression fix: the PowerShell CIM probe (which can
+// take seconds and up to 25 s) used to re-run whenever the disk cache was
+// older than 5 MINUTES — i.e. on every launch for anyone who didn't launch
+// within the last 5 minutes. Hardware (CPU/GPU/RAM/driver) changes daily at
+// most, so the disk cache now lives 24 h and a session-scoped in-memory
+// cache makes all three per-launch detectHardware() calls free.
+const CACHE_MS = 24 * 60 * 60_000
+// A FAILED probe is cached only briefly (60 s) — one transient WMI/PowerShell
+// hiccup must never poison every detectHardware() call for a whole day (the
+// next call retries, exactly like before this pass).
+const FAIL_CACHE_MS = 60_000
+
+let memCache: { at: number; hw: HardwareProfile | null } | null = null
 
 function cacheFile(): string {
   return path.join(paths.data, 'perf', 'hardware.json')
@@ -111,11 +123,18 @@ function isLaptop(chassisTypes: unknown): boolean {
 
 /** Detect the full hardware profile (cached 5 min in memory + on disk). */
 export async function detectHardware(force = false): Promise<HardwareProfile | null> {
+  if (!force && memCache) {
+    const ttl = memCache.hw ? CACHE_MS : FAIL_CACHE_MS
+    if (Date.now() - memCache.at < ttl) return memCache.hw
+  }
   try {
     if (!force) {
       try {
         const cached = JSON.parse(fs.readFileSync(cacheFile(), 'utf-8')) as HardwareProfile & { _at?: number }
-        if (cached && cached.cpu && cached._at && Date.now() - cached._at < CACHE_MS) return cached
+        if (cached && cached.cpu && cached._at && Date.now() - cached._at < CACHE_MS) {
+          memCache = { at: Date.now(), hw: cached }
+          return cached
+        }
       } catch {
         /* no cache yet */
       }
@@ -208,10 +227,12 @@ export async function detectHardware(force = false): Promise<HardwareProfile | n
     } catch {
       /* cache is best-effort */
     }
+    memCache = { at: Date.now(), hw }
 
     logger.info(`RPE hardware: ${hw.cpu.threads}T/${hw.cpu.cores}C ${hw.cpu.model.split('@')[0].trim().slice(0, 40)} · ${hw.gpu.map((g) => g.name.slice(0, 30)).join(' + ') || 'no GPU'} · ${hw.memory.totalGB} GB RAM · ${hw.storage.type} · ${hw.laptop ? 'laptop' : 'desktop'}`)
     return hw
   } catch (err) {
+    memCache = { at: Date.now(), hw: null }
     logger.warn(`RPE hardware detection failed: ${(err as Error).message}`)
     return null
   }

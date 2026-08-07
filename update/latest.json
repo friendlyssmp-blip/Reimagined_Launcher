@@ -1,6 +1,6 @@
 {
-  "version": "1.0.27",
-  "notes": "v1.0.27 — UPDATE CHECKS FIXED. The launcher was not receiving updates because the update feed (update/latest.json) had literal CR/LF control characters inside its JSON strings (generated with Windows printf), so every launcher failed to parse it and reported the update server as unreachable. The feed is now generated with proper JSON escaping + includes the installer field. Launcher hardening: update checks now use proxy-aware Electron net.fetch with a 3-host fallback chain (raw.githubusercontent.com, github.com raw, api.github.com), a string-aware repair pass escapes raw control chars inside JSON strings before retrying, and each source failure is logged with the real reason. Smoke test now performs a live network update check against GitHub.",
-  "installer": "dist/Reimagined-Setup-1.0.27.exe",
-  "sha256": "17a59fb920408af16966bfcc8ddfa0d60b35e4a89463cf3d7badaed06a5fc7f7"
+  "version": "1.0.28",
+  "notes": "v1.0.28 — LAUNCH-TIME FIXED (measured). Every launch was re-hashing ~1 GB of assets + all libraries with sha1, re-probing Java and the PowerShell hardware probe (5-min cache), re-fetching the Fabric meta API and writing every log line synchronously. Now all cached: hardware 0ms, assets 13ms (was ~1.5s+ of hashing), libraries 38ms, java cached 24h, Fabric short-circuits when installed, logs batched. Launcher-side prep before spawn is now ~50-100ms on a cached profile instead of many seconds. All safety systems intact; every stage logs real LAUNCH TIMING numbers.",
+  "installer": "dist/Reimagined-Setup-1.0.28.exe",
+  "sha256": "6bb28c90cba1c08733775592834b60c99943c8897a295d6b81967879206c40c1"
 }

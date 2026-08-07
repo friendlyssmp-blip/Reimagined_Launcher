@@ -42,15 +42,67 @@ function logFileFor(day: string): string {
   return path.join(paths.logs, `launcher-${day}.log`)
 }
 
+/* ----------------------------- async-batched writes ----------------------------- */
+
+// v1.0.28 — launch-time regression fix. Every log line used to be a
+// SYNCHRONOUS disk append (fs.appendFileSync). The launch pipeline emits
+// dozens of lines in quick succession, and on Windows each sync write pays
+// the full file-system/AV cost — real, measurable startup time. Lines are now
+// batched: the first write of a session stays synchronous so the daily file
+// exists immediately, the rest are queued and flushed together every ~250 ms
+// (plus on process exit). Errors still write synchronously — a crash must
+// never lose its own report.
+let pendingLines: string[] = []
+let firstWriteDone = false
+let flushTimer: NodeJS.Timeout | null = null
+
+function flushSync(): void {
+  if (pendingLines.length === 0) return
+  const batch = pendingLines
+  pendingLines = []
+  try {
+    fs.appendFileSync(logFileFor(dateStamp()), batch.join('\n') + '\n', 'utf-8')
+  } catch (err) {
+    console.error('Logger write failure:', err)
+  }
+}
+
+function enqueue(line: string, immediate: boolean): void {
+  pendingLines.push(line)
+  if (immediate) {
+    // Errors are written right away — never lose a crash report to batching.
+    flushSync()
+    return
+  }
+  if (!firstWriteDone) {
+    // First line of the session: synchronous so the daily file exists now.
+    firstWriteDone = true
+    flushSync()
+    return
+  }
+  if (!flushTimer) {
+    flushTimer = setTimeout(() => {
+      flushTimer = null
+      flushSync()
+    }, 250)
+    flushTimer.unref?.()
+  }
+}
+
+/** Flush any queued log lines (called on quit so nothing is lost). */
+export function flushLogs(): void {
+  flushSync()
+}
+
+process.on('exit', () => {
+  flushSync()
+})
+
 function write(level: LogLevel, message: string, data?: unknown): void {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[minLevel]) return
 
   const line = `[${timestamp()}] ${level.toUpperCase()}: ${message}${data !== undefined ? `\n  ${JSON.stringify(data)}` : ''}`
-  try {
-    fs.appendFileSync(logFileFor(dateStamp()), line + '\n', 'utf-8')
-  } catch (err) {
-    console.error('Logger write failure:', err)
-  }
+  enqueue(line, level === 'error')
 
   recentLines.push({ at: new Date().toISOString(), level, text: message })
   if (recentLines.length > MAX_RECENT) recentLines.splice(0, recentLines.length - MAX_RECENT)

@@ -130,6 +130,14 @@ class Launcher {
   }
 
   async launch(profileId: string): Promise<LaunchHandle> {
+    // v1.0.28 — launch-path instrumentation: every pipeline stage is timed and
+    // logged as ONE line so a slow launch is diagnosable from REAL measured
+    // data (never guesswork). The timing itself is ~free (Date.now deltas).
+    const t0 = Date.now()
+    const timings: string[] = []
+    const mark = (name: string): void => {
+      timings.push(`${name}=${Date.now() - t0}ms`)
+    }
     const profile = await profileManager.get(profileId)
     if (!profile) throw Errors.launchFailed('The selected profile no longer exists.')
     // Only THIS profile is blocked when already running — other instances are
@@ -141,6 +149,7 @@ class Launcher {
     const account = accountStore.get()
     if (!account) throw Errors.notLoggedIn()
     const refreshed = await microsoftAuth.refreshIfNeeded()
+    mark('auth')
     const acc = refreshed ?? account
     if (!acc.profile) throw Errors.launchFailed('Your Microsoft account has no Minecraft profile.')
 
@@ -182,6 +191,7 @@ class Launcher {
         const fabric = await installFabric(mc, loaderVersion)
         versionId = fabric.versionId
         loaderLabel = `fabric ${fabric.loaderVersion}`
+        mark('loader-fabric')
       } else if (profile.loader.type === 'forge') {
         this.emitProgress('installing-loader', `Resolving Forge for ${mc}…`)
         const loaderVersion = profile.loader.version ?? (await recommendedForgeVersion(mc))
@@ -191,23 +201,32 @@ class Launcher {
         const forge = await installForge(mc, loaderVersion)
         versionId = forge.versionId
         loaderLabel = `forge ${forge.forgeVersion}`
+        mark('loader-forge')
+      } else {
+        mark('loader-vanilla')
       }
 
       this.emitProgress('downloading', `Preparing ${mc} (${loaderLabel})…`, 0)
       // Resolve `inheritsFrom` chains (Forge installer JSONs inherit the base
       // version's client jar / asset index / base libraries).
       const vj = (await versionManager.ensureResolvedVersionJson(versionId)) as VersionJson
+      mark('version-json')
       const { classpath, nativesDir } = await versionManager.ensureLibraries(versionId, (kind) => this.emitProgress('downloading', `Preparing ${kind}...`, 0))
+      mark('libraries')
       const clientJar = await versionManager.ensureClient(versionId)
+      mark('client')
       if (!vj.assetIndex) throw Errors.launchFailed(`Version ${versionId} has no asset index.`)
       const assetsDir = await versionManager.ensureAssets(
         vj.assetIndex.id,
         vj.assetIndex as { id: string; url: string }
       )
+      mark('assets')
       const log4jConfig = await versionManager.ensureLog4jConfig(versionId)
+      mark('log4j')
 
       const requiredMajor = vj.javaVersion?.majorVersion ?? 8
       const java = await pickJava(requiredMajor)
+      mark('java')
       if (!java) throw Errors.missingJava(requiredMajor)
 
       const gameDir = path.join(paths.games, profile.gameDir)
@@ -217,6 +236,7 @@ class Launcher {
       // carries the in-game knobs; the JVM flags apply regardless). The
       // values come from the RPE for the current hardware tier.
       await this.seedFpsBoostConfig(gameDir)
+      mark('fps-config')
 
       // Shader Guard (anti-crash, v1.0.12): a safety net, not a gate (v1.0.14).
       // Borderline hardware is warned but the launch proceeds; only a real
@@ -248,6 +268,7 @@ class Launcher {
         }
         guard.armShaderCrashFlag(profile)
       }
+      mark('shader-guard')
 
       const args = await this.buildArgs({
         vj,
@@ -259,10 +280,18 @@ class Launcher {
         profile,
         account: acc
       })
+      mark('build-args')
 
       this.emitProgress('launching', `Launching ${profile.name}…`, 100)
       this.spawn(java, args, gameDir, profile, session)
+      mark('spawn')
+      // Single-line summary — the whole pipeline's measured cost, so launch
+      // regressions are caught from real data (v1.0.28).
+      logger.info(`LAUNCH TIMING "${profile.name}" total=${Date.now() - t0}ms · ${timings.join(' · ')}`)
     } catch (err) {
+      // Log the stage timings on failure too — a failed launch is exactly
+      // when you need to know which step ate the time (v1.0.28).
+      logger.info(`LAUNCH TIMING "${profile.name}" FAILED total=${Date.now() - t0}ms · ${timings.join(' · ')}`)
       logger.exception('Launch pipeline failed', err)
       const message = err instanceof Error ? err.message : String(err)
       this.emitLog('system', `Launch failed: ${message}`)

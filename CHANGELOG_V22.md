@@ -496,3 +496,41 @@ Verification: mod compiled against the 26.2 merged jar (exclusiveFullscreen
   source failure is logged with the real reason.
 - Smoke test now performs a live network update check against GitHub.
 
+
+## v1.0.28 — LAUNCH-TIME REGRESSION FIXED (measured, not guessed)
+
+The launch pipeline accumulated redundant work across passes: every launch re-verified
+EVERY asset and library with full sha1 hashing (~1 GB of disk reads), re-probed all Java
+runtimes, re-ran the PowerShell hardware probe (cache was 5 minutes), re-fetched the
+Fabric meta API, and wrote every log line synchronously to disk. All of that is now
+once/cached. Every stage is instrumented with real timing (LAUNCH TIMING lines).
+
+### Measured after (smoke on a fully-cached profile)
+- hardware-detect: 0 ms (was a PowerShell probe that could take seconds, up to 25 s,
+  whenever the 5-min cache was stale = nearly every launch)
+- assets: 13 ms (was a full stat + sha1-hash scan of ~1.5k files / ~1 GB every launch;
+  first run after the fix took 1561 ms to build the verified marker, then it skips)
+- libraries: 38 ms (was hashing every jar every launch)
+- java: cached 10 min in memory + 24 h on disk (was spawning java -version per JDK
+  on every launch)
+
+### What changed
+1. ASSETS: a verified marker per asset index (count + total size + 7-day TTL) skips the
+   whole scan on cached launches; the scan itself is size-only (no sha1 for present files).
+2. LIBRARIES: only missing/wrong-size jars enter the download batch; present jars are no
+   longer re-hashed. Natives are checked independently (same rule).
+3. JAVA: detectJavaRuntimes() is cached (10 min memory, 24 h disk at data/perf/java.json,
+   dead paths filtered); Settings Java panel re-probes on demand; installing a runtime
+   invalidates the cache.
+4. HARDWARE: detectHardware() gets a session in-memory cache and the disk cache TTL went
+   from 5 minutes to 24 h; a failed probe is only cached 60 s (no 24-h poison).
+5. FABRIC: installFabric() short-circuits when the loader is already installed (verifies
+   every loader dep jar on disk) — zero meta-API network on the cached path.
+6. LOGGER: log lines are batched and flushed every ~250 ms instead of a synchronous disk
+   append per line; the first write stays synchronous and errors write immediately.
+7. INSTRUMENTATION: the launch pipeline logs one LAUNCH TIMING line per stage (also on
+   failure), and the smoke test measures the cached launch path on every run.
+
+Safety note: assets/libraries are still sha1-verified when downloaded; the 7-day marker
+TTL re-verifies weekly so rare corruption self-heals. Nothing correctness-related was
+weakened (shader crash protection, hardware-aware presets, config guard all intact).

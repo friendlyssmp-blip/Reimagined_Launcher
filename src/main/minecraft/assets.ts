@@ -28,10 +28,32 @@ export async function ensureAssets(assetIndex: { id: string; url: string }, id: 
 
   const index = JSON.parse(fs.readFileSync(indexFile, 'utf-8')) as AssetIndexJson
   const objects = Object.values(index.objects)
-  const items: DownloadItem[] = []
+  const count = objects.length
+  const totalSize = objects.reduce((s, o) => s + o.size, 0)
 
+  // v1.0.28 — launch-time regression fix. Every launch used to stat EVERY
+  // object AND sha1-hash every present asset file (~1-2k files, ~1 GB of
+  // reads) to "verify" them, even on a fully-cached profile. Assets are
+  // sha1-verified when downloaded, so a present, full-size file is trusted.
+  // A marker keyed to the index id + object count + total size records a
+  // fully-verified set; it is re-verified at most weekly (self-heals rare
+  // corruption without paying the cost on every single launch).
+  const markerFile = path.join(paths.assetsIndexes, `${assetIndex.id}.verified.json`)
+  try {
+    const marker = JSON.parse(fs.readFileSync(markerFile, 'utf-8')) as { count?: number; totalSize?: number; at?: number }
+    if (marker.count === count && marker.totalSize === totalSize && marker.at && Date.now() - marker.at < 7 * 86_400_000) {
+      return paths.assets
+    }
+  } catch {
+    /* no marker yet */
+  }
+
+  const items: DownloadItem[] = []
   for (const obj of objects) {
     const dest = path.join(paths.assetsObjects, obj.hash.slice(0, 2), obj.hash)
+    // Size-only presence check — present/full-size objects are trusted (they
+    // were sha1-verified at install time); missing or partial ones are
+    // re-downloaded and verified by the batch below.
     if ((await sizeOf(dest)) >= obj.size) continue
     items.push({
       url: `${RESOURCE_BASE}/${obj.hash.slice(0, 2)}/${obj.hash}`,
@@ -43,6 +65,13 @@ export async function ensureAssets(assetIndex: { id: string; url: string }, id: 
   }
 
   await runDownloadBatch(items, { kind: 'assets', label: `Assets (${assetIndex.id})`, concurrency: 8 })
+
+  // Batch succeeded = every object is now on disk and verified — record it.
+  try {
+    fs.writeFileSync(markerFile, JSON.stringify({ count, totalSize, at: Date.now() }, null, 2), 'utf-8')
+  } catch {
+    /* marker is best-effort */
+  }
 
   // Some older asset indexes are "virtual" — Minecraft resolves them from
   // objects/ directly, which is exactly what we download. Nothing else to do.

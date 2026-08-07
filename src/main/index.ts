@@ -544,6 +544,39 @@ async function runSmokeTest(): Promise<void> {
     logger.info(`Updater smoke OK — latest ${info.latestVersion}, hasUpdate=${info.hasUpdate}`)
   })
 
+  // v1.0.28 — real measured launch-path timings (cached profile): the pieces
+  // that used to be expensive on every launch. These numbers go to the log on
+  // every smoke run so launch regressions are caught from data, not guesswork.
+  await ok('launch path timing (cached): hardware + java + libraries + assets', async () => {
+    const t = (label: string, ms: number): void => logger.info(`LAUNCH TIMING ${label}: ${ms}ms`)
+    let t0 = Date.now()
+    const { detectHardware } = await import('./perf/hardware')
+    const hw = await detectHardware(false)
+    t('hardware-detect', Date.now() - t0)
+    t0 = Date.now()
+    const { detectJavaRuntimes } = await import('./minecraft/java')
+    detectJavaRuntimes(true)
+    t('java-detect', Date.now() - t0)
+
+    const { versionManager } = await import('./minecraft/version-manager')
+    const installed = await versionManager.installedVersions()
+    if (installed.length > 0 && hw) {
+      const id = installed[0]
+      t0 = Date.now()
+      const { classpath } = await versionManager.ensureLibraries(id, () => undefined)
+      t('libraries-cached', Date.now() - t0)
+      if (classpath.length > 0) {
+        const vj = await versionManager.ensureResolvedVersionJson(id)
+        if (vj.assetIndex) {
+          t0 = Date.now()
+          await versionManager.ensureAssets(vj.assetIndex.id, vj.assetIndex as { id: string; url: string })
+          t('assets-cached', Date.now() - t0)
+        }
+      }
+    }
+    logger.info('Launch-path timing recorded (see LAUNCH TIMING lines above)')
+  })
+
   const summary = `Smoke test results\n${checks.join('\n')}`
   logger.info(summary)
   console.log('=== SMOKE TEST ===')

@@ -284,7 +284,14 @@ class VersionManager {
       if (!artifact) continue
       const dest = path.join(paths.libraries, artifact.path)
       classpath.push(dest)
-      items.push({ url: artifact.url, dest, expectedSize: artifact.size, expectedSha1: artifact.sha1 })
+      // v1.0.28 — launch-time regression fix: only files that are MISSING or
+      // the wrong size enter the batch (they get sha1-verified by the
+      // downloader on the way in). Previously EVERY library was pushed and the
+      // batch re-hashed every present jar on EVERY launch — hundreds of MB of
+      // redundant disk reads on a fully-cached profile.
+      if ((await sizeOf(dest)) < (artifact.size ?? 1)) {
+        items.push({ url: artifact.url, dest, expectedSize: artifact.size, expectedSha1: artifact.sha1 })
+      }
 
       // Natives (e.g. LWJGL DLLs) — extract into the natives dir.
       const nativeClassifier = lib.natives?.[OS]
@@ -293,7 +300,9 @@ class VersionManager {
         if (nativeArtifact) {
           const nativeJar = path.join(paths.libraries, nativeArtifact.path)
           classpath.push(nativeJar)
-          items.push({ url: nativeArtifact.url, dest: nativeJar, expectedSize: nativeArtifact.size, expectedSha1: nativeArtifact.sha1 })
+          if ((await sizeOf(nativeJar)) < (nativeArtifact.size ?? 1)) {
+            items.push({ url: nativeArtifact.url, dest: nativeJar, expectedSize: nativeArtifact.size, expectedSha1: nativeArtifact.sha1 })
+          }
         }
       }
     }
@@ -308,6 +317,8 @@ class VersionManager {
       const base = lib.url?.replace(/\/$/, '') ?? LIBRARY_BASE
       const dest = path.join(paths.libraries, mavenPath)
       classpath.push(dest)
+      // Same size-only presence check as the artifacts above.
+      if ((await sizeOf(dest)) > 0) continue
       items.push({ url: `${base}/${mavenPath}`, dest })
     }
 

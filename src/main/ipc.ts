@@ -627,7 +627,9 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle('java:runtimes', async () => {
     try {
-      return { ok: true, data: detectJavaRuntimes() }
+      // v1.0.28 — the Settings Java panel is the user explicitly asking for
+      // current data: force a real re-probe here (never the launch path).
+      return { ok: true, data: detectJavaRuntimes(true) }
     } catch (err) {
       return { ok: false, error: { code: 'JAVA_SCAN', message: (err as Error).message } }
     }

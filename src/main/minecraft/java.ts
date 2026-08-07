@@ -136,16 +136,90 @@ function candidatePaths(): string[] {
   return [...new Set(candidates)]
 }
 
+/* ----------------------------- runtime detection cache ----------------------------- */
+
+// v1.0.28 — launch-time regression fix. Every launch ran `java -version`
+// (a spawned process, up to 12 s each) for EVERY candidate JDK on the system
+// before the game could start. Runtimes barely change, so the probe result is
+// cached: 10 min in memory, 24 h on disk (survives cold starts). `force`
+// re-probes — used by the Settings Java panel (on-demand, never the launch
+// path).
+let runtimeCache: { at: number; runtimes: JavaRuntime[] } | null = null
+const RUNTIME_MEM_TTL_MS = 10 * 60_000
+const RUNTIME_DISK_TTL_MS = 24 * 60 * 60_000
+
+function runtimeCacheFile(): string {
+  return path.join(paths.data, 'perf', 'java.json')
+}
+
+function readRuntimeCacheDisk(): JavaRuntime[] | null {
+  try {
+    const c = JSON.parse(fs.readFileSync(runtimeCacheFile(), 'utf-8')) as { at?: number; runtimes?: JavaRuntime[] }
+    if (c.at && Array.isArray(c.runtimes) && Date.now() - c.at < RUNTIME_DISK_TTL_MS && c.runtimes.length > 0) {
+      // A cached path can go stale (Java uninstalled) — never serve a dead
+      // binary: a missing executable would fail the launch with a confusing
+      // error instead of a clean re-probe.
+      return aliveRuntimes(c.runtimes)
+    }
+  } catch {
+    /* no cache yet */
+  }
+  return null
+}
+
+/** Drop cached runtimes whose java.exe no longer exists on disk. */
+function aliveRuntimes(runtimes: JavaRuntime[]): JavaRuntime[] {
+  return runtimes.filter((r) => {
+    try {
+      return r.path === 'java' || (fs.existsSync(r.path) && fs.statSync(r.path).isFile())
+    } catch {
+      return false
+    }
+  })
+}
+
+function writeRuntimeCacheDisk(runtimes: JavaRuntime[]): void {
+  try {
+    fs.mkdirSync(path.dirname(runtimeCacheFile()), { recursive: true })
+    fs.writeFileSync(runtimeCacheFile(), JSON.stringify({ at: Date.now(), runtimes }, null, 2), 'utf-8')
+  } catch {
+    /* cache is best-effort */
+  }
+}
+
+/** Invalidate both caches (after the launcher installs a runtime, etc.). */
+export function invalidateRuntimeCache(): void {
+  runtimeCache = null
+  try {
+    fs.rmSync(runtimeCacheFile(), { force: true })
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Probe every candidate and return runtimes sorted by major version (desc). */
-export function detectJavaRuntimes(): JavaRuntime[] {
+export function detectJavaRuntimes(force = false): JavaRuntime[] {
+  if (!force && runtimeCache && Date.now() - runtimeCache.at < RUNTIME_MEM_TTL_MS) {
+    return aliveRuntimes(runtimeCache.runtimes)
+  }
+  if (!force && !runtimeCache) {
+    const fromDisk = readRuntimeCacheDisk()
+    if (fromDisk) {
+      runtimeCache = { at: Date.now(), runtimes: fromDisk }
+      return fromDisk
+    }
+  }
+
   const found: JavaRuntime[] = []
   for (const exe of candidatePaths()) {
     const rt = probeJava(exe)
     if (rt && !found.some((f) => f.path === rt.path)) found.push(rt)
   }
   found.sort((a, b) => b.major - a.major)
+  runtimeCache = { at: Date.now(), runtimes: found }
   if (found.length > 0) {
     logger.info(`Java detection: ${found.map((r) => `${r.major}@${r.path}`).join(', ')}`)
+    writeRuntimeCacheDisk(found)
   } else {
     logger.warn('Java detection: no runtimes found')
   }
@@ -227,6 +301,8 @@ async function ensureRuntimeJava(requiredMajor: number): Promise<JavaRuntime | n
     if (!exe) throw new Error('The extracted runtime has no java.exe')
     const rt = probeJava(exe)
     if (!rt) throw new Error('The downloaded runtime failed its version probe')
+    // A new runtime exists on disk now — never serve a stale detection.
+    invalidateRuntimeCache()
     logger.info(`Java ${requiredMajor} runtime ready at ${exe}`)
     return rt
   } catch (err) {

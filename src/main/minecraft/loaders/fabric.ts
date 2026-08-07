@@ -80,6 +80,45 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
   if (!loaderVersion) {
     throw new Error(`No Fabric loader version was resolved for Minecraft ${mcVersion}.`)
   }
+  const versionId = `${mcVersion}-fabric-${loaderVersion}`
+  const versionDir = path.join(paths.versions, versionId)
+
+  // v1.0.28 — launch-time regression fix: on every launch this function
+  // re-fetched the Fabric meta API AND re-downloaded/re-verified the loader
+  // libraries even when the loader was already installed. When the version
+  // JSON + the cached install metadata exist, reuse them (the loader jar is
+  // verified on disk) — zero network on the cached path. Falls through to a
+  // real install only when something is genuinely missing.
+  const metaPath = path.join(versionDir, 'fabric-meta.json')
+  const jsonPath = path.join(versionDir, `${versionId}.json`)
+  if (exists(jsonPath) && exists(metaPath)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as {
+        loader?: { version?: string }
+        launcherMeta?: {
+          mainClass?: { client?: string }
+          libraries?:
+            | { name: string; url?: string }[]
+            | { client?: { name: string; url?: string }[]; common?: { name: string; url?: string }[]; server?: { name: string; url?: string }[] }
+        }
+      }
+      const clientMain = meta.launcherMeta?.mainClass?.client
+      // Every library the loader needs must still be on disk — including the
+      // loader artifact itself (KnotClient). If ANY is missing we fall through
+      // to a full install that re-downloads it (old behavior self-healed).
+      const libNames = fabricLibrariesForClient((meta.launcherMeta ?? { libraries: [] }) as FabricInstallResponse['launcherMeta']).map((l) => l.name)
+      libNames.push(`net.fabricmc:fabric-loader:${loaderVersion}`)
+      const rels = libNames.map((n) => mavenPathFromName(n)).filter((r): r is string => r !== null)
+      const allPresent = rels.length > 0 && rels.every((rel) => exists(path.join(paths.libraries, rel)))
+      if (clientMain && allPresent) {
+        logger.info(`Fabric ${loaderVersion} already installed for ${mcVersion} (${versionId})`)
+        return { versionId, mainClass: clientMain, loaderVersion: meta.loader?.version ?? loaderVersion }
+      }
+    } catch {
+      /* cache unreadable — fall through to a full install */
+    }
+  }
+
   const res = await getJson<FabricInstallResponse>(
     `${FABRIC_META}/versions/loader/${mcVersion}/${loaderVersion}`,
     { timeoutMs: 20_000 }
@@ -87,8 +126,6 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
   const clientMain = res.launcherMeta.mainClass.client
   if (!clientMain) throw new Error(`Fabric loader ${loaderVersion} has no client main class`)
 
-  const versionId = `${mcVersion}-fabric-${res.loader.version}`
-  const versionDir = path.join(paths.versions, versionId)
   mkdirp(versionDir)
 
   // 1) Cache the fabric install metadata locally.
