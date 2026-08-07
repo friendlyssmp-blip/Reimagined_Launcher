@@ -217,7 +217,7 @@ export const updater = {
    */
   async install(): Promise<void> {
     if (app.isPackaged) return this.installPackaged()
-    return this.installSource()
+    return installSource()
   },
 
   /** Packaged installs: silently run the freshly downloaded installer .exe. */
@@ -262,21 +262,82 @@ export const updater = {
 
     // NSIS: /S = fully silent, --updated = replace the existing install
     // without prompting. Detached so it survives this process exiting.
+    let installer: ReturnType<typeof spawn> | null = null
     try {
-      const child = spawn(dest, ['/S', '--updated'], { detached: true, stdio: 'ignore', windowsHide: false })
-      child.unref()
+      installer = spawn(dest, ['/S', '--updated'], { detached: true, stdio: 'ignore', windowsHide: false })
+      installer.unref()
     } catch (err) {
       logger.error(`Could not start the installer: ${(err as Error).message}`)
       throw new Error('The installer could not be started. Open the launcher folder and run the downloaded setup manually.')
     }
 
+    // The NSIS silent installer never shows its Finish page, so it will NOT
+    // relaunch the app by itself. Arm a detached helper that waits for the
+    // installer to finish replacing the files and then starts the NEW
+    // launcher exe automatically — the update reopens the launcher on its
+    // own, no manual restart needed.
+    armRelaunchAfterInstaller(installer?.pid ?? null)
+
     // Give the child a moment to spawn, then close this instance.
     setTimeout(() => app.exit(0), 1500)
-  },
+  }
+}
 
-  /** Source runs: overlay the repository zip, npm install, rebuild, relaunch. */
-  async installSource(): Promise<void> {
-    const info = await this.getInfo()
+/**
+ * Arm a detached helper that reopens the launcher once the update installer
+ * finishes.
+ *
+ * Why this is needed: the NSIS installer is run fully silent (`/S
+ * --updated`), and in silent mode every installer page — including the
+ * Finish page that would normally relaunch the app — is skipped. So after
+ * the installer replaces the files and exits, nothing would reopen the
+ * launcher. This helper process is spawned detached (it survives this
+ * process exiting), waits for the installer process to finish, gives the
+ * file replacement a moment to settle (antivirus scans can briefly lock the
+ * new exe), and then launches `process.execPath` — which is the SAME path
+ * the installer just wrote the new version to. The user lands back in the
+ * updated launcher automatically.
+ */
+function armRelaunchAfterInstaller(installerPid: number | null): void {
+  try {
+    const exe = process.execPath
+    if (!exe || !/\.exe$/i.test(exe)) {
+      logger.warn('Relaunch helper skipped: not running from a packaged .exe.')
+      return
+    }
+    const waitCmd = installerPid
+      ? `Wait-Process -Id ${installerPid} -ErrorAction SilentlyContinue`
+      : 'Start-Sleep -Seconds 4'
+    const cmd = [
+      waitCmd,
+      // Let the file replacement settle (antivirus may briefly lock the exe).
+      'Start-Sleep -Milliseconds 1200',
+      `$exe = '${exe.replace(/'/g, "''")}'`,
+      // Launch the NEW launcher; retry briefly if the file is still locked.
+      '$ok = $false',
+      'for ($i = 0; $i -lt 40 -and -not $ok; $i++) {',
+      '  try { Start-Process -FilePath $exe -ErrorAction Stop; $ok = $true }',
+      '  catch { Start-Sleep -Milliseconds 750 }',
+      '}',
+      'if (-not $ok) { Start-Process -FilePath $exe }'
+    ].join('; ')
+    const helper = spawn(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', cmd],
+      { detached: true, stdio: 'ignore', windowsHide: true }
+    )
+    helper.unref()
+    logger.info(`Relaunch helper armed — the launcher will reopen automatically after the installer (pid ${String(installerPid)}) finishes.`)
+  } catch (err) {
+    // Never fail the update because the relaunch could not be armed — the
+    // user can still open the launcher from the Start menu / desktop.
+    logger.warn(`Could not arm the relaunch helper: ${(err as Error).message}`)
+  }
+}
+
+/** Source runs: overlay the repository zip, npm install, rebuild, relaunch. */
+async function installSource(): Promise<void> {
+  const info = await updater.getInfo()
     const dest = downloadFile(info)
     if (!exists(dest)) throw new Error('No update downloaded yet — click "Download" first.')
 
@@ -328,7 +389,6 @@ export const updater = {
       app.relaunch()
       app.exit(0)
     }, 700)
-  }
 }
 
 /** If the staging dir contains a single top-level folder, use it as the root. */

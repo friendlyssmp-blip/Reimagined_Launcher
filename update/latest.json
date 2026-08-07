@@ -1,5 +1,5 @@
 {
-  "version": "1.0.12",
-  "notes": "v1.0.12 — Anti-Crash System (Shader Guard) + FPS Boost pushed further. Shader Guard: real GPU/driver assessment before shader sessions, VRAM-aware render distance auto-reduction, auto-recovery after a shader crash (next session launches with shaders disabled + clear message), shader-pattern detection in the Crash Assistant, new Stability section in Settings. FPS: LOD for distant chunks, async chunk upload, overdraw reduction, texture-atlas batching, and a new Turbo preset (max FPS trade-off, never default).",
-  "installer": "dist/Reimagined-Setup-1.0.12.exe"
+  "version": "1.0.13",
+  "notes": "v1.0.13 — Fixed: the launcher now reopens by itself after installing an update. Root cause: the silent NSIS installer never shows its Finish page, so it never relaunched the app. The updater now arms a detached helper that waits for the installer to finish replacing the files and then starts the new launcher automatically.",
+  "installer": "dist/Reimagined-Setup-1.0.13.exe"
 }
