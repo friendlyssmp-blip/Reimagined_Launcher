@@ -3,9 +3,9 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, TextInput, Spinner, EmptyState, ProfileGlyph, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { ModIcon } from '../components/ModIcon'
-import { ProjectImage } from '../components/ProjectImage'
-import { IconArchive, IconShare, IconDownload, IconPuzzle, IconX, IconCheck } from '../components/icons'
-import type { ModrinthSearchResult } from '@shared/types'
+import { ProjectDetail } from '../components/ProjectDetail'
+import { IconArchive, IconShare, IconDownload, IconPuzzle } from '../components/icons'
+import type { ModrinthSearchResult, ProjectVersionInfo } from '@shared/types'
 
 function fmtDownloads(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -28,8 +28,8 @@ export function ModpacksPage() {
   const [searching, setSearching] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [installingId, setInstallingId] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<{ projectId: string; title: string; description: string; downloads: number; gallery: { url: string }[] } | null>(null)
-  const [detailBusy, setDetailBusy] = useState(false)
+  /* Part 1 (V2) — full-screen modpack preview (replaces the whole page). */
+  const [detailPack, setDetailPack] = useState<{ projectId: string; title: string } | null>(null)
 
   useEffect(() => {
     api.versions
@@ -81,25 +81,39 @@ export function ModpacksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
 
-  const openDetail = async (r: ModrinthSearchResult) => {
-    if (expanded?.projectId === r.projectId) {
-      setExpanded(null)
-      return
-    }
-    setDetailBusy(true)
+  /* Part 1 (V2) — the preview replaces the screen; start at the top so the
+   * header is visible from the first frame. */
+  useEffect(() => {
+    if (!detailPack) return
+    const el = document.querySelector<HTMLElement>('.content')
+    el?.scrollTo({ top: 0 })
+  }, [detailPack])
+
+  /* Part 1 (V2) — a version is compatible when it matches the page's current
+   * Minecraft-version and loader filters (mirrors the old quick-install pick). */
+  const compatibleCheck = (v: ProjectVersionInfo): boolean =>
+    (mcFilter === 'any' || v.gameVersions.includes(mcFilter)) &&
+    (loaderFilter === 'any' || v.loaders.some((l) => l.toLowerCase().includes(loaderFilter)))
+
+  /* Part 1 (V2) — install the EXACT version chosen inside the preview page.
+   * Creates a new independent profile and switches to it on success. */
+  const installPackVersion = async (versionId: string) => {
+    if (!detailPack) return
+    setInstallingId(detailPack.projectId)
     try {
-      const d = await api.content.detail({ provider: 'modrinth', projectId: r.projectId, projectType: 'modpack' })
-      setExpanded({
-        projectId: r.projectId,
-        title: d.title || r.title,
-        description: d.description || r.description,
-        downloads: d.downloads || r.downloads,
-        gallery: d.gallery ?? []
-      })
-    } catch {
-      setExpanded({ projectId: r.projectId, title: r.title, description: r.description, downloads: r.downloads, gallery: [] })
+      const res = await api.modpacks.install(detailPack.projectId, versionId, detailPack.title)
+      await refreshProfiles()
+      setActiveProfile(res.profileId)
+      notify(
+        'success',
+        'Modpack installed',
+        `"${res.name}" is ready with ${res.installed} mods${res.skipped.length > 0 ? ` — ${res.skipped.length} could not be restored` : ''}.`
+      )
+      setDetailPack(null)
+    } catch (err) {
+      notify('error', 'Modpack install failed', friendlyError(err))
     } finally {
-      setDetailBusy(false)
+      setInstallingId(null)
     }
   }
 
@@ -141,6 +155,27 @@ export function ModpacksPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* Part 1 (V2) — clicking a modpack's name opens a REAL full-screen
+          preview page (Overview / Changelog / Gallery / Versions with real
+          Modrinth data). It replaces the whole screen while open. */}
+      {detailPack ? (
+        <ProjectDetail
+          provider="modrinth"
+          projectId={detailPack.projectId}
+          projectType="modpack"
+          installed={null}
+          onBack={() => {}}
+          onForward={() => {}}
+          canBack={false}
+          canForward={false}
+          onClose={() => setDetailPack(null)}
+          onInstalledChange={() => {}}
+          onInstallVersion={installPackVersion}
+          compatibleCheck={compatibleCheck}
+          contextLabel="Modpacks"
+        />
+      ) : (
+        <>
       <div className="section-head">
         <div>
           <h2 className="page-title">Modpacks</h2>
@@ -190,54 +225,9 @@ export function ModpacksPage() {
               </span>
             </div>
 
-            {expanded && (
-              <div className="panel" style={{ position: 'relative' }}>
-                <button
-                  className="nav-btn"
-                  style={{ position: 'absolute', top: 12, right: 12 }}
-                  onClick={() => setExpanded(null)}
-                  title="Close details"
-                >
-                  <IconX style={{ width: 14, height: 14 }} />
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                  <div className="mod-icon" style={{ width: 48, height: 48 }}>
-                    <ModIcon src={results.find((r) => r.projectId === expanded.projectId)?.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>{expanded.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                      <IconDownload style={{ width: 11, height: 11 }} /> {fmtDownloads(expanded.downloads)} downloads
-                    </div>
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={installingId !== null}
-                    onClick={() => {
-                      const r = results.find((x) => x.projectId === expanded.projectId)
-                      if (r) void installPack(r)
-                    }}
-                  >
-                    {installingId === expanded.projectId ? <><Spinner /> Installing…</> : 'Install'}
-                  </Button>
-                </div>
-                {expanded.gallery.length > 0 && (
-                  <div className="detail-hero" style={{ marginBottom: 10 }}>
-                    <ProjectImage src={expanded.gallery[0].url} alt="" />
-                  </div>
-                )}
-                <div className="panel-title" style={{ fontSize: 12 }}>Description</div>
-                <p style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.6, whiteSpace: 'pre-wrap', maxHeight: 220, overflow: 'auto' }}>
-                  {expanded.description || 'No description provided.'}
-                </p>
-              </div>
-            )}
-            {detailBusy && <div className="row" style={{ justifyContent: 'center', padding: 10 }}><Spinner /></div>}
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {results.map((r) => (
-                <div key={r.projectId} className="mod-row card" onClick={() => void openDetail(r)} role="button" tabIndex={0}>
+                <div key={r.projectId} className="mod-row card" onClick={() => setDetailPack({ projectId: r.projectId, title: r.title })} role="button" tabIndex={0} title="Open full preview">
                   <div className="mod-icon">
                     {r.iconUrl ? <ModIcon src={r.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <IconPuzzle style={{ width: 20, height: 20 }} />}
                   </div>
@@ -263,11 +253,15 @@ export function ModpacksPage() {
                   <div className="mod-actions" onClick={(e) => e.stopPropagation()}>
                     <Button
                       size="sm"
-                      variant={expanded?.projectId === r.projectId ? 'ghost' : 'primary'}
+                      variant="primary"
                       disabled={installingId !== null}
-                      onClick={() => (expanded?.projectId === r.projectId ? setExpanded(null) : void installPack(r))}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void installPack(r)
+                      }}
+                      title="Install the newest compatible version"
                     >
-                      {installingId === r.projectId ? <Spinner /> : expanded?.projectId === r.projectId ? <><IconCheck style={{ width: 13, height: 13 }} /> Installed</> : 'Install'}
+                      {installingId === r.projectId ? <Spinner /> : 'Install'}
                     </Button>
                   </div>
                 </div>
@@ -354,6 +348,8 @@ export function ModpacksPage() {
               ))}
             </div>
           </div>
+        </>
+      )}
         </>
       )}
     </div>

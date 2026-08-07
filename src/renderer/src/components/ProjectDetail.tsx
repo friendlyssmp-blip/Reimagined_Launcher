@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner, EmptyState, Toggle, TabBar } from './ui'
 import { ModIcon } from './ModIcon'
@@ -16,18 +17,20 @@ import {
   IconDots,
   IconCopy,
   IconPuzzle,
-  IconCheck
+  IconCheck,
+  IconTrash
 } from './icons'
 import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo } from '@shared/types'
 
-type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader'
+type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader' | 'modpack'
 type DetailTab = 'overview' | 'changelog' | 'gallery' | 'versions'
 
 const CONTENT_LABEL: Record<ContentType, string> = {
   mod: 'Mod',
   resourcepack: 'Resource Pack',
   datapack: 'Data Pack',
-  shader: 'Shader Pack'
+  shader: 'Shader Pack',
+  modpack: 'Modpack'
 }
 
 /** Minimal, safe markdown renderer (escapes everything first). */
@@ -103,7 +106,12 @@ export function ProjectDetail({
   canBack,
   canForward,
   onClose,
-  onInstalledChange
+  onInstalledChange,
+  /* Modpacks (V2): installs create a whole new profile — the page drives the
+   * action through these optional props instead of the per-profile install. */
+  onInstallVersion,
+  compatibleCheck,
+  contextLabel
 }: {
   provider: 'modrinth' | 'curseforge'
   projectId: string
@@ -115,6 +123,9 @@ export function ProjectDetail({
   canForward: boolean
   onClose: () => void
   onInstalledChange: (mod: ProfileMod | null) => void
+  onInstallVersion?: (versionId: string) => Promise<void>
+  compatibleCheck?: (v: ProjectVersionInfo) => boolean
+  contextLabel?: string
 }) {
   const { activeProfile, notify, setModals } = useApp()
   const [detail, setDetail] = useState<ProjectDetailData | null>(null)
@@ -131,6 +142,9 @@ export function ProjectDetail({
   // Install confirmation (plain click = dialog with real deps; Shift-click
   // = install immediately with dependencies).
   const [confirm, setConfirm] = useState<InstallTarget | null>(null)
+  /* Part 1 (V2) — gallery lightbox: click any screenshot to view it full-size
+   * with prev/next navigation; Esc or click-outside closes. */
+  const [lightbox, setLightbox] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,14 +160,31 @@ export function ProjectDetail({
 
   useEffect(() => { void load() }, [load])
 
-  // Fresh page state for every project.
+  // Fresh page state for every project (incl. closing any open lightbox so
+  // back/forward navigation never shows a stale screenshot from the last one).
   useEffect(() => {
     setTab('overview')
     setOverflowOpen(false)
     setChangelogs({})
     setChangelogLoading(false)
     setShowAllVersions(false)
+    setLightbox(null)
   }, [provider, projectId])
+
+  /* Lightbox keyboard: Esc closes, ← / → navigate between screenshots. */
+  useEffect(() => {
+    if (lightbox === null) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setLightbox(null)
+      else if (e.key === 'ArrowRight' && detail && detail.gallery.length > 1) {
+        setLightbox((i) => ((i ?? 0) + 1) % detail.gallery.length)
+      } else if (e.key === 'ArrowLeft' && detail && detail.gallery.length > 1) {
+        setLightbox((i) => ((i ?? 0) - 1 + detail.gallery.length) % detail.gallery.length)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox, detail])
 
   // Close the overflow menu on outside clicks or Escape (never swallow its own clicks).
   useEffect(() => {
@@ -200,13 +231,28 @@ export function ProjectDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, provider, projectId, detail])
 
+  /* Part 1 (V2) — modpacks install a whole new profile through the page that
+   * owns them; the per-profile install flow never runs for those. */
+  const installPackVersion = (versionId: string) => {
+    if (!onInstallVersion) return
+    setBusy('latest')
+    void onInstallVersion(versionId)
+      .catch(() => {})
+      .finally(() => setBusy(null))
+  }
+
   const installLatest = (e?: React.MouseEvent) => {
     if (!activeProfile) return
+    // Modpack path — page-driven install (new profile is created by the page).
+    if (onInstallVersion) {
+      if (latest) installPackVersion(latest.id)
+      return
+    }
     // Shift-click fast path — install immediately WITH dependencies.
     if (e?.shiftKey) {
       setBusy('latest')
       void api.mods
-        .installWithDeps(activeProfile.id, projectId, '', projectType)
+        .installWithDeps(activeProfile.id, projectId, '', projectType as 'mod' | 'resourcepack' | 'datapack' | 'shader')
         .then((res) => {
           onInstalledChange(res.mod)
           notify('success', 'Installed with dependencies', res.installed.join(', '))
@@ -228,7 +274,7 @@ export function ProjectDetail({
         .finally(() => setBusy(null))
       return
     }
-    setConfirm({ provider: 'modrinth', projectId, projectType })
+    setConfirm({ provider: 'modrinth', projectId, projectType: projectType as 'mod' | 'resourcepack' | 'datapack' | 'shader' })
   }
 
   const updateInstalled = async () => {
@@ -247,11 +293,19 @@ export function ProjectDetail({
 
   const installVersion = (v: ProjectVersionInfo, e?: React.MouseEvent) => {
     if (!activeProfile) return
+    // Modpack path — page-driven install.
+    if (onInstallVersion) {
+      setBusy('v:' + v.id)
+      void onInstallVersion(v.id)
+        .catch(() => {})
+        .finally(() => setBusy(null))
+      return
+    }
     // Shift-click fast path — install immediately WITH dependencies.
     if (e?.shiftKey) {
       setBusy('v:' + v.id)
       void api.mods
-        .installWithDeps(activeProfile.id, projectId, v.id, projectType)
+        .installWithDeps(activeProfile.id, projectId, v.id, projectType as 'mod' | 'resourcepack' | 'datapack' | 'shader')
         .then((res) => {
           onInstalledChange(res.mod)
           notify('success', 'Installed with dependencies', res.installed.join(', '))
@@ -272,7 +326,7 @@ export function ProjectDetail({
         .finally(() => setBusy(null))
       return
     }
-    setConfirm({ provider: 'modrinth', projectId, projectType, versionId: v.id })
+    setConfirm({ provider: 'modrinth', projectId, projectType: projectType as 'mod' | 'resourcepack' | 'datapack' | 'shader', versionId: v.id })
   }
 
   const changeVersion = async (versionId: string) => {
@@ -405,9 +459,10 @@ export function ProjectDetail({
           </button>
           <span className="detail-breadcrumb">
             <IconPuzzle style={{ width: 13, height: 13 }} />
-            {activeProfile
-              ? `${activeProfile.name} · ${activeProfile.loader.type === 'vanilla' ? 'Vanilla' : activeProfile.loader.type} / ${activeProfile.minecraftVersion}`
-              : 'Mods'}
+            {contextLabel ??
+              (activeProfile
+                ? `${activeProfile.name} · ${activeProfile.loader.type === 'vanilla' ? 'Vanilla' : activeProfile.loader.type} / ${activeProfile.minecraftVersion}`
+                : 'Mods')}
           </span>
         </div>
         <button className="nav-btn" onClick={onClose} title="Close">
@@ -489,28 +544,31 @@ export function ProjectDetail({
               <Button variant="ghost" size="sm" onClick={openFolder} title="Open instance folder">
                 <IconFolder style={{ width: 13, height: 13 }} />
               </Button>
-              <Button
-                variant="danger"
-                size="sm"
+              {/* Part 5 (V2) — Remove as a minimalist trash icon; same
+                  function (confirm unless Shift is held). */}
+              <button
+                className="icon-danger-btn"
                 onClick={(e) => removeInstalled(e)}
                 disabled={busy === 'remove'}
                 title="Remove (hold Shift to remove immediately)"
+                aria-label="Remove"
               >
-                {busy === 'remove' ? <Spinner /> : 'Remove'}
-              </Button>
+                {busy === 'remove' ? <Spinner /> : <IconTrash style={{ width: 14, height: 14 }} />}
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Big preview — the project's main gallery image, full-width hero. */}
+      {/* Big preview — the project's main gallery image, full-width hero.
+          Clicking it opens the lightbox directly at the first screenshot. */}
       {detail.gallery?.[0]?.url && (
         <div className="detail-hero">
           <ProjectImage
             src={detail.gallery[0].url}
             alt={detail.gallery[0].title ?? detail.title}
-            onClick={() => setTab('gallery')}
-            title="View gallery"
+            onClick={() => setLightbox(0)}
+            title="View gallery (click to enlarge)"
           />
           {detail.gallery.length > 1 && (
             <span className="detail-hero-count">{detail.gallery.length} screenshots</span>
@@ -613,7 +671,14 @@ export function ProjectDetail({
               <div className="panel-title">Gallery ({detail.gallery.length})</div>
               <div className="detail-gallery">
                 {detail.gallery.map((g, i) => (
-                  <ProjectImage key={i} src={g.url} alt={g.title ?? ''} loading="lazy" />
+                  <ProjectImage
+                    key={i}
+                    src={g.url}
+                    alt={g.title ?? ''}
+                    loading="lazy"
+                    onClick={() => setLightbox(i)}
+                    title="Click to enlarge"
+                  />
                 ))}
               </div>
             </div>
@@ -629,8 +694,9 @@ export function ProjectDetail({
               <div className="version-list">
                 {visibleVersions.map((v) => {
                   const isThisCurrent = installed?.versionId === v.id
-                  const compatible =
-                    v.gameVersions.length === 0 || v.gameVersions.includes(activeProfile?.minecraftVersion ?? '')
+                  const compatible = compatibleCheck
+                    ? compatibleCheck(v)
+                    : v.gameVersions.length === 0 || v.gameVersions.includes(activeProfile?.minecraftVersion ?? '')
                   return (
                     <div key={v.id} className={'version-row' + (isThisCurrent ? ' current' : '') + (compatible ? '' : ' incompatible')}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -676,7 +742,9 @@ export function ProjectDetail({
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-          Profile: {activeProfile?.name} · {activeProfile?.minecraftVersion} · {activeProfile?.loader.type}
+          {contextLabel
+            ? contextLabel
+            : `Profile: ${activeProfile?.name} · ${activeProfile?.minecraftVersion} · ${activeProfile?.loader.type}`}
         </span>
       </div>
 
@@ -690,6 +758,44 @@ export function ProjectDetail({
           }}
         />
       )}
+
+      {/* Part 1 (V2) — full-screen gallery lightbox, portaled to <body> so no
+          ancestor transform/overflow can clip it. Click outside or Esc to
+          close; ← / → (or the arrows) move between screenshots. */}
+      {lightbox !== null && detail.gallery[lightbox] &&
+        createPortal(
+          <div className="lightbox-overlay" onClick={() => setLightbox(null)} role="dialog" aria-modal="true" aria-label="Screenshot viewer">
+            <button className="lightbox-close" onClick={() => setLightbox(null)} aria-label="Close">
+              <IconX style={{ width: 18, height: 18 }} />
+            </button>
+            {detail.gallery.length > 1 && (
+              <>
+                <button
+                  className="lightbox-nav lightbox-prev"
+                  onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + detail.gallery.length) % detail.gallery.length) }}
+                  aria-label="Previous image"
+                >
+                  <IconChevronLeft style={{ width: 22, height: 22 }} />
+                </button>
+                <button
+                  className="lightbox-nav lightbox-next"
+                  onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % detail.gallery.length) }}
+                  aria-label="Next image"
+                >
+                  <IconChevronRight style={{ width: 22, height: 22 }} />
+                </button>
+              </>
+            )}
+            <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
+              <ProjectImage
+                src={detail.gallery[lightbox].url}
+                alt={detail.gallery[lightbox].title ?? detail.title}
+              />
+              <div className="lightbox-counter">{lightbox + 1} / {detail.gallery.length}</div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

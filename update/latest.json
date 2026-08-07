@@ -1,5 +1,7 @@
 {
-  "version": "1.0.19",
-  "notes": "v1.0.19 — (1) Minecraft settings NEVER reset: a config guard snapshots your options.txt / servers.dat / config files before any operation that could touch an instance (version changes, modpack overrides, FPS-cap writes) and restores them if anything goes wrong — verified by a new smoke test. (2) Minecraft SURVIVES launcher updates: the game now runs fully detached, and when you update the launcher your running Minecraft keeps playing; after the ~3s wait the updated launcher reopens itself and RECONNECTS to the still-running game (validated PIDs — no stale/recycled ones). Update loops are impossible and a failed update keeps the old launcher. (3) Import/Share: imports restore the EXACT shared versions with dependencies resolved and de-duplicated, are cancellable (partial profile removed cleanly), show real progress, and share packages are sanitized (nothing personal can leak). Share links reimagined://share/CODE open the launcher straight into Import.",
-  "installer": "dist/Reimagined-Setup-1.0.19.exe"
+  "version": "1.0.20",
+  "notes": "v1.0.20 — (1) FULL-SCREEN PREVIEWS: clicking any mod, resource pack, data pack, shader or MODPACK name now replaces the whole launcher screen with the project's real page (Overview / Changelog / Gallery / Versions + back/forward). Modpacks finally have a real detail page with per-version install. Gallery images open a full-screen lightbox (arrows, Esc). (2) Contrast fixed in the Change-version list (explicit dark rows, installed version highlighted). (3) Honest update labels: the Installed panel re-checks Modrinth's real release order so 'Up to date' / 'Update' / 'Update All (N)' are always true; Update All asks first (Shift skips). (4) Remove is now a trash icon everywhere (same behavior). (5) Each instance shows the icon you chose for it in the Play card and pickers. (6) Browsing from Installed → Modrinth keeps your content-type filter (Mods/Packs/Shaders).",
+  "installer": "dist/Reimagined-Setup-1.0.20.exe",
+  "checksum": "SHA256SUMS.txt",
+  "publishedAt": "2026-08-07T00:30:00Z"
 }

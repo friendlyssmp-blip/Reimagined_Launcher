@@ -5,7 +5,7 @@ import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { InstallConfirmModal, type InstallTarget } from '../components/InstallConfirmModal'
 import { ModIcon } from '../components/ModIcon'
-import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe } from '../components/icons'
+import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
 
 type SourceTab = 'installed' | 'modrinth'
@@ -327,6 +327,24 @@ export function ModsPage() {
     })
   }
 
+  /* Part 4 (V2) — the actual "update everything" work, shared by the
+   * confirmation flow and the Shift-click fast path. */
+  const runUpdateAll = async () => {
+    if (!activeProfile) return
+    setUpdatingAll(true)
+    try {
+      const updatable = installed.filter((m) => m.updateAvailable)
+      for (const m of updatable) {
+        notify('info', 'Updating', `${m.title} → ${m.updateAvailable!.versionNumber}`)
+        await api.mods.update(activeProfile.id, m.slug).catch((err) => notify('error', `Update failed: ${m.title}`, friendlyError(err)))
+      }
+      setInstalled(await api.mods.list(activeProfile.id))
+      notify('success', 'Updates finished', `${updatable.length} item(s) updated.`)
+    } finally {
+      setUpdatingAll(false)
+    }
+  }
+
   /** Update list detail shown inside the Update All confirmation. */
   const updateAllDetail = (): string => {
     const updatable = installed.filter((m) => m.updateAvailable).slice(0, 8)
@@ -485,6 +503,15 @@ export function ModsPage() {
     }
   }, [tab, instTab, activeProfile])
 
+  /* Part 1 (V2) — the detail page replaces the whole screen; always start at
+   * the top so its header is visible from the first frame (the .content
+   * scroll position would otherwise persist from the long list below). */
+  useEffect(() => {
+    if (!detail) return
+    const el = document.querySelector<HTMLElement>('.content')
+    el?.scrollTo({ top: 0 })
+  }, [detail, detailIndex])
+
   /** Keep the installed list in sync after detail-page actions (Part 5). */
   const handleInstalledChange = (mod: ProfileMod | null) => {
     if (!activeProfile) return
@@ -502,6 +529,30 @@ export function ModsPage() {
   // Part 3 — a Vanilla profile has no loader, so mods can't run on it. Packs
   // (resource packs / data packs / shaders) work fine and stay reachable.
   const noModsLoader = activeProfile?.loader.type === 'vanilla'
+
+  /* Part 7 — content-type context: the Installed sub-tab the user is on
+   * (Mods / Resource Packs / Data Packs / Shaders) travels with them into
+   * Browse (Modrinth). Once the user manually changes the type inside
+   * Browse, that choice wins from then on and is never overridden again. */
+  const contentTypeUserSet = useRef(false)
+
+  /* Part 4 — keep the "Update" badges honest: refresh the installed list
+   * against Modrinth's real release order whenever the Installed panel is
+   * opened or the profile changes, so "Up to date" / "Update" / the
+   * "Update All (N)" count always match reality (never stale metadata). */
+  useEffect(() => {
+    if (tab !== 'installed' || !activeProfile) return
+    let cancelled = false
+    api.mods
+      .checkUpdates(activeProfile.id)
+      .then((fresh) => {
+        if (!cancelled) setInstalled(fresh)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [tab, activeProfile])
 
   const renderRow = (r: ProviderResult) => (
     <div key={r.projectId} className="mod-row card" onClick={() => openDetail(r)} role="button" tabIndex={0}>
@@ -610,7 +661,7 @@ export function ModsPage() {
                     disabled={v.id === m.versionId}
                   >
                     {v.versionNumber}
-                    <span style={{ color: 'var(--text-3)', fontSize: 10.5 }}>
+                    <span className="version-opt-sub" style={{ fontSize: 10.5 }}>
                       {v.gameVersions[0] ?? ''}{v.loaders[0] ? ' · ' + v.loaders[0] : ''}
                     </span>
                   </button>
@@ -652,14 +703,16 @@ export function ModsPage() {
           <IconChevronDown style={{ width: 13, height: 13 }} /> Versions
         </Button>
       )}
-      <Button
-        size="sm"
-        variant="danger"
+      {/* Part 5 (V2) — Remove is a minimalist trash icon; the function is
+          unchanged (confirm unless Shift is held). */}
+      <button
+        className="icon-danger-btn"
         onClick={(e) => removeMod(m.slug, e)}
         title="Remove (hold Shift to remove immediately)"
+        aria-label={`Remove ${m.title}`}
       >
-        Remove
-      </Button>
+        <IconTrash style={{ width: 14, height: 14 }} />
+      </button>
     </div>
   )
 
@@ -689,6 +742,8 @@ export function ModsPage() {
               setContentType(e.target.value as ContentType)
               setResults([])
               setCategory(null)
+              // Part 7 — a manual choice inside Browse always wins from here on.
+              contentTypeUserSet.current = true
             }}
             title="Browse content type"
           >
@@ -808,6 +863,24 @@ export function ModsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* Part 5 (V2) — the detail page REPLACES the whole screen while open:
+          header, tabs and lists are hidden behind it, so the preview is fully
+          visible from the first frame with no scrolling required. */}
+      {detail ? (
+        <ProjectDetail
+          provider={detail.provider}
+          projectId={detail.projectId}
+          projectType={detail.projectType}
+          installed={installed.find((m) => m.id === detail.projectId) ?? null}
+          onBack={goBack}
+          onForward={goForward}
+          canBack={detailIndex > 0}
+          canForward={detailIndex < detailHistory.length - 1}
+          onClose={closeDetail}
+          onInstalledChange={handleInstalledChange}
+        />
+      ) : (
+        <Fragment>
       <div className="section-head">
         <div>
           <h2 className="page-title">Mods</h2>
@@ -824,7 +897,16 @@ export function ModsPage() {
           { id: 'modrinth', label: 'Modrinth' }
         ]}
         active={tab}
-        onChange={(id) => setTab(id as SourceTab)}
+        onChange={(id) => {
+          const next = id as SourceTab
+          // Part 7 — entering Browse from an Installed sub-tab carries that
+          // content type (e.g. Resource Packs → Modrinth opens on Resource
+          // Packs), unless the user already chose a type manually in Browse.
+          if (next === 'modrinth' && !contentTypeUserSet.current && instTab !== 'worlds') {
+            setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
+          }
+          setTab(next)
+        }}
       />
 
       {/* Part 3 — Vanilla profiles can't run mods, but packs work fine. */}
@@ -881,30 +963,23 @@ export function ModsPage() {
               <Button
                 variant="primary"
                 disabled={updatingAll || !installed.some((m) => m.updateAvailable)}
-                onClick={() => {
-                  // Always ask first — show the exact update list.
+                onClick={(e) => {
+                  // Always ask first — show the exact update list — unless
+                  // Shift is held, which skips the confirmation (Part 4).
+                  if (e.shiftKey) {
+                    void runUpdateAll()
+                    return
+                  }
                   setModals({
                     confirm: {
                       title: 'Update all available?',
-                      message: `${installed.filter((m) => m.updateAvailable).length} update(s) are available. Updates are manual — nothing installs until you confirm.\n\n${updateAllDetail()}`, 
+                      message: `${installed.filter((m) => m.updateAvailable).length} update(s) are available. Updates are manual — nothing installs until you confirm (hold Shift next time to update all immediately).\n\n${updateAllDetail()}`, 
                       confirmLabel: 'Update All',
-                      onConfirm: async () => {
-                        setUpdatingAll(true)
-                        try {
-                          const updatable = installed.filter((m) => m.updateAvailable)
-                          for (const m of updatable) {
-                            notify('info', 'Updating', `${m.title} → ${m.updateAvailable!.versionNumber}`)
-                            await api.mods.update(activeProfile.id, m.slug).catch((err) => notify('error', `Update failed: ${m.title}`, friendlyError(err)))
-                          }
-                          setInstalled(await api.mods.list(activeProfile.id))
-                          notify('success', 'Updates finished', `${updatable.length} mod(s) updated.`)
-                        } finally {
-                          setUpdatingAll(false)
-                        }
-                      }
+                      onConfirm: () => void runUpdateAll()
                     }
                   })
                 }}
+                title="Update every installed item that has a newer version (hold Shift to update all immediately)"
               >
                 {updatingAll ? <><Spinner /> Updating…</> : `Update All (${installed.filter((m) => m.updateAvailable).length})`}
               </Button>
@@ -969,6 +1044,9 @@ export function ModsPage() {
                 <Button
                   variant="primary"
                   onClick={() => {
+                    // Part 7 — an explicit "Browse <type>" choice is as good as
+                    // a manual one: it wins and is never overridden again.
+                    contentTypeUserSet.current = true
                     setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
                     setTab('modrinth')
                   }}
@@ -1003,14 +1081,14 @@ export function ModsPage() {
                         Manual — dropped into the mods folder
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="danger"
+                    <button
+                      className="icon-danger-btn"
                       onClick={(e) => removeManual(f, e)}
                       title="Remove (hold Shift to remove immediately)"
+                      aria-label={`Remove ${f}`}
                     >
-                      Remove
-                    </Button>
+                      <IconTrash style={{ width: 14, height: 14 }} />
+                    </button>
                   </div>
                 ))}
             </div>
@@ -1021,20 +1099,7 @@ export function ModsPage() {
       {/* Browse Modrinth */}
       {tab === 'modrinth' && renderBrowse()}
 
-      {/* Part 5 — full detail page (mods, resource packs, data packs, shaders) */}
-      {detail && (
-        <ProjectDetail
-          provider={detail.provider}
-          projectId={detail.projectId}
-          projectType={detail.projectType}
-          installed={installed.find((m) => m.id === detail.projectId) ?? null}
-          onBack={goBack}
-          onForward={goForward}
-          canBack={detailIndex > 0}
-          canForward={detailIndex < detailHistory.length - 1}
-          onClose={closeDetail}
-          onInstalledChange={handleInstalledChange}
-        />
+        </Fragment>
       )}
 
       {/* Install confirmation with real dependency data */}

@@ -72,7 +72,9 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
               <div className="panel-title">Active Profile</div>
               <div className="profile-switch" style={{ marginTop: 12 }}>
                 {profiles.slice(0, 8).map((p) => (
-                  <button key={p.id} className={`chip ${activeProfile?.id === p.id ? 'active' : ''}`} onClick={() => setActiveProfile(p.id)}>
+                  <button key={p.id} className={`chip ${activeProfile?.id === p.id ? 'active' : ''}`} onClick={() => setActiveProfile(p.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    {/* Part 6 (V2) — the instance's own icon travels everywhere. */}
+                    <span className="chip-glyph"><ProfileGlyph icon={p.icon} name={p.name} /></span>
                     {p.name}
                     <Badge variant={p.loader.type !== 'vanilla' ? 'accent' : 'default'}>{p.loader.type}</Badge>
                   </button>

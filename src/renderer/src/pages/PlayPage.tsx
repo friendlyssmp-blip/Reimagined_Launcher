@@ -1,5 +1,5 @@
 import { useApp } from '../state/AppContext'
-import { Button, Badge, Spinner } from '../components/ui'
+import { Button, Badge, Spinner, ProfileGlyph } from '../components/ui'
 import { api } from '../lib/api'
 import { IconPlay, IconStop, IconTerminal, IconLog, IconFolder } from '../components/icons'
 import { humanDuration, timeAgo } from '../lib/format'
@@ -44,7 +44,8 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
             <span className="muted" style={{ fontSize: 12 }}>No instances yet — create one from Instances.</span>
           )}
           {profiles.map((p) => (
-            <button key={p.id} className={`chip ${activeProfile?.id === p.id ? 'active' : ''}`} onClick={() => setActiveProfile(p.id)}>
+            <button key={p.id} className={`chip ${activeProfile?.id === p.id ? 'active' : ''}`} onClick={() => setActiveProfile(p.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              <span className="chip-glyph"><ProfileGlyph icon={p.icon} name={p.name} /></span>
               {p.name}
               <Badge variant={p.loader.type !== 'vanilla' ? 'accent' : 'default'}>{p.loader.type}</Badge>
             </button>
@@ -53,10 +54,11 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
       </div>
 
       <div className="card" style={{ padding: '26px 28px', display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
-        <div className="hero-face">
-          <span style={{ fontSize: 34, fontWeight: 700, color: 'var(--accent-3)' }}>
-            {activeProfile ? activeProfile.name.charAt(0).toUpperCase() : '?'}
-          </span>
+        {/* Part 6 (V2) — the instance card shows the icon the user chose in
+            Edit/creation (ProfileGlyph handles preset icons + uploaded photos);
+            never a generic launcher logo or letter. */}
+        <div className={`profile-avatar instance-avatar ${activeProfile?.icon ? '' : 'plain'}`}>
+          {activeProfile ? <ProfileGlyph icon={activeProfile.icon} name={activeProfile.name} /> : '?'}
         </div>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div className="hero-tagline">Ready to play</div>

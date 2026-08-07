@@ -220,3 +220,47 @@
   and oversized zips are rejected. Share modal now offers Copy Code + Copy
   Link (`reimagined://share/<CODE>`), and a share link opened in the launcher
   lands directly on Import with the code ready to preview.
+
+## v1.0.20 — Full-screen previews everywhere, honest update labels & UI polish
+
+### Part 1 — Full preview pages for EVERYTHING (incl. Modpacks)
+- Clicking a mod / resource pack / data pack / shader / MODPACK name now
+  REPLACES the whole launcher screen with the project's page (header + stat
+  pills + Overview/Changelog/Gallery/Versions + back/forward arrows). Before,
+  the preview was pushed inline below the page (scroll required) and Modpacks
+  had no preview at all. Scroll always resets to the top on open/navigation.
+- Modpacks now have a REAL detail page (Overview, Changelog, Gallery, Versions)
+  fed by real Modrinth data, with per-version install — installing from the
+  preview creates the new profile and switches to it.
+- Gallery got a proper lightbox: click any screenshot to view it full-screen
+  (dark blurred backdrop, prev/next arrows, keyboard ← →, Esc or click-outside
+  closes). The hero image opens it directly too.
+- Installing from the preview updates the on-screen state instantly.
+
+### Part 2 — Contrast fix ("Change version" list)
+- Version rows inside an installed item now use explicit dark surfaces and
+  high-contrast text: normal / hover / installed(current) states each have
+  verified readable colors — no more pale rows with washed-out text. The
+  installed version is highlighted with the purple accent.
+
+### Part 3/4 — "Check for Updates" + honest labels
+- Opening the Installed panel re-validates every item against Modrinth's real
+  release order (date, not string) so "Up to date" / "Update" and the
+  "Update All (N)" counter always match reality — never stale metadata.
+- Update All asks for confirmation with the exact item list (versions
+  before/after); hold Shift to update all immediately without asking.
+- The manual "Check for Updates" button still performs a real, immediate check
+  (bypasses the 30-min cache) and never resets the automatic background timer.
+
+### Part 5 — Remove as a trash icon
+- Every Remove action (mods, packs, shaders, manual files, detail page) is now
+  a minimalist trash icon with the same behavior: asks first, Shift = instant.
+
+### Part 6 — Instances wear their own icon
+- The Play card and the profile picker chips now show the icon chosen in
+  Edit/creation (uploaded photo or preset) everywhere — no more generic letter.
+
+### Part 7 — Content-type context travels
+- Browsing from Installed → Resource Packs/Data Packs/Shaders/Mods opens
+  Modrinth already filtered to that type. Once you change the type manually
+  inside Browse, your choice wins from then on.
