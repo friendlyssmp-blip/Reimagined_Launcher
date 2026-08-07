@@ -1,0 +1,14 @@
+{
+  "version": "1.0.11",
+  "files": [
+    {
+      "url": "Reimagined-Setup-1.0.11.exe",
+      "sha512": "10d7b80dc4490ccb7f7a84ce889d3758fcd28eed0c69f9a47e1a3822b2b4646d",
+      "size": 83941757
+    }
+  ],
+  "path": "Reimagined-Setup-1.0.11.exe",
+  "sha512": "10d7b80dc4490ccb7f7a84ce889d3758fcd28eed0c69f9a47e1a3822b2b4646d",
+  "releaseDate": "2026-08-06T00:00:00.000Z",
+  "releaseNotes": "v1.0.11: Console timers, install confirmation with dependencies, fix stuck downloads, cancel downloads, fix false Launching state, FPS Boost enchantment glint fix, profile card cleanup"
+}
