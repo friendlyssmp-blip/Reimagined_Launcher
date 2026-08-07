@@ -526,6 +526,24 @@ async function runSmokeTest(): Promise<void> {
     }
   })
 
+  // v1.0.27 — real network validation of the update checker (the bug was the
+  // launcher never receiving updates). force=true bypasses the 30-min cache so
+  // this actually exercises the proxy-aware fetch + 3-host fallback chain.
+  await ok('updater: live GitHub check returns a version (fallback chain works)', async () => {
+    const { updater } = await import('./updater/updater')
+    // Cap the smoke check at 45s so a truly dead network cannot hang the suite.
+    const info = (await Promise.race([
+      updater.check(true),
+      new Promise<never>((_, reject) => {
+        const t = setTimeout(() => reject(new Error('update check timed out after 45s')), 45_000)
+        t.unref?.()
+      })
+    ])) as { hasUpdate: boolean; latestVersion: string }
+    if (!info || typeof info.hasUpdate !== 'boolean') throw new Error('check() returned no UpdateInfo')
+    if (!info.latestVersion || info.latestVersion.length === 0) throw new Error('latestVersion is empty')
+    logger.info(`Updater smoke OK — latest ${info.latestVersion}, hasUpdate=${info.hasUpdate}`)
+  })
+
   const summary = `Smoke test results\n${checks.join('\n')}`
   logger.info(summary)
   console.log('=== SMOKE TEST ===')

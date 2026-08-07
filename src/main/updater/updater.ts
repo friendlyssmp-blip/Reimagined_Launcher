@@ -28,7 +28,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { paths, appVersion } from '../paths'
 import { logger } from '../logs/logger'
 import { eventBus } from '../core/event-bus'
@@ -45,6 +45,37 @@ const CACHE_MAX_AGE = 30 * 60_000 // re-check GitHub at most every 30 min
 const OFFICIAL_REPO = 'friendlyssmp-blip/Reimagined_Launcher'
 /** The trigger file inside the repo's `update/` folder: {"version":"1.0.2","installer":"dist/..."}. */
 const LATEST_JSON = `https://raw.githubusercontent.com/${OFFICIAL_REPO}/main/update/latest.json`
+/**
+ * v1.0.27 — fallback sources for `update/latest.json`. raw.githubusercontent.com
+ * is slow or blocked on some networks (and Node's global fetch ignores the
+ * system proxy); these are tried in order until one answers:
+ *   1. raw.githubusercontent.com (fast, no rate limit)
+ *   2. github.com/…/raw/… (different host, same file)
+ *   3. api.github.com contents API (base64 — last resort, rate-limited)
+ */
+const LATEST_JSON_FALLBACKS = [
+  LATEST_JSON,
+  `https://github.com/${OFFICIAL_REPO}/raw/main/update/latest.json`,
+  `https://api.github.com/repos/${OFFICIAL_REPO}/contents/update/latest.json`
+]
+
+/**
+ * v1.0.27 — fetch that honors the system proxy. Electron's `net.fetch` uses
+ * Chromium's network stack (proxy-aware) while Node's global `fetch` (undici)
+ * ignores the OS proxy entirely — the exact reason update checks could fail on
+ * networks that need a proxy to reach GitHub. Falls back to Node fetch.
+ */
+async function ghFetch(url: string, init?: RequestInit): Promise<Response> {
+  const netFetch = (net as unknown as { fetch?: (u: string, i?: RequestInit) => Promise<Response> }).fetch
+  if (netFetch) {
+    try {
+      return await netFetch(url, init)
+    } catch {
+      /* fall through to Node fetch */
+    }
+  }
+  return fetch(url, init)
+}
 /** Whole-repository archive — always the latest committed state of `main`. */
 const CODELOAD_ZIP = `https://codeload.github.com/${OFFICIAL_REPO}/zip/refs/heads/main`
 /** Raw file base — used to fetch the installer exe in packaged builds. */
@@ -53,8 +84,65 @@ const RAW_BASE = `https://raw.githubusercontent.com/${OFFICIAL_REPO}/main`
 /** AbortController-based timeout (works on every supported Node/Electron). */
 function timeoutSignal(ms: number): AbortSignal {
   const ctrl = new AbortController()
-  setTimeout(() => ctrl.abort(), ms)
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  timer.unref?.() // never let a pending abort timer delay app exit
   return ctrl.signal
+}
+
+/**
+ * v1.0.27 — tolerate malformed update metadata. A `latest.json` with literal
+ * control characters inside its strings (e.g. generated on Windows with
+ * `printf` which embeds real CR/LF into the JSON string values) makes
+ * `JSON.parse` throw and the whole check report "unreachable". This repair
+ * pass walks the text with a string-literal state machine and escapes raw
+ * control characters ONLY inside "..." values (structural whitespace outside
+ * strings is legal JSON and is left untouched), then retries the parse.
+ */
+function parseLenientJson(text: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(text) as Record<string, unknown>
+  } catch {
+    /* fall through to the repair pass */
+  }
+  let out = ''
+  let inString = false
+  let escaped = false
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) {
+        out += ch
+        escaped = false
+        continue
+      }
+      if (ch === '\\') {
+        out += ch
+        escaped = true
+        continue
+      }
+      if (ch === '"') {
+        inString = false
+        out += ch
+        continue
+      }
+      const code = ch.codePointAt(0) ?? 0
+      if (code < 0x20) {
+        // Raw control char inside a string value: escape it (or drop bare CR).
+        if (ch === '\t') out += '\\t'
+        else if (ch === '\n') out += '\\n'
+        else if (ch !== '\r') out += ' '
+        continue
+      }
+      out += ch
+      continue
+    }
+    if (ch === '"') inString = true
+    out += ch
+  }
+  try {
+    return JSON.parse(out) as Record<string, unknown>
+  } catch {
+    return null
+  }
 }
 
 function cacheFile(): string {
@@ -110,12 +198,46 @@ export const updater = {
         const cached = await readJson<{ at: number; info: UpdateInfo } | null>(cacheFile(), null)
         if (cached && cached.info && Date.now() - cached.at < CACHE_MAX_AGE) return cached.info
       }
-      const res = await fetch(LATEST_JSON, {
-        headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0', Accept: 'application/json' },
-        signal: timeoutSignal(12_000)
-      })
-      // No `update/latest.json` in the repo yet — there is nothing to update.
-      if (res.status === 404) {
+      // v1.0.27 — try every source until one answers (proxy-aware fetch + the
+      // raw / web-raw / api.github.com fallback chain).
+      let data: { version?: string; notes?: string; installer?: string } | null = null
+      let saw404 = false
+      for (const url of LATEST_JSON_FALLBACKS) {
+        try {
+          const r = await ghFetch(url, {
+            headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0', Accept: 'application/json' },
+            signal: timeoutSignal(12_000)
+          })
+          if (r.status === 404) {
+            saw404 = true
+            continue
+          }
+          if (!r.ok) {
+            logger.debug(`Update check: ${url} answered ${r.status} ${r.statusText}`)
+            continue
+          }
+          if (url.includes('api.github.com')) {
+            // Contents API returns the file base64-encoded.
+            const payload = (await r.json()) as { content?: string; encoding?: string }
+            if (!payload.content) continue
+            const rawText =
+              payload.encoding === 'base64' ? Buffer.from(payload.content, 'base64').toString('utf-8') : payload.content
+            data = parseLenientJson(rawText) as { version?: string; notes?: string; installer?: string } | null
+          } else {
+            data = parseLenientJson(await r.text()) as { version?: string; notes?: string; installer?: string } | null
+          }
+          if (!data) {
+            logger.debug(`Update check: ${url} served unparseable JSON`)
+            continue
+          }
+          break
+        } catch (err) {
+          logger.debug(`Update check: ${url} unreachable — ${err instanceof Error ? err.message : String(err)}`)
+          /* try the next source */
+        }
+      }
+      // The repo genuinely has no update/latest.json yet.
+      if (!data && saw404) {
         logger.warn('Update check: no update/latest.json in the repository yet — nothing to update.')
         const info: UpdateInfo = { ...base }
         try {
@@ -125,9 +247,7 @@ export const updater = {
         }
         return info
       }
-      if (!res.ok) throw new Error(`GitHub returned HTTP ${res.status}.`)
-
-      const data = (await res.json()) as { version?: string; notes?: string; installer?: string }
+      if (!data) throw new Error('Update check: could not reach the update server (all sources failed).')
       const latestVersion = String(data.version ?? '').replace(/^v/i, '')
       const currentVersion = await readInstalledVersion()
       const hasUpdate = latestVersion !== '' && compareVersions(latestVersion, currentVersion) > 0
@@ -178,10 +298,21 @@ export const updater = {
     if (exists(dest)) fs.rmSync(dest, { force: true })
 
     const url = info.assetUrl || CODELOAD_ZIP
-    const res = await fetch(url, {
+    let res = await ghFetch(url, {
       headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0' },
       signal: timeoutSignal(600_000)
     })
+    // v1.0.27 — if the raw host is unreachable, retry the same file via the
+    // github.com web-raw host (different host, same content).
+    if (!res.ok && url.startsWith('https://raw.githubusercontent.com/')) {
+      const alt = url
+        .replace('https://raw.githubusercontent.com/', 'https://github.com/')
+        .replace('/main/', '/raw/main/')
+      res = await ghFetch(alt, {
+        headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0' },
+        signal: timeoutSignal(600_000)
+      })
+    }
     if (!res.ok || !res.body) throw new Error(`Download failed (HTTP ${res.status}).`)
     const total = Number(res.headers.get('content-length')) || 0
     let received = 0

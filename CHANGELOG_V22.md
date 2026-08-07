@@ -475,3 +475,24 @@ Verification: mod compiled against the 26.2 merged jar (all signatures
 Verification: mod compiled against the 26.2 merged jar (exclusiveFullscreen
   javap-verified), launcher typechecks 0/0, smoke 10/10, code review applied
  (reattached flag, concurrency cap, half-upgrade protection).
+
+## v1.0.27 — UPDATE CHECKS FIXED (the launcher was not receiving updates)
+
+### Root cause (found and fixed)
+- The update feed (update/latest.json in the repo) was generated on Windows
+  with printf, which embedded literal CR/LF control characters INSIDE the
+  JSON string values. JSON forbids raw control chars in strings, so every
+  launcher that fetched the file failed to parse it and reported the update
+  server as unreachable — no one ever saw an update.
+- The feed is now generated with proper JSON escaping (no raw control chars,
+  correct UTF-8) and includes the installer field for packaged installs.
+
+### Launcher hardening (v1.0.27 updater)
+- Update checks now use Electron net.fetch (proxy-aware) with a 3-host
+  fallback chain: raw.githubusercontent.com, github.com raw, api.github.com
+  contents API (base64). One blocked host no longer kills the check.
+- Malformed feed files no longer fail silently: a string-aware repair pass
+  escapes raw control chars inside JSON string values and retries; each
+  source failure is logged with the real reason.
+- Smoke test now performs a live network update check against GitHub.
+
