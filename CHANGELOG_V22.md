@@ -264,3 +264,31 @@
 - Browsing from Installed → Resource Packs/Data Packs/Shaders/Mods opens
   Modrinth already filtered to that type. Once you change the type manually
   inside Browse, your choice wins from then on.
+
+## v1.0.21 — CurseForge modpack .zip import + new app icon
+
+### Import CurseForge modpack .zips
+- You can now import a modpack .zip exported from CurseForge (or any launcher
+  that uses the CurseForge export format). The importer understands the
+  CurseForge `manifest.json` (name, Minecraft version, Fabric/Forge loader,
+  and every pinned project/file id) and the `overrides/` folder.
+- Files are downloaded straight from CurseForge using its public web
+  endpoints (no API key needed) with the EXACT pinned versions from the
+  manifest — never silently substituted. Configs, resource packs and scripts
+  from `overrides/` are applied into the new instance automatically.
+- The loader is mapped from the manifest (Fabric/Forge; NeoForge packs show a
+  clear "not supported yet" message) and the launcher auto-picks the right
+  loader version for that Minecraft version. Skipped/unavailable files are
+  reported instead of failing the whole import.
+- Preview before importing shows the pack name, Minecraft version, loader and
+  item count — exactly like Reimagined exports. Zip size cap raised to 512 MB
+  (CurseForge packs can carry large overrides).
+- Verified end-to-end in the smoke suite with a REAL CurseForge download
+  (offline manifest-parse check always runs; the live download runs with
+  REIMAGINED_SMOKE_CF=1).
+
+### New app icon (the .exe wears Logo.png)
+- The old `Logo/Reimagined_Launcher.png` banner was removed. The installer /
+  executable / shortcuts now use `Logo/Logo.png` as the icon (center-fitted on
+  a square canvas — content fully visible, nothing clipped), applied to the
+  packaged .exe on every build.

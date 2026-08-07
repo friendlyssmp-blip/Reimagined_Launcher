@@ -334,6 +334,91 @@ async function runSmokeTest(): Promise<void> {
     logger.info('Share flow OK (prepare → code → resolve → zip → import → expiry)')
   })
 
+  await ok('curseforge zip: manifest parse + overrides extraction', async () => {
+    const { shareService } = await import('./share/share')
+    const { zipCreate, zipExtractPrefix } = await import('./utils/zip')
+    const os = await import('node:os')
+    const pathMod = await import('node:path')
+    const fsp = await import('node:fs/promises')
+
+    // A real CurseForge-style modpack export: manifest.json + overrides/
+    // (config/resource packs) — exactly what CurseForge produces.
+    const manifest = JSON.stringify(
+      {
+        minecraft: {
+          version: '1.21.11',
+          modLoaders: [{ id: 'fabric-0.14.21', primary: true }]
+        },
+        manifestType: 'minecraftModpack',
+        manifestVersion: 1,
+        name: 'CF Smoke Pack',
+        version: '1.0.0',
+        files: [
+          { projectID: 394468, fileID: 8591803, required: true },
+          { projectID: 551850, fileID: 8593021, required: false }
+        ],
+        overrides: 'overrides'
+      },
+      null,
+      2
+    )
+    const zip = zipCreate([
+      { name: 'manifest.json', data: manifest },
+      { name: 'overrides/config/example.toml', data: 'enabled = true\n' },
+      { name: 'overrides/resourcepacks/readme.txt', data: 'pack\n' }
+    ])
+
+    const snapshot = await shareService.readZipBuffer(zip)
+    if (snapshot.name !== 'CF Smoke Pack') throw new Error('CF name not parsed')
+    if (snapshot.minecraftVersion !== '1.21.11') throw new Error('CF mc version not parsed')
+    if (snapshot.loader.type !== 'fabric') throw new Error('CF loader not mapped')
+    if (snapshot.items.length !== 2) throw new Error('CF files not mapped')
+    const first = snapshot.items[0]
+    if (first.source !== 'curseforge' || first.id !== '394468' || first.versionId !== '8591803') {
+      throw new Error('CF file ids not mapped correctly')
+    }
+
+    // overrides/ must land inside the instance with the prefix stripped.
+    const tmp = await fsp.mkdtemp(pathMod.join(os.tmpdir(), 'cf-overrides-'))
+    const written = zipExtractPrefix(zip, 'overrides', tmp)
+    const cfg = await fsp.readFile(pathMod.join(tmp, 'config', 'example.toml'), 'utf-8').catch(() => '')
+    if (!cfg.includes('enabled')) throw new Error('overrides not extracted')
+    await fsp.rm(tmp, { recursive: true, force: true })
+    if (written.length < 2) throw new Error('overrides returned too few files')
+
+    logger.info('CurseForge zip OK (manifest.json → snapshot + overrides → instance)')
+
+    // Full end-to-end (REIMAGINED_SMOKE_CF=1): import a real CurseForge pack
+    // — downloads one real file from CurseForge (network) and verifies the
+    // installed mod + applied overrides, then removes the test profile.
+    if (process.env.REIMAGINED_SMOKE_CF === '1') {
+      const realZip = zipCreate([
+        { name: 'manifest.json', data: manifest },
+        { name: 'overrides/config/example.toml', data: 'enabled = true\n' }
+      ])
+      let importedId: string | null = null
+      try {
+        const imported = await shareService.importZipBuffer(realZip)
+        importedId = imported.profileId
+        const profile = await profileManager.get(imported.profileId)
+        if (!profile) throw new Error('real CF import created no profile')
+        const sodium = profile.mods.find((m) => m.id === '394468')
+        if (!sodium || sodium.source !== 'curseforge') throw new Error('real CF mod not installed')
+        const { exists } = await import('./utils/fs')
+        const modFile = pathMod.join(await import('./paths').then((m) => m.paths.games), profile.gameDir, 'mods', sodium.filename)
+        if (!exists(modFile)) throw new Error('real CF mod file missing')
+        const appliedCfg = await fsp
+          .readFile(pathMod.join(await import('./paths').then((m) => m.paths.games), profile.gameDir, 'config', 'example.toml'), 'utf-8')
+          .catch(() => '')
+        if (!appliedCfg.includes('enabled')) throw new Error('real CF overrides not applied')
+        logger.info(`CurseForge real import OK (${sodium.title}, ${modFile})`)
+      } finally {
+        // Never leak a test profile, even when the download/import fails.
+        if (importedId) await profileManager.delete(importedId).catch(() => {})
+      }
+    }
+  })
+
   await ok('config guard: backup + restore preserves options.txt', async () => {
     const fsMod = await import('node:fs')
     const pathMod = await import('node:path')

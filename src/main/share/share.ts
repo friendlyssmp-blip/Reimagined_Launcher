@@ -19,9 +19,10 @@ import fsp from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { paths } from '../paths'
 import { exists, readJson, writeJson, mkdirp } from '../utils/fs'
-import { zipCreate, zipReadEntry } from '../utils/zip'
+import { zipCreate, zipReadEntry, zipExtractPrefix } from '../utils/zip'
 import { profileManager } from '../profiles/profile-manager'
 import { modManager } from '../mods/mod-manager'
+import { installCurseforgeFile } from '../mods/cf-keyless'
 import { eventBus } from '../core/event-bus'
 import { logger } from '../logs/logger'
 import { LauncherError } from '../core/errors'
@@ -31,8 +32,10 @@ import type { ShareSnapshot, ShareItem } from '@shared/types'
 const CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const MANIFEST_NAME = 'reimagined-manifest.json'
 const FORMAT_VERSION = 1
-/** Imports are re-resolved from source; a huge zip can never be a valid export. */
-const MAX_ZIP_BYTES = 100 * 1024 * 1024
+/* Imports are re-resolved from source. CurseForge modpack zips carry their
+ * `overrides/` content (configs, resource packs…) inside the archive, so the
+ * cap is generous — only absurd files are rejected. */
+const MAX_ZIP_BYTES = 512 * 1024 * 1024
 
 /** The single active import (for cancellation) — one at a time is fine. */
 let activeImport: { cancelled: boolean } | null = null
@@ -168,6 +171,118 @@ function sanitizeSnapshot(snap: ShareSnapshot): ShareSnapshot {
   }
 }
 
+/* --------------------------- CurseForge modpacks (v1.0.21) --------------------------- */
+
+/** The manifest.json layout CurseForge exports inside a modpack .zip. */
+interface CurseForgeManifest {
+  minecraft?: {
+    version?: string
+    modLoaders?: { id?: string; primary?: boolean }[]
+  }
+  name?: string
+  version?: string
+  author?: string
+  manifestType?: string
+  manifestVersion?: number
+  files?: { projectID?: number; fileID?: number; required?: boolean }[]
+  overrides?: string
+}
+
+/**
+ * Map a CurseForge modLoader id ("forge-47.1.0", "fabric-0.14.21") to a
+ * launcher loader. The launcher auto-resolves the newest compatible loader
+ * version for the pack's Minecraft version, so only the TYPE is kept.
+ */
+function cfLoaderFromManifest(m: CurseForgeManifest): ShareSnapshot['loader'] {
+  const loaders = (m.minecraft?.modLoaders ?? []).filter((l) => l.id)
+  const pick = loaders.find((l) => l.primary) ?? loaders[0]
+  const id = (pick?.id ?? '').toLowerCase()
+  if (id.startsWith('neoforge')) {
+    throw new LauncherError(
+      'LOADER_UNSUPPORTED',
+      'This modpack uses NeoForge, which Reimagined does not support yet.',
+      'Fabric and Forge modpacks are supported — NeoForge packs will be added later.'
+    )
+  }
+  if (id.startsWith('fabric')) return { type: 'fabric', version: null }
+  if (id.startsWith('forge')) return { type: 'forge', version: null }
+  return { type: 'vanilla', version: null }
+}
+
+/** Convert a parsed CurseForge manifest into the shared snapshot format. */
+function snapshotFromCurseforge(m: CurseForgeManifest): ShareSnapshot {
+  const mc = (m.minecraft?.version ?? '').trim()
+  if (!mc || !/^\d/.test(mc)) {
+    throw new LauncherError(
+      'NOT_SHARE_EXPORT',
+      'This CurseForge modpack has no usable Minecraft version.',
+      'The manifest.json inside the .zip is missing minecraft.version.'
+    )
+  }
+  const loader = cfLoaderFromManifest(m)
+  const items: ShareItem[] = (m.files ?? [])
+    .filter((f) => f && Number.isFinite(f.projectID) && Number.isFinite(f.fileID))
+    .map((f) => ({
+      id: String(f.projectID),
+      title: `CurseForge #${f.projectID}`,
+      source: 'curseforge' as const,
+      projectType: 'mod' as const,
+      versionId: String(f.fileID),
+      versionNumber: '',
+      disabled: false
+    }))
+  return {
+    schema: 'reimagined-profile',
+    formatVersion: FORMAT_VERSION,
+    name: (m.name ?? 'CurseForge Modpack').trim().slice(0, 120) || 'CurseForge Modpack',
+    minecraftVersion: mc,
+    loader,
+    memory: 4096,
+    resolution: { width: 1280, height: 720, fullscreen: false },
+    items,
+    createdAt: iso()
+  }
+}
+
+/**
+ * Parse a .zip buffer into a snapshot — Reimagined exports AND CurseForge
+ * modpack exports (manifest.json + files[]/overrides) are both understood.
+ */
+export async function readZipBuffer(buf: Buffer): Promise<ShareSnapshot> {
+  const reimagined = zipReadEntry(buf, MANIFEST_NAME)
+  if (reimagined) {
+    try {
+      return validateSnapshot(JSON.parse(reimagined.toString('utf-8')))
+    } catch (err) {
+      if (err instanceof LauncherError) throw err
+      throw new LauncherError('SHARE_CORRUPT', 'This profile export is corrupted or unreadable.')
+    }
+  }
+
+  const cfRaw = zipReadEntry(buf, 'manifest.json')
+  if (cfRaw) {
+    let m: CurseForgeManifest | null = null
+    try {
+      m = JSON.parse(cfRaw.toString('utf-8')) as CurseForgeManifest
+    } catch {
+      m = null
+    }
+    const looksCf =
+      m &&
+      Array.isArray(m.files) &&
+      m.files.length > 0 &&
+      m.files.some((f) => f && Number.isFinite(f.projectID) && Number.isFinite(f.fileID)) &&
+      (m.manifestType === 'minecraftModpack' || (m.minecraft && typeof m.minecraft.version === 'string'))
+    if (looksCf && m) return snapshotFromCurseforge(m)
+  }
+
+  throw new LauncherError(
+    'NOT_SHARE_EXPORT',
+    "This doesn't look like a Reimagined profile export or a CurseForge modpack.",
+    'Expected a .zip containing reimagined-manifest.json or a CurseForge manifest.json with files.'
+  )
+}
+
 /** Validate a parsed manifest, returning a typed snapshot or a clear error. */
 function validateSnapshot(raw: unknown): ShareSnapshot {
   const snap = raw as ShareSnapshot | null
@@ -236,7 +351,7 @@ export async function exportZipWithDialog(profileId: string): Promise<{ canceled
   return { canceled: false, path: result.filePath, name: profile.name }
 }
 
-/** Read + validate a Reimagined export .zip and return its snapshot. */
+/** Read + validate an export .zip (Reimagined or CurseForge) → snapshot. */
 export async function readZip(zipPath: string): Promise<ShareSnapshot> {
   if (!exists(zipPath)) {
     throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
@@ -244,23 +359,9 @@ export async function readZip(zipPath: string): Promise<ShareSnapshot> {
   const st = await fsp.stat(zipPath).catch(() => null)
   if (!st) throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
   if (st.size > MAX_ZIP_BYTES) {
-    throw new LauncherError('INVALID_FILE', 'This .zip is too large to be a Reimagined export.')
+    throw new LauncherError('INVALID_FILE', 'This .zip is too large to be a valid profile export.')
   }
-  const buf = await fsp.readFile(zipPath)
-  const manifest = zipReadEntry(buf, MANIFEST_NAME)
-  if (!manifest) {
-    throw new LauncherError(
-      'NOT_SHARE_EXPORT',
-      "This doesn't look like a Reimagined profile export.",
-      'Expected a .zip containing a reimagined-manifest.json file.'
-    )
-  }
-  try {
-    return validateSnapshot(JSON.parse(manifest.toString('utf-8')))
-  } catch (err) {
-    if (err instanceof LauncherError) throw err
-    throw new LauncherError('SHARE_CORRUPT', 'This profile export is corrupted or unreadable.')
-  }
+  return readZipBuffer(await fsp.readFile(zipPath))
 }
 
 /* ------------------------------ Online codes ------------------------------ */
@@ -371,12 +472,13 @@ export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportRes
       try {
         const type = (item.projectType ?? 'mod') as 'mod' | 'resourcepack' | 'shader' | 'datapack'
         if (item.source === 'curseforge') {
-          // Exact file id is preferred; only fall back to "latest" when the
-          // share predates version ids (never silently substitute versions).
+          // v1.0.21: CurseForge items restore through the keyless resolver
+          // (exact pinned file only — never silently substitutes versions).
           if (item.versionId) {
-            await modManager.installVersion(profile.id, 'curseforge', item.id, item.versionId, type)
+            await installCurseforgeFile(profile.id, item.id, item.versionId, type)
           } else {
-            await modManager.installCurseforge(profile.id, item.id, { title: item.title }, type)
+            skipped.push(`${item.title} (no pinned CurseForge file)`)
+            continue
           }
         } else if (item.source === 'modrinth') {
           // Exact version preferred; dependencies are resolved and deduped
@@ -439,10 +541,38 @@ export async function importCode(code: string): Promise<ImportResult> {
   return importSnapshot(snapshot)
 }
 
-/** Import from an exported .zip file. */
+/** Import from an exported .zip file (Reimagined or CurseForge). */
 export async function importZip(zipPath: string): Promise<ImportResult> {
-  const snapshot = await readZip(zipPath)
-  return importSnapshot(snapshot)
+  if (!exists(zipPath)) {
+    throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
+  }
+  const st = await fsp.stat(zipPath).catch(() => null)
+  if (!st) throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
+  if (st.size > MAX_ZIP_BYTES) {
+    throw new LauncherError('INVALID_FILE', 'This .zip is too large to be a valid profile export.')
+  }
+  const buf = await fsp.readFile(zipPath)
+  return importZipBuffer(buf)
+}
+
+/** Import from an in-memory .zip buffer (Reimagined or CurseForge). */
+export async function importZipBuffer(buf: Buffer): Promise<ImportResult> {
+  const snapshot = await readZipBuffer(buf)
+  const result = await importSnapshot(snapshot)
+
+  // CurseForge packs ship config / resource packs / scripts inside the
+  // archive's `overrides/` folder — apply them into the fresh instance.
+  const isCurseforge = snapshot.items.length > 0 && snapshot.items[0].source === 'curseforge'
+  if (isCurseforge) {
+    const profile = await profileManager.get(result.profileId)
+    if (profile) {
+      const applied = zipExtractPrefix(buf, 'overrides', path.join(paths.games, profile.gameDir))
+      if (applied.length > 0) {
+        logger.info(`CurseForge import: applied ${applied.length} override file(s) to "${profile.name}"`)
+      }
+    }
+  }
+  return result
 }
 
 export const shareService = {
@@ -450,10 +580,12 @@ export const shareService = {
   exportZip,
   exportZipWithDialog,
   readZip,
+  readZipBuffer,
+  importZip,
+  importZipBuffer,
   createCode,
   resolveCode,
   importCode,
-  importZip,
   cancelImport,
   setPendingDeepLink,
   takePendingDeepLink

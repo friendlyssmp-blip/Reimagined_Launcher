@@ -1,7 +1,7 @@
 {
-  "version": "1.0.20",
-  "notes": "v1.0.20 — (1) FULL-SCREEN PREVIEWS: clicking any mod, resource pack, data pack, shader or MODPACK name now replaces the whole launcher screen with the project's real page (Overview / Changelog / Gallery / Versions + back/forward). Modpacks finally have a real detail page with per-version install. Gallery images open a full-screen lightbox (arrows, Esc). (2) Contrast fixed in the Change-version list (explicit dark rows, installed version highlighted). (3) Honest update labels: the Installed panel re-checks Modrinth's real release order so 'Up to date' / 'Update' / 'Update All (N)' are always true; Update All asks first (Shift skips). (4) Remove is now a trash icon everywhere (same behavior). (5) Each instance shows the icon you chose for it in the Play card and pickers. (6) Browsing from Installed → Modrinth keeps your content-type filter (Mods/Packs/Shaders).",
-  "installer": "dist/Reimagined-Setup-1.0.20.exe",
+  "version": "1.0.21",
+  "notes": "v1.0.21 — (1) CURSED? NO — CURSEFORGE: importa modpacks exportados de CurseForge (.zip con manifest.json + overrides). La importación descarga las versiones EXACTAS fijadas en el manifest desde los endpoints públicos de CurseForge (sin API key), aplica configs/resource packs de overrides en la instancia, mapea el loader Fabric/Forge y salta con aviso lo que ya no existe. Preview con nombre/versión/loader/conteo antes de importar. (2) Ícono nuevo: el .exe, el instalador y los accesos directos ahora usan Logo.png (antes el banner Reimagined_Launcher.png, que fue eliminado).",
+  "installer": "dist/Reimagined-Setup-1.0.21.exe",
   "checksum": "SHA256SUMS.txt",
   "publishedAt": "2026-08-07T00:30:00Z"
 }

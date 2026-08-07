@@ -222,3 +222,78 @@ export function zipExtractAll(archive: Buffer, destDir: string): string[] {
   }
   return written
 }
+
+/**
+ * Extract only the entries under `prefix/` of a ZIP archive into `destDir`,
+ * stripping the prefix from each path (used to apply a CurseForge modpack's
+ * `overrides/` folder into an instance). Path traversal is blocked the same
+ * way as `zipExtractAll`. Returns the list of files written.
+ */
+export function zipExtractPrefix(archive: Buffer, prefix: string, destDir: string): string[] {
+  const written: string[] = []
+  const pre = prefix.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!pre || archive.length < 22) return written
+
+  const tailStart = Math.max(0, archive.length - 65557)
+  let eocdAt = -1
+  for (let i = archive.length - 22; i >= tailStart; i--) {
+    if (archive.readUInt32LE(i) === SIG_EOCD) {
+      eocdAt = i
+      break
+    }
+  }
+  if (eocdAt < 0) return written
+
+  const entryCount = archive.readUInt16LE(eocdAt + 10)
+  let cdOffset = archive.readUInt32LE(eocdAt + 16)
+
+  for (let i = 0; i < entryCount && cdOffset + 46 <= archive.length; i++) {
+    if (archive.readUInt32LE(cdOffset) !== SIG_CENTRAL) break
+    const method = archive.readUInt16LE(cdOffset + 10)
+    const csize = archive.readUInt32LE(cdOffset + 20)
+    const usize = archive.readUInt32LE(cdOffset + 24)
+    const nameLen = archive.readUInt16LE(cdOffset + 28)
+    const extraLen = archive.readUInt16LE(cdOffset + 30)
+    const commentLen = archive.readUInt16LE(cdOffset + 32)
+    const localOffset = archive.readUInt32LE(cdOffset + 42)
+    const name = archive.subarray(cdOffset + 46, cdOffset + 46 + nameLen).toString('utf-8')
+    cdOffset += 46 + nameLen + extraLen + commentLen
+
+    const clean = name.replace(/\\/g, '/')
+    if (!clean.startsWith(pre + '/')) continue
+    const rel = clean.slice(pre.length + 1)
+    if (!rel || rel.startsWith('/') || /^[a-zA-Z]:/.test(rel)) continue
+    if (rel.split('/').includes('..')) continue
+
+    const dest = path.join(destDir, rel)
+    if (clean.endsWith('/')) {
+      fs.mkdirSync(dest, { recursive: true })
+      continue
+    }
+    if (localOffset + 30 > archive.length) continue
+
+    const lNameLen = archive.readUInt16LE(localOffset + 26)
+    const lExtraLen = archive.readUInt16LE(localOffset + 28)
+    const dataStart = localOffset + 30 + lNameLen + lExtraLen
+    const data = archive.subarray(dataStart, dataStart + csize)
+    let out: Buffer | null = null
+    if (method === 0) out = Buffer.from(data)
+    else if (method === 8) {
+      try {
+        out = inflateRawSync(data, { maxOutputLength: Math.max(usize, 64 * 1024) })
+      } catch {
+        out = null
+      }
+    }
+    if (!out) continue
+
+    try {
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.writeFileSync(dest, out)
+      written.push(dest)
+    } catch {
+      /* skip entries that fail to write */
+    }
+  }
+  return written
+}
