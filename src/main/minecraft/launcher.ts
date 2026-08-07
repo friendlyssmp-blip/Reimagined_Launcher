@@ -168,13 +168,14 @@ class Launcher {
         const guard = await import('../anti-crash/shader-guard')
         const guardHw = await (await import('../perf/engine')).detectHardware(false)
         const support = guard.assessShaderSupport(guardHw)
+        // v1.0.14: the assessment is a WARNING, never a gate. Shaders launch
+        // and play normally in the vast majority of cases; borderline hardware
+        // is warned (Settings → Stability shows the verdict) but the launch
+        // always proceeds — the runtime error-boundary/auto-recovery is the
+        // safety net, not an upfront block. (assessShaderSupport no longer
+        // produces 'unsupported'; this is a defensive no-op.)
         if (support.level === 'unsupported') {
-          logger.warn('Shader Guard: refusing shader session for unsupported hardware.')
-          throw new LauncherError(
-            'SHADERS_UNSUPPORTED',
-            'Your graphics hardware cannot run shaders safely.',
-            support.reasons.join(' ') + ' The game will launch without shaders — remove or disable the shader pack to keep this session stable.'
-          )
+          logger.warn('Shader Guard: borderline hardware detected — proceeding anyway (' + support.reasons.join(' ') + ')')
         }
         // Auto-recovery: the previous session crashed with shaders armed —
         // disable shaders now and tell the user why (breaks the crash loop).
@@ -264,6 +265,14 @@ class Launcher {
     const hw = await rpe.detectHardware(false)
     const { tier } = rpe.effectiveTier(settingsManager.get(), hw)
     jvm.push(...rpe.jvmFlagsFor(tier))
+    // v1.0.13: hand the frame cap to the in-game watchdog so it can enforce
+    // the same safe limit as a backstop (skipped when the user opted into
+    // unlimited FPS). The in-game client reads -Dreimagined.maxfps.
+    if (!settingsManager.get().unlimitedFps) {
+      const fpsCfg = rpe.fpsConfigFor(tier, hw)
+      const cap = Math.max(60, Math.min(240, Number(fpsCfg.maxFps) || 120))
+      jvm.push(`-Dreimagined.maxfps=${cap}`)
+    }
     jvm.push('-cp', classpath.join(CLASSPATH_SEP))
     if (profile.extraJvmArgs.trim()) jvm.push(...this.splitArgs(profile.extraJvmArgs))
 
@@ -433,6 +442,10 @@ class Launcher {
         const report = await detectCrashReport(profile)
         if (report) {
           logger.warn(`Crash detected for "${profile.name}": ${report.cause}`)
+          // v1.0.13: persist the FULL crash report content (truncated) so any
+          // later instability — e.g. a "render frame" failure — can be debugged
+          // from real data, never from guesswork.
+          logger.info(`Crash report (${report.file}) content for debugging:\n${report.snippet.slice(0, 4000)}`)
           eventBus.emit('crash:detected', report)
           // Shader Guard: a crash on a shader-armed session is recorded so the
           // next launch auto-disables shaders (no endless crash loop).
@@ -565,8 +578,22 @@ class Launcher {
       const config = rpe.fpsConfigFor(tier, hw)
       const dir = path.join(gameDir, 'config')
       fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(path.join(dir, 'reimagined-fps-boost.json'), JSON.stringify(config, null, 2))
-      logger.info(`RPE: seeded FPS Boost config for tier "${tier}" (render cap ${String(config.smartRdCap)})`)
+      // v1.0.13 frame-rate safety: by default the engine applies a safe FPS
+      // cap everywhere (options.txt + the in-game watchdog via the JVM flag +
+      // the mod config). When the user opted into "unlimited FPS" (warned in
+      // Settings), ALL of those mechanisms must be off — including the mod
+      // config, or the watchdog would silently re-cap the game anyway.
+      if (settingsManager.get().unlimitedFps) {
+        fs.writeFileSync(
+          path.join(dir, 'reimagined-fps-boost.json'),
+          JSON.stringify({ ...config, unlimitedFps: true, maxFps: 0 }, null, 2)
+        )
+        logger.info('RPE: unlimited FPS enabled by the user — no frame cap applied (thermal/power risk warned in Settings).')
+      } else {
+        fs.writeFileSync(path.join(dir, 'reimagined-fps-boost.json'), JSON.stringify(config, null, 2))
+        rpe.applyFrameCap(gameDir, Number(config.maxFps) || 120)
+        logger.info(`RPE: seeded FPS Boost config for tier "${tier}" (render cap ${String(config.smartRdCap)}, fps cap ${String(config.maxFps)})`)
+      }
     } catch (err) {
       logger.warn(`Could not write FPS Boost config: ${(err as Error).message}`)
     }

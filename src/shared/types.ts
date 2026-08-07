@@ -41,6 +41,12 @@ export interface LauncherSettings {
   shaderAutoReduceRd: boolean
   /** After a shader crash, launch the next session with shaders disabled. */
   autoDisableShadersOnCrash: boolean
+  /**
+   * Opt-in unlimited frame rate (v1.0.13 safety: OFF by default). When ON the
+   * engine's safe default FPS cap is removed — drives the GPU harder and can
+   * trigger thermal/power shutdown on some hardware; clearly warned in UI.
+   */
+  unlimitedFps: boolean
   /** Recently performed activities shown on the Home page. */
   recentActivity: RecentActivity[]
 

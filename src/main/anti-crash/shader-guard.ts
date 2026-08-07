@@ -1,15 +1,15 @@
 /**
  * Shader Guard — the Reimagined anti-crash layer for the shader rendering path.
  *
- * Shader crashes are almost never random; they come from a small set of
- * causes. This module diagnoses EACH of them against REAL detected hardware
- * and never lets a shader attempt take down the game silently:
+ * v1.0.13 correction: the guard is a SAFETY NET, never a gate. Shaders must
+ * launch and play normally in the vast majority of cases — the guard's job is
+ * to catch and gracefully recover from an ACTUAL failure if one happens:
  *
- *  1. GPU / driver incompatibility — assessed from the detected GPU (vendor,
- *     VRAM, driver version). Unsupported hardware is refused BEFORE the game
- *     even launches with shaders, with a clear explanation.
- *  2. VRAM exhaustion — shaders roughly double VRAM pressure; on low-VRAM
- *     GPUs the engine offers to auto-reduce render distance.
+ *  1. GPU / driver capability — assessed from the detected GPU, but used ONLY
+ *     as a non-blocking warning for borderline hardware. The launch always
+ *     proceeds; when in doubt we rely on the runtime fallback instead.
+ *  2. VRAM — a warning with the option to proceed (auto-reduce render
+ *     distance only when the user enabled that setting). Never a hard block.
  *  3. Compile / runtime failures — a crash WHILE shaders were enabled is
  *     recorded (crash flag written before the shader session); the next
  *     launch auto-disables shaders and tells the user why, breaking the
@@ -144,6 +144,12 @@ export function profileUsesShaders(profile: Profile): boolean {
 /**
  * Assess whether THIS machine can realistically run shaders. Real hardware
  * data only — vendor, VRAM and driver version from the detected profile.
+ *
+ * v1.0.14: this is deliberately NON-BLOCKING. Even a sub-1 GB VRAM GPU gets a
+ * strong warning and the launch proceeds — VRAM is never a hard block, the
+ * user can always choose "launch anyway", and if shaders actually fail the
+ * runtime fallback and auto-recovery handle it. (The ShaderSupport type keeps
+ * an 'unsupported' level for UI display only; the launcher never refuses.)
  */
 export function assessShaderSupport(hw: HardwareProfile | null): ShaderSupport {
   const reasons: string[] = []
@@ -154,24 +160,30 @@ export function assessShaderSupport(hw: HardwareProfile | null): ShaderSupport {
 
   let level: ShaderSupport['level'] = 'ok'
 
-  // 1) VRAM — shaders roughly double VRAM pressure.
-  if (vramGB > 0 && vramGB < 2) {
-    level = 'unsupported'
-    reasons.push('This GPU has ' + vramGB + ' GB of VRAM — shaders need at least 2 GB and may exhaust memory and crash the game.')
+  // 1) VRAM — shaders roughly double VRAM pressure. VRAM is NEVER a hard
+  //    block (v1.0.14): even sub-1 GB GPUs get a strong warning and the
+  //    launch proceeds — the user can always choose "launch anyway" and the
+  //    runtime fallback/auto-recovery is the safety net.
+  if (vramGB > 0 && vramGB < 1) {
+    level = 'limited'
+    reasons.push('This GPU has less than 1 GB of VRAM — shaders will very likely exhaust memory and crash the game. Try a lightweight shader pack or skip shaders on this machine.')
+  } else if (vramGB > 0 && vramGB < 2) {
+    level = 'limited'
+    reasons.push('This GPU has ' + vramGB + ' GB of VRAM — shaders may run out of memory at high render distance. Consider lowering render distance if you see stutters.')
   } else if (vramGB > 0 && vramGB < 4) {
     level = 'limited'
-    reasons.push('This GPU has ' + vramGB + ' GB of VRAM — shaders can work but may run out of memory at high render distance.')
+    reasons.push('This GPU has ' + vramGB + ' GB of VRAM — shaders can work but may struggle at high render distance.')
   }
 
-  // 2) Integrated Intel iGPUs without a modern driver are a common crash source.
+  // 2) Older Intel HD iGPUs are a common crash source — warn, don't block.
   const isOldIntel =
     hw?.gpu.some((g) => /intel/i.test(g.vendor) && /hd (graphics )?(2000|3000|4000|2500|4400|4600)/i.test(g.name)) ?? false
   if (isOldIntel) {
-    level = 'unsupported'
-    reasons.push('This Intel HD Graphics generation does not fully support the OpenGL features shaders require.')
+    level = 'limited'
+    reasons.push('This Intel HD Graphics generation may not fully support the OpenGL features shaders require — if shaders crash, update the driver or use a lighter pack.')
   }
 
-  // 3) Outdated drivers on otherwise-capable GPUs.
+  // 3) Outdated drivers on otherwise-capable GPUs — always just a warning.
   const min = MIN_DRIVERS[vendor]
   if (min && driverVersion && !driverAtLeast(driverVersion, min)) {
     level = 'limited'

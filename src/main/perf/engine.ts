@@ -109,6 +109,14 @@ export function effectiveTier(settings: LauncherSettings, hw: HardwareProfile | 
  * and is never the default.
  */
 export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record<string, unknown> {
+  // Frame-rate safety (v1.0.13): the engine NEVER lets the GPU run uncapped by
+  // default — an unbounded frame rate is the #1 cause of whole-PC thermal /
+  // power-delivery shutdowns on weaker machines. The cap tracks the detected
+  // monitor refresh rate (safe 120 when unknown) and is bounded to 240, snapped
+  // to vanilla's real framerateLimit values so options.txt stays clean. The
+  // in-game watchdog also enforces the same value (`-Dreimagined.maxfps`).
+  const refresh = hw?.display.refreshHz && hw.display.refreshHz >= 60 ? hw.display.refreshHz : 120
+  const safeCap = snapFpsCap(Math.max(60, Math.min(240, Math.round(refresh))))
   const base = {
     enabled: true,
     reduceParticles: true,
@@ -124,23 +132,27 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     lodDistance: 64,          // chunks beyond this use simplified merged geometry
     asyncChunkUpload: true,   // mesh upload off the main render thread
     overdrawReduction: true,  // early-Z / depth-sorted opaque pass
-    textureBatching: true     // atlas-friendly batching to cut texture swaps
+    textureBatching: true,    // atlas-friendly batching to cut texture swaps
+    // v1.0.13 — frame-rate cap (never uncapped by default; 260 = "Unlimited").
+    unlimitedFps: false,
+    maxFps: 120
   }
   const slowStorage = hw?.storage.type === 'HDD'
   if (tier === 'potato') {
-    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48 }
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 60 }
   }
   if (tier === 'balanced') {
-    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64 }
+    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: Math.max(60, Math.min(safeCap, 120)) }
   }
   if (tier === 'high') {
-    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96 }
+    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: safeCap }
   }
   // Turbo — maximum FPS, clearly a trade-off preset (never the default).
   // Note: limitEntityAnimations stays OFF — the v1.0.1 bundled mod removed the
   // entity-animation state cache because it caused the enchantment glint
   // artifact; Turbo must not re-enable that broken path. It trades geometry,
-  // particles and LOD instead.
+  // particles and LOD instead. Turbo still keeps a safe frame cap — "unlimited"
+  // is a separate, explicitly-warned opt-in (`unlimitedFps`), never a default.
   return {
     ...base,
     reduceVisualEffects: true,
@@ -152,7 +164,8 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     overdrawReduction: true,
     textureBatching: true,
     fogDistanceCutoff: true,    // fog-assisted distance cutoff for distant terrain
-    particleDensity: 0.25       // quarter-density particles
+    particleDensity: 0.25,      // quarter-density particles
+    maxFps: Math.max(60, Math.min(safeCap, 120))
   }
 }
 
@@ -174,6 +187,48 @@ export function jvmFlagsFor(tier: PerfTier): string[] {
     // Turbo also trims GC work for the absolute-lowest-latency frames.
     ...(tier === 'turbo' ? ['-XX:+UseCompressedOops', '-XX:+DisableExplicitGC'] : [])
   ]
+}
+
+/** Vanilla's real framerateLimit slider values (10..260). */
+const VANILLA_FPS_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 144, 160, 180, 240, 260]
+
+/** Snap a target FPS to the nearest vanilla framerateLimit value (>= 60). */
+function snapFpsCap(target: number): number {
+  const t = Math.max(60, Math.min(260, target))
+  let best = 120
+  for (const step of VANILLA_FPS_STEPS) {
+    if (Math.abs(step - t) < Math.abs(best - t)) best = step
+  }
+  return best
+}
+
+/**
+ * Write the engine's frame-rate cap into the instance's real `options.txt`
+ * (vanilla key `maxFps`, valid range 10..260 where 260 = "Unlimited"). Called
+ * on every launch so the game NEVER starts with an unbounded GPU load by
+ * default. Minecraft reads options.txt at startup and rewrites it on exit,
+ * so re-applying it here each launch is the correct, real mechanism.
+ */
+export function applyFrameCap(gameDir: string, maxFps: number): void {
+  try {
+    const file = path.join(gameDir, 'options.txt')
+    const cap = snapFpsCap(maxFps)
+    let content = ''
+    try {
+      content = fs.readFileSync(file, 'utf-8')
+    } catch {
+      content = ''
+    }
+    const capped = content.replace(/^maxFps:.*$/m, `maxFps:${cap}`)
+    if (capped === content) {
+      fs.writeFileSync(file, content + `\nmaxFps:${cap}\n`, 'utf-8')
+    } else {
+      fs.writeFileSync(file, capped, 'utf-8')
+    }
+    logger.info(`RPE: frame-rate cap ${cap} FPS applied for this session.`)
+  } catch (err) {
+    logger.warn('RPE: could not apply frame-rate cap: ' + (err as Error).message)
+  }
 }
 
 /* ------------------------------ sessions & learning ------------------------------ */
@@ -430,4 +485,4 @@ export async function applyRecommendation(payload: { id?: string; profileId?: st
   }
 }
 
-export const engine = { detectHardware, scoreHardware, recommendMemoryMB, effectiveTier, fpsConfigFor, jvmFlagsFor, perfStatus, buildRecommendations, applyRecommendation, recordSessionFromLog }
+export const engine = { detectHardware, scoreHardware, recommendMemoryMB, effectiveTier, fpsConfigFor, jvmFlagsFor, perfStatus, buildRecommendations, applyRecommendation, recordSessionFromLog, applyFrameCap }

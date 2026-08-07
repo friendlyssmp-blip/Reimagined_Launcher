@@ -1,5 +1,5 @@
 {
-  "version": "1.0.13",
-  "notes": "v1.0.13 — Fixed: the launcher now reopens by itself after installing an update. Root cause: the silent NSIS installer never shows its Finish page, so it never relaunched the app. The updater now arms a detached helper that waits for the installer to finish replacing the files and then starts the new launcher automatically.",
-  "installer": "dist/Reimagined-Setup-1.0.13.exe"
+  "version": "1.0.14",
+  "notes": "v1.0.14 — Shaders now launch and play normally (the Shader Guard is a safety net, not a gate: borderline hardware gets a warning but always proceeds; only a real failure triggers recovery). Frame-rate safety: the engine ALWAYS caps FPS by default (matches your monitor refresh, max 240) so the GPU never runs unbounded — fixes whole-PC thermal/power crashes; 'Unlimited FPS' is a warned opt-in in Settings. The FPS Boost mod (v1.0.2) gained a watchdog that re-asserts the cap every 5s, plus a SafetyGate that auto-disables any render module that keeps failing instead of crashing on a 'render frame' error. The Crash Assistant now recognizes render-frame failures and logs the full crash report.",
+  "installer": "dist/Reimagined-Setup-1.0.14.exe"
 }

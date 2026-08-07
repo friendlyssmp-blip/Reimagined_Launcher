@@ -28,6 +28,10 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // when shaders are enabled, and auto-disable shaders after a shader crash.
   shaderAutoReduceRd: true,
   autoDisableShadersOnCrash: true,
+  // v1.0.13 frame-rate safety: the engine ALWAYS applies a sane FPS cap by
+  // default. `unlimitedFps` is a clearly-warned, explicit opt-in that removes
+  // the cap — OFF by default (uncapped FPS can trigger thermal shutdown).
+  unlimitedFps: false,
   recentActivity: [],
   audioEnabled: true,
   audioVolume: 0.7,

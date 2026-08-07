@@ -35,6 +35,16 @@ function suggestFor(text: string): string[] {
     out.push('This looks like a shader crash. The launcher will start the next session with shaders disabled so the game can run — re-enable them from the in-game shader menu when you\'re ready.')
     out.push('If shaders keep crashing, update your GPU drivers or try a different shader pack. Older/low-VRAM GPUs often need render distance lowered.')
   }
+  // Render-frame failures — an exception escaped during the per-frame render
+  // call (vanilla Description: "Failed to render frame", stack in the Render
+  // thread). Newly diagnosed: the FPS Boost in-game watchdog now logs the full
+  // stack so this can be debugged from real data.
+  // Narrow on purpose: "render thread" appears in the head of nearly every
+  // crash report, so only specific per-frame render failures should match.
+  if (/render frame|failed to render|framebuffer|renderer.*error|exception.*render|at net\.minecraft\.client\.renderer/i.test(lower)) {
+    out.push('The game crashed while rendering a frame — usually a GPU/driver issue or an aggressive render optimization. The Reimagined engine auto-lowers its render tweaks after this kind of crash; updating your GPU driver is the most common fix.')
+    out.push('Try lowering Render Distance and disabling shaders to isolate it, then re-enable one at a time. Reimagined FPS Boost settings can also be reduced in the in-game menu (K).')
+  }
   if (/outofmemoryerror|out of memory|memoryerror|unable to allocate/i.test(lower)) {
     out.push('The game ran out of memory. Increase this profile RAM (Play → Memory) to 4–8 GB, or close other apps while playing.')
   }

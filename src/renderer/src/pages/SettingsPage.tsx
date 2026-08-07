@@ -611,6 +611,24 @@ function PerformanceSection() {
           />
         </div>
 
+        {/* v1.0.13 frame-rate safety: the engine always caps FPS by default;
+            "unlimited" is a clearly-warned, explicit opt-in, OFF by default. */}
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <Toggle
+            checked={settings.unlimitedFps ?? false}
+            onChange={(v) => {
+              void updateSettings({ unlimitedFps: v })
+              notify(v ? 'error' : 'success', v ? 'Unlimited FPS enabled' : 'Frame cap restored', v ? 'Driving the GPU without a cap can cause overheating or shutdowns on some hardware — you were warned.' : 'The engine will re-apply its safe frame cap on the next launch.')
+            }}
+            label="Unlimited FPS (not recommended)"
+          />
+          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>
+            {settings.unlimitedFps
+              ? 'Off by default for a reason: without a frame cap the GPU runs at 100% load and on some PCs that triggers thermal shutdown or a power-protection restart. Only enable this on desktop hardware with strong cooling.'
+              : 'The engine caps FPS to a safe value (matching your monitor refresh rate, max 240) so the GPU never runs unbounded — this prevents whole-PC crashes on weaker hardware.'}
+          </div>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
           <div
             style={{

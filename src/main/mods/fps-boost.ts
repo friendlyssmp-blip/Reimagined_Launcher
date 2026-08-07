@@ -15,8 +15,8 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-const FPS_BOOST_VERSION = '1.0.1'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.1.jar'
+const FPS_BOOST_VERSION = '1.0.2'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.2.jar'
 
 /** Path of the mod jar bundled with the launcher.
  * Dev: project `data/bundled`. Packaged: shipped inside the installer via
@@ -54,9 +54,8 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
 
     const { mkdirp } = await import('../utils/fs')
     mkdirp(modsDir)
-    // 1.0.1 removed the fragile entity-animation state cache (it could cause
-    // visual artifacts like the enchantment glint disappearing). Drop any
-    // previous bundled jar so no stale copy stays behind.
+    // 1.0.2 adds the frame-rate watchdog + SafetyGate auto-fallback (v1.0.13
+    // release). Drop any previous bundled jar so no stale copy stays behind.
     if (existing && existing.filename && existing.filename !== FPS_BOOST_FILENAME) {
       try {
         fs.rmSync(path.join(modsDir, existing.filename), { force: true })
