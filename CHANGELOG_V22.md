@@ -897,3 +897,15 @@ on the next launch.
   configured → setup card with the deploy guide) from real failures (proxy
   down / HTTP error → compact banner with Retry), so a transient error never
   misleads the user into thinking the proxy isn't set up.
+
+
+## v1.0.39 — Modrinth-first search with automatic CurseForge fallback
+- The Modrinth tab now auto-falls back to CurseForge when a real search term
+  returns zero results (and no category filter is active): a banner says
+  "No Modrinth results — showing X matches from CurseForge instead" and the
+  hits render with the CurseForge badge and install through CurseForge.
+- Modrinth remains the priority: CurseForge results only appear when Modrinth
+  has nothing, so normal browsing is untouched.
+- Confirmed: the Fabric API (and Legacy Fabric API) installs exclusively from
+  Modrinth (api.modrinth.com) on profile creation and first launch — CurseForge
+  is never used for it.

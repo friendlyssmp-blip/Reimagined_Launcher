@@ -1,7 +1,7 @@
 {
-  "notes": "v1.0.38 — CurseForge fix + clearer errors.\n\nFixed the CurseForge 404: the backend proxy now accepts the exact paths the\nlauncher sends (/api/cf/mods/search, /mods/:id, /mods/:id/files, changelog,\nsingle file) — previously only shorter browser-test paths matched, so every\nlauncher request returned HTTP 404. The fix is deployed to the proxy itself,\nso CurseForge now works even without updating the launcher; this release also\nmakes error states honest: the \"not connected\" setup card only appears when no\nproxy URL is configured, while real failures (proxy down / HTTP error) show a\ncompact Retry banner instead of a misleading setup message.\n",
-  "publishedAt": "2026-08-08T13:28:00.000Z",
-  "sha256": "5bee964785f590bafce6c5e25ace6e61d329cca183792ced724d6dc84696f566",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.38.exe",
-  "version": "1.0.38"
+  "notes": "v1.0.39 — Modrinth-first search with automatic CurseForge fallback.\n\nSearching the Modrinth tab now never dead-ends: if Modrinth has no match\nfor your search term, the launcher automatically runs the same search in\nCurseForge and shows those results with a clear banner (\"No Modrinth\nresults — showing X matches from CurseForge instead\"). Modrinth stays the\npriority — results only come from CurseForge when Modrinth truly has none\n(and no category filter is active). Installing from the fallback list\nworks exactly the same way.\n\nAlso confirmed: the Fabric API is always installed from Modrinth\n(api.modrinth.com) — creating a Fabric profile never touches CurseForge.\n",
+  "publishedAt": "2026-08-08T13:38:00.000Z",
+  "sha256": "a53243c7bce0ad7ce05b6d34831cd5bac539c192105044d73ef2c8a819aef268",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.39.exe",
+  "version": "1.0.39"
 }

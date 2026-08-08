@@ -3378,3 +3378,9 @@ select.select:hover {
 .dl-card-meta.done { color: #34d399; font-weight: 600; }
 .dl-card-meta.err { color: #f87171; }
 .dl-card-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+
+/* v1.0.39 — Modrinth-empty -> CurseForge fallback note */
+.cf-fallback-note {
+  border-left: 3px solid var(--accent-3, #a78bfa);
+  font-size: 12.5px;
+}

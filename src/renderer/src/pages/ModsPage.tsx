@@ -175,6 +175,27 @@ export function ModsPage() {
         const page = r.items.map((x) => ({ ...x, source: 'modrinth' as const }))
         setResults((prev) => (append ? [...prev, ...page] : page))
         setOffset(startOffset + page.length)
+        // v1.0.39 — Modrinth-first: when the FIRST page of a real query has no
+        // results (and no category filter is active), automatically look in
+        // CurseForge for the same term so users never hit a dead end. The
+        // results keep the CurseForge badge and install through CurseForge.
+        if (!append && page.length === 0 && term.trim() && category === null) {
+          setCfFallback(true)
+          setSearching(true)
+          try {
+            const cfSort = modrinthIndex === 'updated' ? 'recent' : modrinthIndex === 'relevance' ? 'downloads' : modrinthIndex
+            const cfPage = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType)
+            if (mySeq === searchSeq.current) {
+              setResults(cfPage.map((x) => ({ ...x, source: 'curseforge' as const })))
+              setCfFallbackCount(cfPage.length)
+            }
+          } catch {
+            if (mySeq === searchSeq.current) setCfFallbackCount(0)
+          }
+        } else {
+          setCfFallback(false)
+          if (!append) setCfFallbackCount(0)
+        }
       } catch (err) {
         notify('error', 'Search failed', friendlyError(err))
       } finally {
@@ -192,6 +213,8 @@ export function ModsPage() {
   const [cfSearching, setCfSearching] = useState(false)
   const [cfError, setCfError] = useState<string | null>(null)
   const [cfSetup, setCfSetup] = useState(false)
+  const [cfFallback, setCfFallback] = useState(false)
+  const [cfFallbackCount, setCfFallbackCount] = useState(0)
   const doCurseforgeSearch = useCallback(
     async (q?: string, _append = false) => {
       if (!activeProfile) return
@@ -882,6 +905,14 @@ export function ModsPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {tab === 'modrinth' && cfFallback && query.trim() && (
+              <div className="panel cf-fallback-note">
+                <b>No Modrinth results for “{query}”</b>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                  {' '}— showing {cfFallbackCount} match{cfFallbackCount === 1 ? '' : 'es'} from CurseForge instead. Install works the same way.
+                </span>
+              </div>
+            )}
             {visible.map(renderRow)}
             {loadingMore && (
               <div className="row" style={{ justifyContent: 'center', padding: '16px 0' }}>
