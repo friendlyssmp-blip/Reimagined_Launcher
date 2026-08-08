@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../state/AppContext'
+import { sound } from '../lib/sound'
 import { Modal, Button, Field, TextInput, Select, Slider, ProfileGlyph } from './ui'
 import { PROFILE_ICONS } from './icons'
 import { api, friendlyError } from '../lib/api'
@@ -151,6 +152,7 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
           )
           try {
             await api.profiles.prepare(profile.id)
+            sound.installComplete()
             notify('success', 'Profile ready', `${mcVersion}${loader !== 'vanilla' ? ` + ${loader}` : ''} is installed.`)
           } catch (err) {
             notify('error', 'Could not prepare new version', friendlyError(err))

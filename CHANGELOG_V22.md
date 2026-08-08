@@ -777,3 +777,31 @@ chunk work is scheduled changed (zero gameplay/functional changes).
 
 Bundled FPS Boost upgraded to 1.0.11 - profiles on older bundles auto-upgrade
 on the next launch.
+
+## v1.0.35 follow-up - Change 2 implemented for real: processed-output decode cache (LoadCache)
+
+### The gap closed
+- The reviewer caught that the first v1.0.35 cut covered only load *responsiveness*
+  (LoadingBoost), not Change 2’s raw-load-*speed* requirements. This follow-up
+  implements the speed half properly inside the bundled FPS Boost mod.
+
+### LoadCache - processed-result caching (the biggest repeat-load lever)
+- Decoded texture pixels are cached keyed by the SHA-256 of the exact input bytes.
+  Identical bytes ALWAYS decode to identical pixels (STB decode is deterministic),
+  so every cache hit is pixel-identical by construction - and there is no
+  invalidation logic to get wrong: a changed pack changes the bytes, which changes
+  the key. Nothing to invalidate.
+- Two tiers, both bounded with LRU eviction:
+  - In-memory LRU (~96 MB of decoded pixels) - fast repeat loads within a session.
+  - On-disk tier at gameDir/reimagined-cache/textures (~512 MB, oldest-first
+    eviction) - repeat loads across sessions, surviving restarts.
+- Restore is one bulk ByteBuffer.put into NativeImage.getPixelBytes() (the live
+  backing buffer) instead of a full STB decode. Disk writes happen on a dedicated
+  daemon thread, so the reload is never slowed by IO.
+- Hooked at NativeImage.read(InputStream) + read(Format, InputStream) with a
+  re-entrancy guard; every path guarded - a hash failure, IO error or format
+  mismatch falls through to the normal vanilla decode. A failed cache can never
+  change what a texture looks like or break texture loading.
+- New config toggle textureDecodeCache (default on) + SafetyGate “loadcache” case.
+- Real measured stats are logged per reload (hits/misses/stored/failed) and at
+  game close, feeding the ongoing performance changelog.

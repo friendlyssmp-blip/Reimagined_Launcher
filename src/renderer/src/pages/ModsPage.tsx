@@ -479,6 +479,7 @@ export function ModsPage() {
     if (!activeProfile) return
     await runGuarded('Back up world', async () => {
       await api.content.backupWorld(activeProfile.id, w.folder)
+      sound.installComplete()
       notify('success', 'World backed up', `“${w.name}” was copied into the instance's backups folder.`)
     })
   }
