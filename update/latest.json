@@ -1,7 +1,7 @@
 {
-  "version": "1.0.31",
-  "installer": "dist/Reimagined-Setup-1.0.31.exe",
-  "notes": "v1.0.31 — CRITICAL FIX: the Update button was broken for v1.0.30 (it did nothing on 2 PCs). Root cause: the v1.0.30 manifest dropped the installer field the client requires, so the packaged launcher silently fell back to the whole-repository codeload zip (wrong artifact, slow/blocked host) — the download never completed and install() rejected it (not an exe). Fix: (1) the manifest now declares the asset BOTH as installer path and direct url; (2) the updater resolves the asset from installer OR a direct asset url, and on a packaged install with no asset it disables the button with a clear log instead of silently downloading the repo zip; (3) the downloaded installer is now SHA-256 verified against the manifest — a corrupt/partial/tampered file is deleted and the update cancelled loudly; (4) download start is logged (real network call confirmed). Existing v1.0.30 users were already unblocked by the hotfix manifest commit (d12fd7a).",
-  "sha256": "b11f3e7f00e706f380ea8968c451ca10fb4b0f282941d10d2357ba5aa1f9d179",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.31.exe"
+  "version": "1.0.32",
+  "installer": "dist/Reimagined-Setup-1.0.32.exe",
+  "notes": "v1.0.32 — Follow-up to the critical update fix (v1.0.31): the direct-asset url fallback is now restricted to packaged installs only. Source/dev runs always update via the repository zip (codeload) and can no longer be hijacked by a direct exe link in the manifest url field; asset names also strip query strings/fragments. Same guarantees as v1.0.31: the manifest declares the asset as installer path + direct url, the Update button is disabled with a clear log when a packaged install has no asset (no silent repo-zip fallback), the download is logged at start and SHA-256-verified against the manifest (mismatch = file deleted + update cancelled loudly).",
+  "sha256": "0958f23a447b981b30b2283ceb1c0156039a91d2344845c607c8fa434a003d4f",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.32.exe"
 }

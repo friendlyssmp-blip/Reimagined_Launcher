@@ -264,15 +264,20 @@ export const updater = {
       // shows the honest "No installer asset" state instead of a download
       // that can never install.
       const directUrl = String(data.url ?? '').trim()
-      const directAsset = /\.(exe|zip)(\?|#|$)/i.test(directUrl) ? directUrl : ''
+      const directAsset = app.isPackaged && /\.(exe|zip)(\?|#|$)/i.test(directUrl) ? directUrl : ''
+      // The `installer` path is only honored on packaged installs — SOURCE
+      // (dev / zip) runs must ALWAYS update via the whole-repository codeload
+      // zip, never a direct .exe link from the manifest `url` field.
       const installer = app.isPackaged && data.installer ? String(data.installer).replace(/^\/+/, '') : ''
       const assetUrl = installer
         ? `${RAW_BASE}/${installer}`
-        : directAsset || (app.isPackaged ? '' : CODELOAD_ZIP)
+        : app.isPackaged
+          ? directAsset
+          : CODELOAD_ZIP
       const assetName = installer
         ? path.basename(installer)
-        : directAsset
-          ? (directAsset.split('/').pop() || 'reimagined-update')
+        : app.isPackaged && directAsset
+          ? (directAsset.split('/').pop()?.split(/[?#]/)[0] || 'reimagined-update')
           : 'Reimagined_Launcher-main.zip'
       if (app.isPackaged && !installer && !directAsset) {
         logger.warn(
@@ -381,7 +386,7 @@ export const updater = {
       const hash = createHash('sha256')
       await new Promise<void>((resolve, reject) => {
         const stream = fs.createReadStream(dest)
-        stream.on('data', (c) => hash.update(c as Buffer))
+        stream.on('data', (c) => hash.update(c))
         stream.on('end', () => resolve())
         stream.on('error', reject)
       })

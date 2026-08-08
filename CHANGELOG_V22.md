@@ -669,3 +669,15 @@ chunk work is scheduled changed (zero gameplay/functional changes).
   size matches local 83890320 bytes) and to `Reimagined-Setup-1.0.31.exe` for v1.0.31.
 - Smoke 12/12 (live updater check included); typechecks node+web clean.
 
+## v1.0.32 — Update fix follow-up (source-run regression caught in review)
+
+- The direct-asset `url` fallback is now restricted to PACKAGED installs only:
+  source/dev runs always update via the repository zip (codeload) and can no
+  longer be hijacked by a direct .exe link in the manifest `url` field (which
+  would have made `installSource()` try to unzip an exe).
+- Asset names derived from a direct URL now strip query strings/fragments.
+- Same guarantees as v1.0.31: asset declared as `installer` path + direct `url`,
+  no silent repo-zip fallback on packaged installs (clear log + disabled
+  button), download start logged, SHA-256 verified (mismatch = delete + loud
+  cancel).
+
