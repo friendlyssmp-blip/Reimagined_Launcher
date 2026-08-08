@@ -1,8 +1,8 @@
 {
-  "version": "1.0.48",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.48.exe",
-  "sha256": "332914a8fb76a4e88e467448f0e060da820254ad9019d3a6e5caa7b1eb1b8d19",
-  "publishedAt": "2026-08-08T22:03:11.362308Z",
-  "notes": "v1.0.48 - CurseForge installs fixed (no more Modrinth errors).\n\nCurseForge search results showed up fine, but clicking Install mentioned\nModrinth and failed: the install confirmation modal was hardcoded to\nModrinth (detail/versions/deps loaded from Modrinth, install calls used\nthe Modrinth-only paths with the CurseForge numeric id). The modal is now\nprovider-aware: CurseForge items load through the proxy, install through\ninstallVersion with the real provider, and get a single Install button\n(CurseForge exposes no dependency tree, so items install alone).\nProjectDetail also routes CurseForge before the Modrinth-only shift-click\ndependency path. Modrinth behavior is unchanged. Verified live against\nthe proxy (search -> files -> download-url -> real jar download).",
-  "size": 83893073
+  "version": "1.0.49",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.49.exe",
+  "sha256": "f72777d1f1ddbf2a5f6168de5a7a9974787ec75e38c58cea6833d2a6bd77ed69",
+  "publishedAt": "2026-08-08T22:21:44.480742Z",
+  "notes": "v1.0.49 - Smarter install dialog (adapts to dependencies).\n\nThe install confirmation now adapts its actions to the item's real\ndependency state: no deps -> a single \"Install\" button; missing deps ->\n\"Install with Dependencies (N)\" plus \"Install Only\"; all deps already\ninstalled -> \"Install Only\" as the only action, still listing which\ndependency the item needs (marked \"Already installed\"). CurseForge keeps\nits single Install button. Verified: tsc clean, build clean, smoke 12/12.",
+  "size": 83893089
 }

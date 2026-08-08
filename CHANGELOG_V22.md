@@ -1,5 +1,21 @@
 
 ## v1.0.34 — 3-option update prompt (no silent auto-update) + bundled FPS Boost 1.0.10
+## v1.0.49 — Smarter install dialog (adapts to dependencies)
+
+The install confirmation now adapts its actions to the item's real dependency
+state instead of always showing the same two buttons:
+
+- No dependencies at all -> a single clean "Install" button.
+- Missing dependencies -> "Install with Dependencies (N)" as the primary action
+  plus "Install Only" for just the item.
+- Every dependency already installed -> "Install Only" as the only action, and
+  the dialog still lists exactly which dependency the item needs (marked
+  "Already installed"), so you always know what you are getting.
+- The hint line on the left matches the case: no deps / required missing /
+  optional missing / all already installed.
+
+CurseForge items keep their single "Install" button (no dependency tree is
+exposed through the proxy). Verified: tsc clean, build clean, smoke 12/12.
 ## v1.0.48 — CurseForge installs fixed (no more Modrinth errors)
 
 ### 1) The bug

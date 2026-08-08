@@ -3,13 +3,14 @@
  * page). Shown on a plain Install click for ANY content type (mods, resource
  * packs, data packs, shaders) BEFORE anything downloads.
  *
- * It resolves the item's REAL dependency declarations from Modrinth (full
- * tree, de-duplicated), shows each dependency's status — "Already installed"
- * vs "Will be installed" — and offers two actions:
- *   • "Install with Dependencies" (primary, safe default) — installs the
- *     item + every missing dependency, skipping already-installed ones.
- *   • "Install Only" — just the item (allowed, with a warning when required
- *     dependencies are missing).
+ * It resolves the item's REAL dependency declarations (full tree from
+ * Modrinth, de-duplicated), shows each dependency's status — "Already
+ * installed" vs "Will be installed" — and adapts its actions to reality:
+ *   • No dependencies at all → a single "Install" button.
+ *   • Missing dependencies → "Install with Dependencies" (primary) + "Install
+ *     Only".
+ *   • All dependencies already installed → "Install Only" (the list still
+ *     shows exactly what the item depends on).
  * Holding Left Shift on Install bypasses this dialog (see call sites).
  */
 import { useEffect, useState } from 'react'
@@ -223,29 +224,42 @@ export function InstallConfirmModal({
         {info && busy === null && (
           <div className="modal-foot">
             <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--text-3)' }}>
-              {target.provider === 'curseforge'
-                ? 'CurseForge does not expose dependency data — the item installs alone.'
+              {allDeps.length === 0
+                ? target.provider === 'curseforge'
+                  ? 'CurseForge does not expose dependency data — the item installs alone.'
+                  : 'No additional dependencies required.'
                 : missingRequired.length > 0
                   ? 'Required dependencies are missing — install them for the item to work correctly.'
                   : missing.length > 0
                     ? 'Optional dependencies can be added with “with dependencies”.'
-                    : 'Everything is already installed — installing only adds the item.'}
+                    : 'All dependencies are already installed — the item installs alone.'}
             </div>
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            {target.provider !== 'curseforge' && (
-              <Button
-                variant="ghost"
-                onClick={() => void doInstall(false)}
-                title={missingRequired.length > 0 ? 'Install the item alone — it may not work without its required dependencies' : 'Install only the item'}
-              >
+            {allDeps.length === 0 ? (
+              /* No dependencies at all — one clean Install action. */
+              <Button variant="primary" onClick={() => void doInstall(false)}>
+                Install
+              </Button>
+            ) : missing.length > 0 ? (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => void doInstall(false)}
+                  title={missingRequired.length > 0 ? 'Install the item alone — it may not work without its required dependencies' : 'Install only the item'}
+                >
+                  Install Only
+                </Button>
+                <Button variant="primary" onClick={() => void doInstall(true)}>
+                  Install with Dependencies ({missing.length})
+                </Button>
+              </>
+            ) : (
+              /* Every dependency is already installed — Install Only is the
+                 only action; the list above still shows what it depends on. */
+              <Button variant="primary" onClick={() => void doInstall(false)}>
                 Install Only
               </Button>
             )}
-            <Button variant="primary" onClick={() => void doInstall(true)}>
-              {target.provider === 'curseforge'
-                ? 'Install'
-                : `Install with Dependencies${missing.length > 0 ? ` (${missing.length})` : ''}`}
-            </Button>
           </div>
         )}
       </div>
