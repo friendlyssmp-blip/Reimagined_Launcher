@@ -1,4 +1,4 @@
-// Reimagined Launcher — secure CurseForge proxy (Change 5, v1.0.36).
+// Reimagined Launcher — secure CurseForge proxy (Change 5, v1.0.36, fixed v1.0.38).
 //
 // The CurseForge API v3 key lives ONLY here as the CF_API_KEY environment
 // variable — it is never shipped inside the launcher and never committed to
@@ -20,15 +20,26 @@ if (!CF_API_KEY) {
 }
 
 const CF_BASE = 'https://api.curseforge.com/v1'
-const UA = 'ReimaginedLauncher/1.0.36 (Minecraft launcher)'
+const UA = 'ReimaginedLauncher/1.0.38 (Minecraft launcher)'
 
-// Whitelisted routes. Query strings are forwarded for /search and /files.
+// Whitelisted routes. The launcher (src/main/mods/curseforge.ts) forwards the
+// raw CurseForge API path under /api/cf/mods/... — those are the primary
+// routes. The short aliases (/search, /project, /files, /changelog, /file)
+// are kept for quick manual testing in a browser. Query strings are forwarded
+// where CurseForge needs them (/mods/search, /mods/:id/files).
 const ROUTES = [
-  { re: /^\/api\/cf\/search$/,            cf: (u) => '/mods/search' + u.search },
-  { re: /^\/api\/cf\/project\/(\d+)$/,    cf: (u, m) => `/mods/${m[1]}` },
-  { re: /^\/api\/cf\/files\/(\d+)$/,      cf: (u, m) => `/mods/${m[1]}/files` + u.search },
-  { re: /^\/api\/cf\/changelog\/(\d+)\/(\d+)$/, cf: (u, m) => `/mods/${m[1]}/files/${m[2]}/changelog` },
-  { re: /^\/api\/cf\/file\/(\d+)\/(\d+)$/, cf: (u, m) => `/mods/${m[1]}/files/${m[2]}` }
+  // --- launcher paths (what the launcher actually sends) ---
+  { re: /^\/api\/cf\/mods\/search$/,                 cf: (u) => '/mods/search' + u.search },
+  { re: /^\/api\/cf\/mods\/(\d+)$/,                  cf: (u, m) => `/mods/${m[1]}` },
+  { re: /^\/api\/cf\/mods\/(\d+)\/files$/,           cf: (u, m) => `/mods/${m[1]}/files` + u.search },
+  { re: /^\/api\/cf\/mods\/(\d+)\/files\/(\d+)\/changelog$/, cf: (u, m) => `/mods/${m[1]}/files/${m[2]}/changelog` },
+  { re: /^\/api\/cf\/mods\/(\d+)\/files\/(\d+)$/,    cf: (u, m) => `/mods/${m[1]}/files/${m[2]}` },
+  // --- short aliases for manual browser testing ---
+  { re: /^\/api\/cf\/search$/,                       cf: (u) => '/mods/search' + u.search },
+  { re: /^\/api\/cf\/project\/(\d+)$/,               cf: (u, m) => `/mods/${m[1]}` },
+  { re: /^\/api\/cf\/files\/(\d+)$/,                 cf: (u, m) => `/mods/${m[1]}/files` + u.search },
+  { re: /^\/api\/cf\/changelog\/(\d+)\/(\d+)$/,      cf: (u, m) => `/mods/${m[1]}/files/${m[2]}/changelog` },
+  { re: /^\/api\/cf\/file\/(\d+)\/(\d+)$/,           cf: (u, m) => `/mods/${m[1]}/files/${m[2]}` }
 ]
 
 function proxy(u, m) {
