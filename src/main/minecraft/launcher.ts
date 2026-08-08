@@ -351,13 +351,20 @@ class Launcher {
     const hw = await rpe.detectHardware(false)
     const { tier } = rpe.effectiveTier(settingsManager.get(), hw)
     jvm.push(...rpe.jvmFlagsFor(tier))
-    // v1.0.13: hand the frame cap to the in-game watchdog so it can enforce
-    // the same safe limit as a backstop (skipped when the user opted into
-    // unlimited FPS). The in-game client reads -Dreimagined.maxfps.
+    // v1.0.13/v1.0.41: hand the frame cap to the in-game watchdog. v1.0.41
+    // fix: the default cap was the FPS regression (290 -> ~100 FPS), so the
+    // flag is only passed when a REAL cap is configured (user-set cap < 260);
+    // otherwise the game runs at vanilla Unlimited and the watchdog stands
+    // down. The in-game client reads -Dreimagined.maxfps.
     if (!settingsManager.get().unlimitedFps) {
       const fpsCfg = rpe.fpsConfigFor(tier, hw)
-      const cap = Math.max(60, Math.min(240, Number(fpsCfg.maxFps) || 120))
-      jvm.push(`-Dreimagined.maxfps=${cap}`)
+      // v1.0.41 — test the RAW value first: 260 (vanilla "Unlimited") must
+      // never be clamped to 240 and pushed as a real cap.
+      const raw = Number(fpsCfg.maxFps) || 260
+      if (raw < 260) {
+        const cap = Math.max(60, Math.min(240, raw))
+        jvm.push(`-Dreimagined.maxfps=${cap}`)
+      }
     }
     jvm.push('-cp', classpath.join(CLASSPATH_SEP))
     if (profile.extraJvmArgs.trim()) jvm.push(...this.splitArgs(profile.extraJvmArgs))

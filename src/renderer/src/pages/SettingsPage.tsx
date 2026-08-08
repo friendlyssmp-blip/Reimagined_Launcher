@@ -356,11 +356,6 @@ export function SettingsPage() {
                 toggle needed. When a new version is found you choose what happens: the launcher
                 <b> never updates itself without your explicit "Update" click</b>.
               </p>
-              <div className="banner banner-info" style={{ marginTop: 10 }}>
-                New releases show a prompt with three options: <b>Update</b> (download → verify → install →
-                relaunch), <b>Cancel</b> (dismiss now — the next check re-prompts), and
-                <b> Remind me later</b> (no prompts again this session; it returns on the next launch).
-              </div>
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Re-check frequency while the launcher is open</div>
                 <select
@@ -526,23 +521,6 @@ export function SettingsPage() {
 
           {section === 'advanced' && (
             <>
-              <div className="panel">
-                <div className="panel-title">CurseForge proxy URL</div>
-                <p className="panel-sub">CurseForge browsing runs through YOUR backend proxy (folder backend/cf-proxy in the repo) — the API key lives only on that server, never in the launcher.</p>
-                <div style={{ marginTop: 10 }}>
-                  <TextInput
-                    value={settings.curseforgeProxyUrl ?? ''}
-                    onChange={(e) => updateSettings({ curseforgeProxyUrl: e.target.value })}
-                    placeholder="https://my-cf-proxy.onrender.com"
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
-                  Empty = the CurseForge tab shows its setup card. Deploy the proxy with your key as a
-                  server-side <code style={{ fontFamily: 'monospace', background: 'var(--bg-2)', padding: '1px 5px', borderRadius: 5 }}>CF_API_KEY</code>{' '}
-                  env var, then paste its base URL here.
-                </p>
-              </div>
               <div className="panel" style={{ textAlign: 'center', padding: '36px 28px' }}>
                 <BrandLogo height={40} style={{ margin: '0 auto 18px' }} />
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>Reimagined Launcher</h3>
@@ -581,10 +559,19 @@ export function SettingsPage() {
                       setModals({
                         confirm: {
                           title: 'Clear all logs?',
-                          message: 'The on-disk launcher log will be emptied. This cannot be undone.',
-                          confirmLabel: 'Clear',
+                          message: 'This is a destructive action. Are you sure you want to continue?',
+                          confirmLabel: 'Continue',
                           danger: true,
-                          onConfirm: () => void api.logs.clear().then(() => notify('success', 'Logs cleared'))
+                          onConfirm: () =>
+                            setModals({
+                              confirm: {
+                                title: 'Really clear all logs?',
+                                message: 'The on-disk launcher log will be emptied. This cannot be undone. Confirm once more to proceed.',
+                                confirmLabel: 'Clear all logs',
+                                danger: true,
+                                onConfirm: () => void api.logs.clear().then(() => notify('success', 'Logs cleared'))
+                              }
+                            })
                         }
                       })
                     }
@@ -597,17 +584,31 @@ export function SettingsPage() {
                       setModals({
                         confirm: {
                           title: 'Clean Release Reset',
-                          message: 'This restores the launcher to a fresh installation: it logs out your Microsoft account, deletes every profile, save, mod, log and cache, resets all settings, and restarts the launcher. This cannot be undone.',
-                          confirmLabel: 'Reset & Restart',
+                          message: 'This restores the launcher to a fresh installation: it logs out your Microsoft account, deletes every profile, save, mod, log and cache, resets all settings, and restarts the launcher. This cannot be undone. Are you sure?',
+                          confirmLabel: 'Continue',
                           danger: true,
-                          onConfirm: async () => {
-                            try {
-                              await api.system.cleanReset()
-                              notify('info', 'Resetting…', 'The launcher will restart as a fresh installation.')}
-                            catch (err) {
-                              notify('error', 'Reset failed', friendlyError(err))
-                            }
-                          }
+                          onConfirm: () =>
+                            setModals({
+                              confirm: {
+                                title: 'Really reset everything?',
+                                message: 'Every profile, save, mod, log, cache and setting will be permanently deleted and the launcher will restart as a fresh installation. Type your final confirmation below.',
+                                confirmLabel: 'Reset & Restart',
+                                danger: true,
+                                option: { label: 'I understand this permanently deletes everything', defaultChecked: false },
+                                onConfirm: async (r) => {
+                                  if (!r?.optionChecked) {
+                                    notify('error', 'Reset cancelled', 'You must confirm the checkbox to reset.')
+                                    return
+                                  }
+                                  try {
+                                    await api.system.cleanReset()
+                                    notify('info', 'Resetting…', 'The launcher will restart as a fresh installation.')
+                                  } catch (err) {
+                                    notify('error', 'Reset failed', friendlyError(err))
+                                  }
+                                }
+                              }
+                            })
                         }
                       })
                     }

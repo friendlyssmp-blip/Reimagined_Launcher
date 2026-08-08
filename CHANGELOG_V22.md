@@ -942,3 +942,42 @@ on the next launch.
   "CurseForge is no longer supported" message is gone).
 
 Verified: tsc node+web clean, build clean, smoke 12/12, live proxy search for CF modpacks returns real data.
+
+## v1.0.41 — FPS regression fixed (290 -> back to uncapped) + login gate + settings cleanup
+
+### 1) THE FPS FIX (priority) — the launcher was force-capping your FPS
+- Root cause found with real code audit: the "frame-rate safety" added earlier
+  wrote `maxFps:120` (or 60 on weak preset) into options.txt on EVERY launch,
+  passed `-Dreimagined.maxfps` to the JVM, AND the in-game watchdog re-applied
+  it every 5 seconds. On a GPU that runs 290 FPS uncapped (e.g. GTX 1650), that
+  silently dragged the game down to ~100-120 FPS. That is exactly the
+  "89% jugabilidad" regression.
+- v1.0.41: the default is now **Unlimited (260)** for balanced/high/turbo —
+  no options.txt cap write, no -Dreimagined.maxfps flag, watchdog stands down.
+  Only the potato tier keeps a 60 FPS cap (thermal safety on weak iGPUs). The
+  Settings "unlimited FPS" opt-in still exists and a manual cap still works.
+- Extended View default radius lowered 32 -> 16 (ghost geometry beyond render
+  distance still costs GPU draw calls; 16 keeps the benefit without eating
+  frames on mid-range GPUs).
+- Bundled FPS Boost **1.0.13**: the in-game watchdog no longer invents a cap
+  from stale config (treats 260 as unlimited, honors only an explicit flag),
+  and the OBS/capture process sweep moved OFF the game thread (was enumerating
+  every Windows process every 10 s on the tick — a guaranteed periodic
+  micro-stutter; now a background thread every 60 s).
+
+### 2) Login gate — no account = Home/Settings/Account only
+- Without a signed-in (online) account, Play, Instances, Modpacks, Downloads
+  and Logs are locked: navigating to them redirects Home. Only Home (login),
+  Settings and Account are reachable until you sign in. If the session expires
+  ('expired'), the same gate applies.
+
+### 3) Settings cleanup
+- Updates: removed the explanatory "three-option prompt" banner — just the
+  re-check frequency and Check for Updates remain.
+- Advanced: the CurseForge proxy URL field is no longer shown in the launcher
+  (the proxy URL still ships pre-configured by default).
+- Danger Zone: Clear Logs and Clean Release Reset now ask TWICE — a first
+  confirmation opens a second, final confirmation (Clean Release Reset also
+  requires checking "I understand this permanently deletes everything").
+
+Verified: tsc node+web clean, build clean, smoke 12/12.

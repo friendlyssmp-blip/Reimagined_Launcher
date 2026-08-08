@@ -7,10 +7,15 @@ export function ConfirmDialog({ title, message, confirmLabel, danger, option, on
   const { setModals } = useApp()
   const [checked, setChecked] = useState(option?.defaultChecked ?? false)
   const confirm = () => {
+    // v1.0.41 — Danger Zone double confirmation: onConfirm may synchronously
+    // open ANOTHER confirm modal (e.g. the second step of a destructive
+    // action). React batches state updates, so a naive `finally` clear would
+    // wipe that new modal before it renders. Schedule the clear on the next
+    // macrotask so a newly-opened modal survives.
     try {
       onConfirm({ optionChecked: checked })
     } finally {
-      setModals({ confirm: null })
+      setTimeout(() => setModals({ confirm: null }), 0)
     }
   }
   return (

@@ -44,8 +44,25 @@ export type Page =
   | 'logs'
 
 function Shell() {
-  const { ready, modals, theme, settings, setModals } = useApp()
+  const { ready, modals, theme, settings, setModals, account } = useApp()
   const [page, setPage] = useState<Page>('home')
+  /* v1.0.41 — login gate: without a signed-in account the launcher only shows
+   * Home (login), Settings and Account. Play, Instances, Modpacks, Downloads
+   * and Logs require a session — navigating to them redirects home. */
+  // 'expired' (session expired) counts as NOT logged in - only a live
+  // 'online' session unlocks Play/Instances/Modpacks/Downloads/Logs.
+  const loggedIn = account.status === 'online'
+  const navigate = (p: Page): void => {
+    const locked = p === 'play' || p === 'profiles' || p === 'mods' || p === 'modpacks' || p === 'downloads' || p === 'logs'
+    setPage(locked && !loggedIn ? 'home' : p)
+  }
+  /* If the account signs out while a locked page is open, drop back home. */
+  useEffect(() => {
+    if (!loggedIn && page !== 'home' && page !== 'settings' && page !== 'account') {
+      setPage('home')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn])
   /* Share code arriving via a reimagined://share/<CODE> link (v1.0.19). */
   const [importCode, setImportCode] = useState<string | null>(null)
   /* Splash shows once per session (skippable, never blocks init). */
@@ -174,25 +191,25 @@ function Shell() {
 
   return (
     <div className="app" data-theme={theme}>
-      <Sidebar page={page} onNavigate={setPage} />
+      <Sidebar page={page} onNavigate={navigate} />
       <div className="main">
         <TitleBar />
-        <TopBar onNavigate={setPage} />
+        <TopBar onNavigate={navigate} />
         {/* The scroll surface is NOT keyed (scroll position survives nav); the
            keyed ErrorBoundary remounts the page subtree, so .page-enter inside
            replays the page-level entrance animation on every section switch. */}
         <main className="content">
           <ErrorBoundary key={page} onHome={() => setPage('home')}>
             <div className="page-enter">
-              {page === 'home' && <HomePage onNavigate={setPage} />}
-              {page === 'play' && <PlayPage onNavigate={setPage} />}
-              {page === 'profiles' && <ProfilesPage onNavigate={setPage} />}
+              {page === 'home' && <HomePage onNavigate={navigate} />}
+              {page === 'play' && <PlayPage onNavigate={navigate} />}
+              {page === 'profiles' && <ProfilesPage onNavigate={navigate} />}
               {page === 'mods' && <ModsPage />}
               {page === 'modpacks' && <ModpacksPage />}
               {page === 'settings' && <SettingsPage />}
               {page === 'downloads' && <DownloadsPage />}
               {page === 'logs' && <LogsPage />}
-              {page === 'account' && <AccountPage onNavigate={setPage} />}
+              {page === 'account' && <AccountPage onNavigate={navigate} />}
             </div>
           </ErrorBoundary>
         </main>

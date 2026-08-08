@@ -38,7 +38,10 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // v1.0.29 — Extended View: on by default (genuinely low-cost, purely additive
   // static visuals beyond render distance — cached terrain is NOT simulated).
   extendedView: true,
-  extendedViewDistance: 32,
+  // v1.0.41 - Extended View default lowered (32 -> 16): ghost geometry
+  // beyond RD still costs GPU draw calls; 16 keeps the visual benefit
+  // without eating frames on mid-range GPUs.
+  extendedViewDistance: 16,
   extendedCacheLimitMB: 512,
   // v1.0.30 — async server-chunk decode: on by default (server joins are the
   // worst jank case; decoding off the game thread never blocks the tick).

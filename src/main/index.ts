@@ -430,7 +430,7 @@ async function runSmokeTest(): Promise<void> {
     try {
       const dir = pathMod.join(paths.games, p.gameDir)
       fsMod.mkdirSync(dir, { recursive: true })
-      fsMod.writeFileSync(pathMod.join(dir, 'options.txt'), 'maxFps:120\nrenderDistance:12\n')
+      fsMod.writeFileSync(pathMod.join(dir, 'options.txt'), 'maxFps:260\nrenderDistance:12\n')
       const { configGuard } = await import('./minecraft/config-guard')
       const backupId = await configGuard.backupInstanceConfig(p)
       if (!backupId) throw new Error('backup produced no snapshot')

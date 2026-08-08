@@ -115,8 +115,14 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
   // monitor refresh rate (safe 120 when unknown) and is bounded to 240, snapped
   // to vanilla's real framerateLimit values so options.txt stays clean. The
   // in-game watchdog also enforces the same value (`-Dreimagined.maxfps`).
-  const refresh = hw?.display.refreshHz && hw.display.refreshHz >= 60 ? hw.display.refreshHz : 120
-  const safeCap = snapFpsCap(Math.max(60, Math.min(240, Math.round(refresh))))
+  // v1.0.41 — FPS regression fix: the old engine forced a 60-120 FPS cap on
+  // EVERY launch (options.txt + -Dreimagined.maxfps + in-game watchdog). On a
+  // discrete GPU that could run 290 FPS uncapped, that cap silently dragged it
+  // down to ~100-120. The safe cap is now OPT-IN ONLY (potato tier keeps 60
+  // for thermal safety on weak iGPUs); balanced/high/turbo default to 260
+  // (vanilla "Unlimited"). The user can still enable a cap in Settings.
+  // v1.0.41 — the monitor-refresh-derived safeCap is intentionally unused now:
+  // the default is Unlimited (260) except on potato (60 for thermal safety).
   const base = {
     enabled: true,
     reduceParticles: true,
@@ -133,9 +139,11 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     asyncChunkUpload: true,   // mesh upload off the main render thread
     overdrawReduction: true,  // early-Z / depth-sorted opaque pass
     textureBatching: true,    // atlas-friendly batching to cut texture swaps
-    // v1.0.13 — frame-rate cap (never uncapped by default; 260 = "Unlimited").
+    // v1.0.13 — frame-rate cap. v1.0.41: NOT applied by default anymore (it
+    // was the FPS regression — 290 -> ~100 FPS on discrete GPUs). 260 =
+    // vanilla "Unlimited"; potato tier overrides to 60 for thermal safety.
     unlimitedFps: false,
-    maxFps: 120,
+    maxFps: 260,
     // v1.0.29 — Extended View (Bobby-style, native): persist previously-loaded
     // chunks as compact static snapshots and render them as ghost terrain far
     // beyond the real render distance. Zero simulation out there — the live
@@ -154,10 +162,10 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 60, extendedViewDistance: 16, extendedCacheLimitMB: 256 }
   }
   if (tier === 'balanced') {
-    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: Math.max(60, Math.min(safeCap, 120)), extendedViewDistance: 32, extendedCacheLimitMB: 512 }
+    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: 260, extendedViewDistance: 16, extendedCacheLimitMB: 512 }
   }
   if (tier === 'high') {
-    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: safeCap, extendedViewDistance: 48, extendedCacheLimitMB: 768 }
+    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: 260, extendedViewDistance: 24, extendedCacheLimitMB: 768 }
   }
   // Turbo — maximum FPS, clearly a trade-off preset (never the default).
   // Note: limitEntityAnimations stays OFF — the v1.0.1 bundled mod removed the
@@ -177,8 +185,8 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     textureBatching: true,
     fogDistanceCutoff: true,    // fog-assisted distance cutoff for distant terrain
     particleDensity: 0.25,      // quarter-density particles
-    maxFps: Math.max(60, Math.min(safeCap, 120)),
-    extendedViewDistance: 16,   // Turbo keeps the extra radius small — fidelity
+    maxFps: 260,
+    extendedViewDistance: 8,    // Turbo keeps the extra radius small — fidelity
     extendedCacheLimitMB: 256   // trades for absolute FPS
   }
 }
@@ -228,6 +236,7 @@ function snapFpsCap(target: number): number {
  * so re-applying it here each launch is the correct, real mechanism.
  */
 export function applyFrameCap(gameDir: string, maxFps: number): void {
+  if (maxFps >= 260) return // v1.0.41 — uncapped default; nothing to enforce
   // v1.0.19 settings persistence: snapshot options.txt (at most once a day)
   // before the per-launch cap write so the user's settings are always
   // recoverable — the cap edit itself only rewrites the maxFps line.
