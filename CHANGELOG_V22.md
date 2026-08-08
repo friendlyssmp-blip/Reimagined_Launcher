@@ -868,3 +868,17 @@ on the next launch.
 - Launcher: tsc node + web clean, electron-vite build clean, smoke 12/12.
 - Mod: gradle build clean with the @Unique fix.
 - Secret scan: no CurseForge key or credentials anywhere in the repo.
+
+
+## v1.0.37 — CurseForge connected out of the box
+- The launcher now ships with the Reimagined CurseForge proxy URL as the
+  default (`https://reimagined-cf-proxy.onrender.com`): after updating, the
+  CurseForge tab in Mods (and Resource Packs / Data Packs / Shaders) browses,
+  installs and updates immediately — no setup step needed.
+- Settings → Advanced → CurseForge proxy URL remains editable/clearable;
+  old empty values in settings.json are ignored in favor of the default, so
+  existing users get the working proxy automatically.
+- The CurseForge API key continues to live only on the user's own backend
+  proxy (backend/cf-proxy, deployed on Render) — never in the launcher or
+  repository. Verified live: /health OK and real search/project/files data
+  flowing through the proxy.

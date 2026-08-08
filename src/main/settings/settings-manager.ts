@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   microsoftClientId: 'c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb',
   startupAnimation: true,
   startupSound: true,
-  curseforgeProxyUrl: '',
+  curseforgeProxyUrl: 'https://reimagined-cf-proxy.onrender.com',
   closeOnLaunch: false,
   showConsoleOnLaunch: true,
   showSnapshots: false,
