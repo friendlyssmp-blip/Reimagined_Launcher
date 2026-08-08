@@ -1021,3 +1021,25 @@ Three follow-ups on top of the v1.0.41/v1.0.42 FPS restoration:
   never accumulate dead FPS Boost copies.
 
 Verified: tsc node+web clean, build clean, smoke 12/12.
+
+
+## v1.0.44 - potato-tier FPS cap removed (real-hardware diagnosis)
+
+A live test session on the user's machine showed every scenario pinned at
+58-60 FPS (walking, breaking, ocean, new chunks) with drops only on heavy
+scenes (TNT, 800+ arrows). Real-data diagnosis from the launcher log:
+
+- RPE: launch FPS state -> options.txt maxFps=60 enableVsync=true tier=potato
+- The engine detected the machine as potato (Intel i5-7200U 2C/4T + Intel HD
+  Graphics 620 1 GB, 1080p 60 Hz) and by design applied a 60 FPS thermal cap
+  + passed -Dreimagined.maxfps=60 + wrote maxFps:60 into options.txt, while
+  VSync was also on (60 Hz panel). Double ceiling at 60.
+
+Fix: the potato tier no longer forces maxFps:60 - all tiers now default to
+260 (vanilla "Unlimited"), consistent with the v1.0.41 no-forced-cap
+philosophy. Potato keeps its conservative settings (RD 8-10, LOD 48, reduced
+FX) for stability; only the FPS ceiling is lifted. Users on 60 Hz panels
+should also enable Settings -> "Force VSync off" so VSync cannot pin the
+game to 60 Hz.
+
+Verified: tsc node+web clean, build clean, smoke 12/12.

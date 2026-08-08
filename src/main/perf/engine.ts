@@ -118,9 +118,9 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
   // v1.0.41 — FPS regression fix: the old engine forced a 60-120 FPS cap on
   // EVERY launch (options.txt + -Dreimagined.maxfps + in-game watchdog). On a
   // discrete GPU that could run 290 FPS uncapped, that cap silently dragged it
-  // down to ~100-120. The safe cap is now OPT-IN ONLY (potato tier keeps 60
-  // for thermal safety on weak iGPUs); balanced/high/turbo default to 260
-  // (vanilla "Unlimited"). The user can still enable a cap in Settings.
+  // down to ~100-120. The safe cap is now OPT-IN ONLY; ALL tiers (potato
+  // included) default to 260 (vanilla "Unlimited"). The user can still enable
+  // a cap in Settings.
   // v1.0.41 — the monitor-refresh-derived safeCap is intentionally unused now:
   // the default is Unlimited (260) except on potato (60 for thermal safety).
   const base = {
@@ -141,7 +141,9 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     textureBatching: true,    // atlas-friendly batching to cut texture swaps
     // v1.0.13 — frame-rate cap. v1.0.41: NOT applied by default anymore (it
     // was the FPS regression — 290 -> ~100 FPS on discrete GPUs). 260 =
-    // vanilla "Unlimited"; potato tier overrides to 60 for thermal safety.
+    // vanilla "Unlimited". v1.0.44: even potato no longer forces 60 — a weak
+    // iGPU can still run vanilla uncapped far above 60 (screen-tear risk only),
+    // and the cap silently confused users into thinking their GPU was bad.
     unlimitedFps: false,
     maxFps: 260,
     // v1.0.29 — Extended View (Bobby-style, native): persist previously-loaded
@@ -159,7 +161,10 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
   }
   const slowStorage = hw?.storage.type === 'HDD'
   if (tier === 'potato') {
-    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 60, extendedViewDistance: 16, extendedCacheLimitMB: 256 }
+    // v1.0.44 — maxFps 60 -> 260: the forced potato cap is gone. Everything
+    // else stays conservative (RD 8-10, LOD 48, reduced FX) — stability; only
+    // the FPS ceiling is lifted so weak iGPUs show their real uncapped FPS.
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 260, extendedViewDistance: 16, extendedCacheLimitMB: 256 }
   }
   if (tier === 'balanced') {
     return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: 260, extendedViewDistance: 16, extendedCacheLimitMB: 512 }

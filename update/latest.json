@@ -1,7 +1,7 @@
 {
-  "version": "1.0.43",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.43.exe",
-  "sha256": "3cd6beceded52317dfd02efc5df407214f88e043d446f3685e8ca894116922ca",
-  "publishedAt": "2026-08-08T19:15:47.082871Z",
-  "notes": "v1.0.43 - FPS control refinements (VSync off, launch confirmation, jar cleanup).\n\n1) NEW setting 'Force VSync off': a 60 Hz panel with VSync on caps the\ngame at 60 FPS no matter the frame cap. When enabled, the launcher writes\nenableVsync:false into options.txt on every launch (only that one line,\nworks with both the capped and unlimited paths).\n\n2) Launch confirmation logs: every launch now logs the ACTUAL FPS state\nthe game starts with (options.txt maxFps + enableVsync, unlimitedFps flag,\ntier) and the FPS Boost jar(s) present in mods/ - so any future FPS\nreport is debuggable from real logs.\n\n3) Stale jar cleanup: ensureFpsBoost now sweeps the profile's mods dir\nand removes any leftover Reimagined FPS Boost jars (.jar and .jar.disabled)\nfrom older launcher versions, even when the profile is already current.\n"
+  "version": "1.0.44",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.44.exe",
+  "sha256": "9f6caa3d0001410f7ab8c5e370cca6594c13407328f3e9076547e4e8b05bcb7b",
+  "publishedAt": "2026-08-08T20:05:19.555945Z",
+  "notes": "v1.0.44 - potato-tier FPS cap removed (real-hardware diagnosis).\n\nA live test showed every scenario pinned at 58-60 FPS (walking, breaking,\nocean, new chunks) with drops only on heavy scenes (TNT, 800+ arrows).\nThe launcher log told the real story: tier=potato, maxFps=60 in\noptions.txt, -Dreimagined.maxfps=60 passed to the game, VSync on.\n\nFix: the potato tier no longer forces maxFps:60 - ALL tiers now default\nto 260 (vanilla \"Unlimited\"), consistent with the no-forced-cap\nphilosophy. Potato keeps its conservative settings (RD 8-10, LOD 48,\nreduced FX) for stability; only the FPS ceiling is lifted.\n\nTip: on a 60 Hz panel, enable Settings -> \"Force VSync off\" so VSync\ncannot pin the game to 60 Hz.\n"
 }
