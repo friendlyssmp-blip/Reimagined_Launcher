@@ -50,6 +50,16 @@ export interface LauncherSettings {
   /** Recently performed activities shown on the Home page. */
   recentActivity: RecentActivity[]
 
+  /* --------------------------- Extended View (v1.0.29) --------------------------- */
+
+  /** Cached distant-chunk rendering: persist visited chunks and show them as
+   *  static ghost terrain beyond real render distance (Bobby-style, native). */
+  extendedView: boolean
+  /** Additional ghost radius in chunks rendered beyond the real render distance. */
+  extendedViewDistance: number
+  /** Max disk space (MB) the per-world chunk snapshot cache may use (LRU). */
+  extendedCacheLimitMB: number
+
   /* ------------------------------- Audio ------------------------------- */
 
   /** Master toggle for all UI sounds. */

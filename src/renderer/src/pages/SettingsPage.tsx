@@ -837,6 +837,63 @@ function PerformanceSection() {
         ) : null}
       </div>
 
+      {/* v1.0.29 — Extended View: cached distant-chunk terrain (Bobby-style,
+          but Reimagined's own native implementation). Persisted snapshots of
+          visited chunks render as static ghost terrain beyond real RD — no
+          simulation, no entities, no server traffic out there. */}
+      <div className="panel">
+        <div className="panel-title">Extended View</div>
+        <p className="panel-sub">
+          Shows previously-explored terrain far beyond your render distance using cached data — costs
+          almost nothing extra since those chunks aren't actually simulated.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+          <Toggle
+            checked={settings.extendedView ?? true}
+            onChange={(v) => { void updateSettings({ extendedView: v }) }}
+            label="Extended View (cached distant terrain)"
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <Field label={`Extra distance: +${settings.extendedViewDistance ?? 32} chunks`}>
+              <Select
+                value={String(settings.extendedViewDistance ?? 32)}
+                onChange={(e) => void updateSettings({ extendedViewDistance: Number(e.target.value) })}
+              >
+                {[8, 16, 24, 32, 48, 64, 96].map((d) => <option key={d} value={d}>+{d} chunks</option>)}
+              </Select>
+            </Field>
+            <Field label={`Disk cache limit: ${(settings.extendedCacheLimitMB ?? 512) >= 1024 ? `${(settings.extendedCacheLimitMB ?? 512) / 1024} GB` : `${settings.extendedCacheLimitMB ?? 512} MB`}`}>
+              <Select
+                value={String(settings.extendedCacheLimitMB ?? 512)}
+                onChange={(e) => void updateSettings({ extendedCacheLimitMB: Number(e.target.value) })}
+              >
+                {[128, 256, 512, 1024, 2048, 4096].map((mb) => <option key={mb} value={mb}>{mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}</option>)}
+              </Select>
+            </Field>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={async () => {
+              try {
+                const res = await api.extendedView.clearCache(profileId || undefined)
+                notify('success', 'Extended View cache cleared', `Freed ${Math.round(res.freed / 1048576)} MB across ${res.instances} instance(s).`)
+              } catch (err) {
+                notify('error', 'Could not clear cache', friendlyError(err))
+              }
+            }}>
+              Clear cache
+            </Button>
+            <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+              Reclaims disk space used by chunk snapshots (per-world, evicted oldest-first over the limit).
+            </span>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            Chunks you visit are saved as compact static snapshots; when they leave render distance they stay as ghost terrain
+            instead of being discarded. The real simulation radius is <b>never</b> changed — ghosts are static geometry only,
+            no entity/block/server load, and they hand off seamlessly to the live chunk as you approach.
+          </div>
+        </div>
+      </div>
+
       <div className="panel">
         <div className="panel-title">Your hardware</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 12 }}>

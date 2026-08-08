@@ -145,6 +145,9 @@ export const IPC = {
   fpsBoostInstall: 'fpsboost:install',
   fpsBoostRemove: 'fpsboost:remove',
 
+  // Extended View (v1.0.29) — wipe the per-instance cached chunk snapshots
+  extendedViewClearCache: 'extended-view:clear-cache',
+
   // Reliable image proxy (V2 fix) — main-process fetch → data URL
   contentImage: 'content:image'
 } as const

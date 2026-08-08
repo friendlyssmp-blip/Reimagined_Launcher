@@ -205,6 +205,12 @@ export const api = {
   },
 
   /** Reimagined Performance Engine (RPE). */
+  extendedView: {
+    clearCache: (profileId?: string) =>
+      unwrap<{ freed: number; instances: number }>(window.reimagined.extendedView.clearCache(profileId))
+  },
+
+  /** Reimagined Performance Engine (RPE). */
   perf: {
     status: () => unwrap<PerfStatus>(window.reimagined.perf.status()),
     recommendations: (profileId?: string) =>

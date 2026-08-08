@@ -860,6 +860,13 @@ class Launcher {
       const hw = await rpe.detectHardware(false)
       const { tier } = rpe.effectiveTier(settingsManager.get(), hw)
       const config = rpe.fpsConfigFor(tier, hw)
+      // v1.0.29 — Extended View: the user's Settings choices win over the tier
+      // defaults, exactly like unlimitedFps overrides below. Without this the
+      // SettingsPage controls would seed nothing (UI-only).
+      const s = settingsManager.get()
+      config.extendedView = s.extendedView ?? true
+      config.extendedViewDistance = s.extendedViewDistance ?? 32
+      config.extendedCacheLimitMB = s.extendedCacheLimitMB ?? 512
       const dir = path.join(gameDir, 'config')
       fs.mkdirSync(dir, { recursive: true })
       // v1.0.13 frame-rate safety: by default the engine applies a safe FPS

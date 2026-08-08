@@ -15,11 +15,13 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-// v1.0.7 adds capture-tool compatibility (borderless windowed fullscreen) +
-// a TNT/explosion particle-burst cap (see the mod's changelog).
-// ensureFpsBoost upgrades existing profiles to the new bundle automatically.
-const FPS_BOOST_VERSION = '1.0.7'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.7.jar'
+// v1.0.8 adds Extended View: previously-loaded chunks are persisted as compact
+// static snapshots and rendered as cached "ghost" terrain far beyond the real
+// render distance (no simulation out there — Reimagined's own native
+// Bobby-style implementation). ensureFpsBoost upgrades existing profiles to
+// the new bundle automatically.
+const FPS_BOOST_VERSION = '1.0.8'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.8.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

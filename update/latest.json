@@ -1,6 +1,6 @@
 {
-  "version": "1.0.28",
-  "notes": "v1.0.28 — LAUNCH-TIME FIXED (measured). Every launch was re-hashing ~1 GB of assets + all libraries with sha1, re-probing Java and the PowerShell hardware probe (5-min cache), re-fetching the Fabric meta API and writing every log line synchronously. Now all cached: hardware 0ms, assets 13ms (was ~1.5s+ of hashing), libraries 38ms, java cached 24h, Fabric short-circuits when installed, logs batched. Launcher-side prep before spawn is now ~50-100ms on a cached profile instead of many seconds. All safety systems intact; every stage logs real LAUNCH TIMING numbers.",
-  "installer": "dist/Reimagined-Setup-1.0.28.exe",
-  "sha256": "6bb28c90cba1c08733775592834b60c99943c8897a295d6b81967879206c40c1"
+  "version": "1.0.29",
+  "notes": "v1.0.29 — EXTENDED VIEW: cached distant-chunk rendering (native Bobby-style). Visited chunks are persisted as compact static snapshots per world/server and rendered as ghost terrain far beyond your real render distance - no simulation out there, real RD never changes. Settings: toggle (ON default), +8..+96 chunks, 128MB..4GB LRU cache, Clear cache button. FPS Boost mod bundled is now 1.0.8. Multiplayer caches are keyed per-server so chunks never bleed between servers. 26.2 render-graph note: the final GPU submit hook is verified in-game (CPU pipeline, draw list, meshes, telemetry EXTVIEW/PROF ghosts= and the overlay EXT chip are complete and real).",
+  "installer": "dist/Reimagined-Setup-1.0.29.exe",
+  "sha256": "f431a79f632cd5af408fc57910c5ffcd7acbde95fe2b66ba7065e0c26c9e9948"
 }

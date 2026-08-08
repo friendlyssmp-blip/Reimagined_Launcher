@@ -32,6 +32,11 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // default. `unlimitedFps` is a clearly-warned, explicit opt-in that removes
   // the cap — OFF by default (uncapped FPS can trigger thermal shutdown).
   unlimitedFps: false,
+  // v1.0.29 — Extended View: on by default (genuinely low-cost, purely additive
+  // static visuals beyond render distance — cached terrain is NOT simulated).
+  extendedView: true,
+  extendedViewDistance: 32,
+  extendedCacheLimitMB: 512,
   recentActivity: [],
   audioEnabled: true,
   audioVolume: 0.7,

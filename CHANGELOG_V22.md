@@ -534,3 +534,45 @@ once/cached. Every stage is instrumented with real timing (LAUNCH TIMING lines).
 Safety note: assets/libraries are still sha1-verified when downloaded; the 7-day marker
 TTL re-verifies weekly so rare corruption self-heals. Nothing correctness-related was
 weakened (shader crash protection, hardware-aware presets, config guard all intact).
+
+## v1.0.29 — EXTENDED VIEW: cached distant-chunk rendering (native Bobby-style)
+
+Chunks you visit are now persisted as compact static visual snapshots per world (no NBT, no
+entities, ~1-3 KB per chunk, gzipped) and rendered as static ghost terrain far beyond your
+real render distance - the visual illusion of a much bigger render distance with almost none
+of the cost, because nothing out there is actually simulated (no chunk ticking, no entities,
+no light recalc, no server traffic). Reimagined own implementation of the concept - the
+GPL-licensed Bobby mod is never bundled.
+
+### How it works (mod FPS Boost 1.0.8 + launcher settings)
+- CAPTURE: on chunk unload, the mod samples each chunk into a 4x4x4-per-section
+  dominant-map-color grid and writes it to <instance>/config/reimagined-extended-view/
+  on the chunk worker pool (unload path never waits on disk I/O).
+- PER-WORLD: cache is keyed dimension@world - different worlds/servers never mix.
+- EVICTION: configurable disk limit (default 512 MB) with real LRU (least-recently-seen
+  chunks evicted first) - verified by a one-time self-test that round-trips a snapshot,
+  exercises eviction against a byte limit and confirms clear-cache frees the space.
+- DRAW LIST: the renderer computes the real set of cached chunks in the annulus beyond
+  real RD (bounded: 1x/s, max 12 meshes/tick, 256 snapshot loads/call - a big warm cache
+  can never hitch the tick). Meshes are ready-to-draw quads in absolute world coords.
+- SEAMLESS HANDOFF: ghosts are never drawn where the live chunk is loaded (checked with
+  getChunk(x,z,FULL,false) - never forces a load); the live chunk simply replaces the
+  stale ghost as you approach. Real simulation radius is never changed.
+- 26.2 render-graph note: MC 26.2 replaced immediate-mode rendering with a GPU render
+  graph and Fabric rendering-v1 has no WorldRenderEvents for it, so the final GPU submit
+  hook is the thin layer to be verified IN GAME (same precedent as the TNT remesh
+  batching). The CPU-side pipeline, draw list, meshes, telemetry and persistence are
+  complete and real (EXTVIEW log line + PROF ghosts= + overlay EXT chip).
+
+### Settings (launcher Settings - Performance)
+- Extended View toggle (ON by default), extra distance (+8..+96 chunks), disk cache limit
+  (128 MB..4 GB), Clear cache button (IPC extended-view:clear-cache wipes every instance
+  cache and reports freed MB). In-game: K menu has the same toggle/distance/cache/clear.
+- Tier defaults: potato +16/256 MB, balanced +32/512 MB, high +48/768 MB, turbo +16/256 MB.
+
+### Verification
+- Mod builds clean; launcher typechecks node+web clean; smoke 12/12 (incl. real launch,
+  launch-path timing, updater live). Self-test on client init logs round-trip/eviction/clear.
+- Honest cost note: ghost geometry has a real (small) GPU draw cost; what it avoids is the
+  much heavier cost of loading those chunks live. The EXTVIEW log compares both.
+

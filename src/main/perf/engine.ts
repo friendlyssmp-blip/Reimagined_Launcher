@@ -135,17 +135,24 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     textureBatching: true,    // atlas-friendly batching to cut texture swaps
     // v1.0.13 — frame-rate cap (never uncapped by default; 260 = "Unlimited").
     unlimitedFps: false,
-    maxFps: 120
+    maxFps: 120,
+    // v1.0.29 — Extended View (Bobby-style, native): persist previously-loaded
+    // chunks as compact static snapshots and render them as ghost terrain far
+    // beyond the real render distance. Zero simulation out there — the live
+    // simulation radius stays exactly what the user set. Tuned per tier below.
+    extendedView: true,
+    extendedViewDistance: 32,
+    extendedCacheLimitMB: 512
   }
   const slowStorage = hw?.storage.type === 'HDD'
   if (tier === 'potato') {
-    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 60 }
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 60, extendedViewDistance: 16, extendedCacheLimitMB: 256 }
   }
   if (tier === 'balanced') {
-    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: Math.max(60, Math.min(safeCap, 120)) }
+    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: Math.max(60, Math.min(safeCap, 120)), extendedViewDistance: 32, extendedCacheLimitMB: 512 }
   }
   if (tier === 'high') {
-    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: safeCap }
+    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: safeCap, extendedViewDistance: 48, extendedCacheLimitMB: 768 }
   }
   // Turbo — maximum FPS, clearly a trade-off preset (never the default).
   // Note: limitEntityAnimations stays OFF — the v1.0.1 bundled mod removed the
@@ -165,7 +172,9 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     textureBatching: true,
     fogDistanceCutoff: true,    // fog-assisted distance cutoff for distant terrain
     particleDensity: 0.25,      // quarter-density particles
-    maxFps: Math.max(60, Math.min(safeCap, 120))
+    maxFps: Math.max(60, Math.min(safeCap, 120)),
+    extendedViewDistance: 16,   // Turbo keeps the extra radius small — fidelity
+    extendedCacheLimitMB: 256   // trades for absolute FPS
   }
 }
 

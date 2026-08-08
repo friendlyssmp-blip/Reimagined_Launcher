@@ -38,6 +38,29 @@ import type { AccountPublic, LauncherSettings } from '@shared/types'
 
 type Handler = (payload: any) => unknown
 
+/** Recursive byte count of a directory (fs.stat on a dir is ~0 on Windows). */
+async function dirBytes(fs: typeof import('node:fs/promises'), dir: string): Promise<number> {
+  let total = 0
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    for (const e of entries) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        total += await dirBytes(fs, p)
+      } else if (e.isFile()) {
+        try {
+          total += (await fs.stat(p)).size
+        } catch {
+          // file vanished mid-walk — skip
+        }
+      }
+    }
+  } catch {
+    // absent or unreadable — nothing to count
+  }
+  return total
+}
+
 export function registerIpcHandlers(win: BrowserWindow): void {
   const send = (event: AppEvent): void => {
     if (!win.isDestroyed()) win.webContents.send(EVENT_CHANNEL, event)
@@ -552,6 +575,34 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     const res = await removeFpsBoost(profileId)
     eventBus.emit('mods:changed', { profileId, action: 'fpsboost-removed' })
     return res
+  })
+
+  // v1.0.29 — Extended View: wipe the per-instance cached chunk snapshots
+  // (<games>/<profile.gameDir>/config/reimagined-extended-view). Without a
+  // profileId, every instance's cache is cleared. Returns the freed bytes.
+  on(IPC.extendedViewClearCache, async (profileId?: string) => {
+    const fs = await import('node:fs/promises')
+    let profiles: Awaited<ReturnType<typeof profileManager.list>>
+    if (profileId) {
+      const one = await profileManager.get(profileId)
+      profiles = one ? [one] : []
+    } else {
+      profiles = await profileManager.list()
+    }
+    let freed = 0
+    for (const p of profiles) {
+      const dir = path.join(paths.games, p.gameDir, 'config', 'reimagined-extended-view')
+      // Recursive byte count — fs.stat on a directory is ~0 on Windows, which
+      // would report "Freed 0 MB" after wiping gigabytes.
+      freed += await dirBytes(fs, dir)
+      try {
+        await fs.rm(dir, { recursive: true, force: true })
+      } catch {
+        // best effort — a locked file is not worth failing the whole call
+      }
+    }
+    logger.info(`Extended View cache cleared (${Math.round(freed / 1048576)} MB, ${profiles.length} instance(s))`)
+    return { freed, instances: profiles.length }
   })
 
   /* ------------------------------ shader / crash safety ------------------------------ */
