@@ -638,3 +638,34 @@ chunk work is scheduled changed (zero gameplay/functional changes).
   (frame-time spikes on join, time-to-playable) is logged via PROF/CHUNKPIPE
   during live play.
 
+## v1.0.31 — CRITICAL FIX: the Update button did nothing for v1.0.30
+
+### Root cause (confirmed on 2 PCs)
+- The v1.0.30 `update/latest.json` dropped the `installer` field the client
+  contract requires (v1.0.27–29 all had it; the v1.0.30 publish accidentally
+  shipped only `version`/`notes`/`sha256`/`url`).
+- With `installer` missing, `updater.check()` set `assetUrl = CODELOAD_ZIP`
+  — the whole-repository codeload zip: the WRONG artifact on the
+  slow/blocked host, so the click never produced a working download, and
+  `installPackaged()` would have rejected it anyway (not an .exe).
+- Client wiring was verified intact (sidebar → UpdateModal → IPC
+  `update:download` → `updater.download()`): the bug was purely backend/manifest.
+
+### Fix
+1. Immediate hotfix commit (d12fd7a): added `installer` to the v1.0.30
+   manifest — existing launchers were unblocked right away (30-min cache).
+2. `updater.check()` now resolves the asset from `installer` (repo path) OR a
+   direct asset `url` (.exe/.zip), and a packaged install with NEITHER gets a
+   clear warning + a disabled Update button instead of a silent codeload zip
+   fallback that can never install.
+3. `updater.download()` now logs the download start (real network call
+   confirmed) and SHA-256-verifies the downloaded installer against the
+   manifest: on mismatch the file is deleted and the update cancelled loudly
+   — corrupt/partial/tampered packages never reach install().
+4. `UpdateInfo` gained `sha256?`.
+
+### Verification
+- Live manifest now resolves to `Reimagined-Setup-1.0.30.exe` (raw host, HTTP 200,
+  size matches local 83890320 bytes) and to `Reimagined-Setup-1.0.31.exe` for v1.0.31.
+- Smoke 12/12 (live updater check included); typechecks node+web clean.
+

@@ -378,6 +378,8 @@ export interface UpdateInfo {
   /** Direct asset download URL (prefers a .zip). */
   assetUrl?: string
   assetName?: string
+  /** SHA-256 of the asset file, when the manifest declares one. */
+  sha256?: string
   /** Publish date of the latest release. */
   publishedAt?: string
 }

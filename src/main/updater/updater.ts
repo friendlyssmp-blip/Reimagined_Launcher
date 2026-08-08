@@ -200,7 +200,7 @@ export const updater = {
       }
       // v1.0.27 — try every source until one answers (proxy-aware fetch + the
       // raw / web-raw / api.github.com fallback chain).
-      let data: { version?: string; notes?: string; installer?: string } | null = null
+      let data: { version?: string; notes?: string; installer?: string; url?: string; sha256?: string } | null = null
       let saw404 = false
       for (const url of LATEST_JSON_FALLBACKS) {
         try {
@@ -222,9 +222,9 @@ export const updater = {
             if (!payload.content) continue
             const rawText =
               payload.encoding === 'base64' ? Buffer.from(payload.content, 'base64').toString('utf-8') : payload.content
-            data = parseLenientJson(rawText) as { version?: string; notes?: string; installer?: string } | null
+            data = parseLenientJson(rawText) as { version?: string; notes?: string; installer?: string; url?: string; sha256?: string } | null
           } else {
-            data = parseLenientJson(await r.text()) as { version?: string; notes?: string; installer?: string } | null
+            data = parseLenientJson(await r.text()) as { version?: string; notes?: string; installer?: string; url?: string; sha256?: string } | null
           }
           if (!data) {
             logger.debug(`Update check: ${url} served unparseable JSON`)
@@ -252,11 +252,33 @@ export const updater = {
       const currentVersion = await readInstalledVersion()
       const hasUpdate = latestVersion !== '' && compareVersions(latestVersion, currentVersion) > 0
 
-      // Packaged installs cannot rebuild source — they update via the new
-      // installer .exe shipped in the repo (see `install()`).
+      // v1.0.31 — the update asset can be declared two ways: the original
+      // `installer` field (a repo-relative path, e.g. "dist/Reimagined-Setup-x.exe")
+      // or a direct download URL in `url`. v1.0.30 shipped a manifest that
+      // dropped `installer` and only had `url` — the packaged fallback then
+      // silently pointed the Update button at the whole-repository codeload
+      // zip (wrong artifact, slow/blocked host), so the download never
+      // completed and install() rejected it (not an .exe). Support both
+      // shapes, and NEVER silently fall back to the repo zip for packaged
+      // installs: if no asset is declared, leave assetUrl unset so the UI
+      // shows the honest "No installer asset" state instead of a download
+      // that can never install.
+      const directUrl = String(data.url ?? '').trim()
+      const directAsset = /\.(exe|zip)(\?|#|$)/i.test(directUrl) ? directUrl : ''
       const installer = app.isPackaged && data.installer ? String(data.installer).replace(/^\/+/, '') : ''
-      const assetUrl = installer ? `${RAW_BASE}/${installer}` : CODELOAD_ZIP
-      const assetName = installer ? path.basename(installer) : 'Reimagined_Launcher-main.zip'
+      const assetUrl = installer
+        ? `${RAW_BASE}/${installer}`
+        : directAsset || (app.isPackaged ? '' : CODELOAD_ZIP)
+      const assetName = installer
+        ? path.basename(installer)
+        : directAsset
+          ? (directAsset.split('/').pop() || 'reimagined-update')
+          : 'Reimagined_Launcher-main.zip'
+      if (app.isPackaged && !installer && !directAsset) {
+        logger.warn(
+          `Update check: latest.json for ${latestVersion} declares no installer asset (missing "installer" and no direct "url") — the Update button will be disabled.`
+        )
+      }
 
       const info: UpdateInfo = {
         hasUpdate,
@@ -266,6 +288,7 @@ export const updater = {
         url: `https://github.com/${OFFICIAL_REPO}`,
         assetUrl,
         assetName,
+        sha256: data.sha256 ?? '',
         publishedAt: new Date().toISOString()
       }
       if (app.isPackaged) {
@@ -298,6 +321,13 @@ export const updater = {
     if (exists(dest)) fs.rmSync(dest, { force: true })
 
     const url = info.assetUrl || CODELOAD_ZIP
+    // v1.0.31 — never silently download the wrong artifact: a packaged
+    // launcher with no declared asset must fail loudly instead of pulling the
+    // whole-repository zip that can never be installed.
+    if (app.isPackaged && !info.assetUrl) {
+      throw new Error('This update declares no installer asset — open the release page to download the new version manually.')
+    }
+    logger.info(`Downloading update from ${url}…`)
     let res = await ghFetch(url, {
       headers: { 'User-Agent': 'ReimaginedLauncher/1.0.0' },
       signal: timeoutSignal(600_000)
@@ -341,6 +371,30 @@ export const updater = {
     await new Promise<void>((resolve, reject) =>
       file.end((err: Error | null | undefined) => (err ? reject(err) : resolve()))
     )
+    // v1.0.31 — verify the SHA-256 of the downloaded installer against the
+    // manifest when one is declared. A corrupt/partial/tampered file must
+    // never be offered for install; on mismatch the file is deleted so a
+    // retry re-downloads from scratch instead of silently keeping a bad copy.
+    if (info.sha256 && /\.exe$/i.test(dest)) {
+      logger.info('Verifying SHA-256 of the downloaded update…')
+      const { createHash } = await import('node:crypto')
+      const hash = createHash('sha256')
+      await new Promise<void>((resolve, reject) => {
+        const stream = fs.createReadStream(dest)
+        stream.on('data', (c) => hash.update(c as Buffer))
+        stream.on('end', () => resolve())
+        stream.on('error', reject)
+      })
+      const actual = hash.digest('hex')
+      if (actual.toLowerCase() !== info.sha256.toLowerCase()) {
+        fs.rmSync(dest, { force: true })
+        logger.error(
+          `Update checksum mismatch — expected ${info.sha256.slice(0, 12)}…, got ${actual.slice(0, 12)}… — file deleted, update cancelled.`
+        )
+        throw new Error('The downloaded update failed its checksum verification and was cancelled. Try the update again in a moment.')
+      }
+      logger.info('Update checksum OK — the package is genuine.')
+    }
     logger.info(`Update package downloaded (${Math.round(received / 1024 / 1024)} MB) — ${dest}`)
     return { progress: 100, path: dest }
   },
