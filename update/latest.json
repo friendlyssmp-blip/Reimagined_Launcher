@@ -1,7 +1,7 @@
 {
-  "version": "1.0.37",
+  "notes": "v1.0.37 — CurseForge is now connected out of the box.\n\nCurseForge browsing (Mods, Resource Packs, Data Packs, Shaders) now works\nimmediately after updating: the launcher ships with the Reimagined CurseForge\nproxy URL pre-configured as the default. The proxy keeps the CurseForge API\nkey on the server side only (your own backend/cf-proxy instance) — the key\nnever touches your PC or the repository. Anyone can still change or clear the\nproxy URL in Settings → Advanced → CurseForge proxy URL.\n\nEverything from v1.0.36 remains: the join-crash fix (FPS Boost 1.0.12),\nreliable auto-relaunch after updates, the premium startup + Downloads\nredesign, and the enhanced Check-for-Updates modal.\n",
+  "publishedAt": "2026-08-08T13:10:00.000Z",
   "sha256": "c3a03cc969085ed086245c11a01cc78bf92f4207326c2f9ba04b1de6c8fece67",
   "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.37.exe",
-  "notes": "v1.0.37 — CurseForge is now connected out of the box.\n\nCurseForge browsing (Mods, Resource Packs, Data Packs, Shaders) now works\nimmediately after updating: the launcher ships with the Reimagined CurseForge\nproxy URL pre-configured as the default. The proxy keeps the CurseForge API\nkey on the server side only (your own backend/cf-proxy instance) — the key\nnever touches your PC or the repository. Anyone can still change or clear the\nproxy URL in Settings → Advanced → CurseForge proxy URL.\n\nEverything from v1.0.36 remains: the join-crash fix (FPS Boost 1.0.12),\nreliable auto-relaunch after updates, the premium startup + Downloads\nredesign, and the enhanced Check-for-Updates modal.\n",
-  "publishedAt": "2026-08-08T13:10:00.000Z"
+  "version": "1.0.37"
 }
