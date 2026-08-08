@@ -54,12 +54,20 @@ function proxy(u, m) {
 
 http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Content-Type', 'application/json')
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
-  if (req.method !== 'GET') { res.writeHead(405).end(); return }
+  if (req.method !== 'GET') { res.writeHead(405); return res.end(JSON.stringify({ error: 'Method not allowed' })) }
   const u = new URL(req.url, 'http://x')
+  // /health — liveness for Render's health check and UptimeRobot's pings.
+  if (u.pathname === '/health') { res.writeHead(200); return res.end(JSON.stringify({ ok: true })) }
+  // / — tiny info page (also useful as a sanity check in a browser).
+  if (u.pathname === '/') {
+    res.writeHead(200)
+    return res.end(JSON.stringify({ name: 'Reimagined CurseForge proxy', status: 'ok', routes: ROUTES.length }))
+  }
   const m = ROUTES.find((r) => r.re.test(u.pathname))
-  if (!m) { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Not found' })) }
+  if (!m) { res.writeHead(404); return res.end(JSON.stringify({ error: 'Not found' })) }
   const out = await proxy(u, m)
-  res.writeHead(out.status, { 'Content-Type': 'application/json' })
+  res.writeHead(out.status)
   res.end(typeof out.body === 'string' ? out.body : JSON.stringify(out.body))
 }).listen(PORT, () => console.log(`[cf-proxy] listening on :${PORT} — key configured: ${CF_API_KEY.length > 6}`))

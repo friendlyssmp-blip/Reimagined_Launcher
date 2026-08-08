@@ -1,0 +1,13 @@
+{
+  "name": "reimagined-cf-proxy",
+  "version": "1.0.0",
+  "description": "Secure CurseForge proxy for the Reimagined Launcher — the API key lives only here as CF_API_KEY.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

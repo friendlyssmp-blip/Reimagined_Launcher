@@ -1,0 +1,17 @@
+# Render Blueprint — deploy the Reimagined CurseForge proxy with one click.
+# 1. Push this folder to GitHub.
+# 2. In Render: New -> Blueprint -> pick the repo (or use the Deploy to Render button).
+# 3. Set the CF_API_KEY secret in the service's Environment tab (never in code).
+# The free tier sleeps after ~15 min idle; UptimeRobot pings keep it awake.
+services:
+  - type: web
+    name: reimagined-cf-proxy
+    runtime: node
+    rootDir: backend/cf-proxy
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: CF_API_KEY
+        sync: false
+      - key: NODE_VERSION
+        value: 20.11.0
