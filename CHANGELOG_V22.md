@@ -981,3 +981,23 @@ Verified: tsc node+web clean, build clean, smoke 12/12, live proxy search for CF
   requires checking "I understand this permanently deletes everything").
 
 Verified: tsc node+web clean, build clean, smoke 12/12.
+
+
+## v1.0.42 — stale FPS-cap neutralization for existing instances
+
+Verification pass found a real gap in the v1.0.41 FPS fix: existing instances
+still carried an old cap in options.txt (maxFps:60) and the new launcher no
+longer overwrote it when uncapped — Minecraft reads options.txt at startup, so
+the stale 60 would keep throttling the game even after updating.
+
+- applyFrameCap now ALWAYS writes the maxFps line: 260 (vanilla "Unlimited")
+  when no cap is configured, the snapped cap value otherwise. A stale cap
+  persisted by any older launcher version can no longer survive a launch.
+- The unlimitedFps branch (user-enabled "Unlimited" in Settings) now also
+  neutralizes stale caps in options.txt instead of only writing the mod config.
+
+Verified: tsc node+web clean, build clean, smoke 12/12. Confirmed on the user's
+real instance (Fabric -26.2-, options.txt had maxFps:60 + enableVsync:true):
+the launcher now rewrites it to maxFps:260 on the next launch, and the bundled
+FPS Boost auto-upgrades 1.0.12 -> 1.0.13 (ensureFpsBoost runs on every launch
+and upgrades profiles carrying an older bundled jar).

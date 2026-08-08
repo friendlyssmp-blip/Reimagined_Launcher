@@ -236,14 +236,17 @@ function snapFpsCap(target: number): number {
  * so re-applying it here each launch is the correct, real mechanism.
  */
 export function applyFrameCap(gameDir: string, maxFps: number): void {
-  if (maxFps >= 260) return // v1.0.41 — uncapped default; nothing to enforce
+  // v1.0.42 — the uncapped path (>= 260) must STILL write options.txt: a stale
+  // maxFps persisted by an older launcher (e.g. maxFps:60) would otherwise
+  // silently cap every launch through vanilla's options.txt read at startup.
+  // 260 is vanilla's "Unlimited" value, so writing it neutralizes old caps.
+  const cap = maxFps >= 260 ? 260 : snapFpsCap(maxFps)
   // v1.0.19 settings persistence: snapshot options.txt (at most once a day)
   // before the per-launch cap write so the user's settings are always
   // recoverable — the cap edit itself only rewrites the maxFps line.
   void import('../minecraft/config-guard').then((m) => m.configGuard.backupOptionsTxt(gameDir)).catch(() => {})
   try {
     const file = path.join(gameDir, 'options.txt')
-    const cap = snapFpsCap(maxFps)
     let content = ''
     try {
       content = fs.readFileSync(file, 'utf-8')

@@ -896,6 +896,10 @@ class Launcher {
           path.join(dir, 'reimagined-fps-boost.json'),
           JSON.stringify({ ...config, unlimitedFps: true, maxFps: 0 }, null, 2)
         )
+        // v1.0.42 — even in unlimited mode, neutralize any stale cap persisted
+        // in options.txt by an older launcher (maxFps:60 etc.) so the game
+        // actually runs uncapped.
+        rpe.applyFrameCap(gameDir, 260)
         logger.info('RPE: unlimited FPS enabled by the user — no frame cap applied (thermal/power risk warned in Settings).')
       } else {
         fs.writeFileSync(path.join(dir, 'reimagined-fps-boost.json'), JSON.stringify(config, null, 2))
