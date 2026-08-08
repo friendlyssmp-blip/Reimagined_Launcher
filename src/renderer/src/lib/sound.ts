@@ -144,6 +144,18 @@ export const sound = {
     tone(880, 0.16, 0.06, 0.1)
     tone(1100, 0.18, 0.035, 0.2)
   },
+  /**
+   * v1.0.36 — premium startup sequence (Change 3a): a soft ambient breath
+   * swells in with the logo, a quiet harmonic layer, and a gentle bloom at
+   * the reveal. Clean, modern, subtle — pleasant to hear repeatedly.
+   */
+  startup(): void {
+    if (!cfg.enabled) return
+    tone(110, 1.6, 0.05, 0, 165) // low warm pad breathing in
+    tone(220, 1.3, 0.035, 0.12, 330) // soft harmonic layer
+    tone(523, 0.4, 0.05, 0.62, 784) // gentle bloom at the logo reveal
+    tone(880, 0.5, 0.028, 0.78) // airy shimmer, barely there
+  },
   /** Success — soft ascending arpeggio (completion moments). */
   success(): void {
     if (!cfg.success) return

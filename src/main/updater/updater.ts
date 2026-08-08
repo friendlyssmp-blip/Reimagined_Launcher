@@ -479,69 +479,145 @@ export const updater = {
     }
 
     // The NSIS silent installer never shows its Finish page, so it will NOT
-    // relaunch the app by itself. Arm a detached helper that waits for the
-    // installer to finish replacing the files and then starts the NEW
-    // launcher exe automatically — the update reopens the launcher on its
-    // own, no manual restart needed.
-    armRelaunchAfterInstaller(installer?.pid ?? null)
+    // relaunch the app by itself. Arm a detached helper (Change 2) BEFORE we
+    // close: it waits for the installer + this process to exit, then starts
+    // the NEW launcher exe automatically. "Relaunching..." is only shown to
+    // the user once the helper is confirmed running.
+    const armed = armRelaunchAfterInstaller(installer?.pid ?? null)
+    if (armed) {
+      eventBus.emit('update:progress', { phase: 'restarting', percent: 100, message: 'Relaunching… Minecraft keeps running' })
+    } else {
+      logger.warn('[RELAUNCH ERROR] Helper not armed — the user must reopen the launcher manually.')
+      eventBus.emit('update:progress', { phase: 'done', percent: 100, message: 'Update installed — open the launcher from the Start menu or desktop.' })
+    }
 
     // Give the child a moment to spawn, then close this instance.
     setTimeout(() => app.exit(0), 1500)
   }
 }
 
+/** Detached relaunch helper script (Change 2, v1.0.36). Written to the temp
+ *  dir and run with powershell -File, so no quoting/escaping fragility. */
+const RELAUNCH_HELPER_PS1 = `# Reimagined Launcher - detached relaunch helper (v1.0.36).
+# Started by the launcher BEFORE it exits so the updated launcher reopens
+# reliably after the NSIS silent installer replaces the files.
+param(
+  [string]$Exe,
+  [string]$WorkDir,
+  [string]$WaitPids,
+  [string]$LogFile
+)
+$ErrorActionPreference = 'Continue'
+function Log([string]$m) {
+  try { Add-Content -LiteralPath $LogFile -Value ("[RELAUNCH] " + (Get-Date -Format 'HH:mm:ss.fff') + " " + $m) } catch {}
+}
+Log 'Helper started.'
+Log ("Updated executable: " + $Exe)
+Log ("Working directory: " + $WorkDir)
+Log ("Waiting for processes to exit: " + $WaitPids)
+foreach ($pidStr in ($WaitPids -split ',')) {
+  $pidInt = 0
+  if ([int]::TryParse($pidStr, [ref]$pidInt) -and $pidInt -gt 0) {
+    $deadline = (Get-Date).AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+      $p = Get-Process -Id $pidInt -ErrorAction SilentlyContinue
+      if (-not $p) { break }
+      Start-Sleep -Milliseconds 500
+    }
+    Log ("Process " + $pidInt + " exited or wait timed out.")
+  }
+}
+Log 'Settling ~3 seconds so Windows releases every file handle.'
+Start-Sleep -Seconds 3
+Log 'Checking the updated executable exists.'
+$ok = $false
+for ($i = 0; $i -lt 40 -and -not $ok; $i++) {
+  if (Test-Path -LiteralPath $Exe) {
+    try {
+      Start-Process -FilePath $Exe -WorkingDirectory $WorkDir -ErrorAction Stop
+      $ok = $true
+    } catch {
+      Start-Sleep -Milliseconds 750
+    }
+  } else {
+    Start-Sleep -Milliseconds 750
+  }
+}
+if ($ok) {
+  Log 'Updated launcher started successfully.'
+  Log 'Relaunch complete.'
+} else {
+  Log 'Relaunch FAILED: could not start the updated launcher.'
+  $errFile = Join-Path $WorkDir 'RELAUNCH_FAILED.txt'
+  try {
+    Set-Content -LiteralPath $errFile -Value ("Reimagined updated successfully, but automatic relaunch failed.\`r\`nPlease open the launcher manually:\`r\`n" + $Exe)
+    Log ("Recovery note written: " + $errFile)
+  } catch {}
+}
+exit 0
+`
+
 /**
- * Arm a detached helper that reopens the launcher once the update installer
- * finishes.
+ * Arm a detached relaunch helper (Change 2, v1.0.36).
  *
- * Why this is needed: the NSIS installer is run fully silent (`/S
- * --updated`), and in silent mode every installer page — including the
- * Finish page that would normally relaunch the app — is skipped. So after
- * the installer replaces the files and exits, nothing would reopen the
- * launcher. This helper process is spawned detached (it survives this
- * process exiting), waits for the installer process to finish, gives the
- * file replacement a moment to settle (antivirus scans can briefly lock the
- * new exe), and then launches `process.execPath` — which is the SAME path
- * the installer just wrote the new version to. The user lands back in the
- * updated launcher automatically.
+ * Reliable post-update reopen: a real .ps1 script is written to the temp dir
+ * and spawned fully detached (it survives this process exiting), receiving the
+ * ABSOLUTE updated-exe path, the working directory, the PIDs to wait for
+ * (installer + this launcher) and a log file. The helper waits for both
+ * processes to exit, settles ~3 s so Windows releases every file handle, then
+ * verifies the updated exe exists and starts it (retrying while the file is
+ * still locked). Every step is logged to relaunch.log next to the exe, and a
+ * RELAUNCH_FAILED.txt recovery note is written if it can never start.
+ *
+ * Returns true only when the helper process was actually created — the caller
+ * must show "Relaunching..." only after that, never before.
  */
-function armRelaunchAfterInstaller(installerPid: number | null): void {
+function armRelaunchAfterInstaller(installerPid: number | null): boolean {
   try {
     const exe = process.execPath
     if (!exe || !/\.exe$/i.test(exe)) {
-      logger.warn('Relaunch helper skipped: not running from a packaged .exe.')
-      return
+      logger.warn('[RELAUNCH] Skipped: not running from a packaged .exe.')
+      return false
     }
-    // v1.0.19: wait for BOTH the installer and the OLD launcher process to
-    // fully exit, then wait ~3 s so Windows releases every file handle and
-    // finishes the replacement before the updated exe is started.
-    const waitCmd = installerPid
-      ? `Wait-Process -Id ${installerPid} -ErrorAction SilentlyContinue; Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue`
-      : 'Start-Sleep -Seconds 5'
-    const cmd = [
-      waitCmd,
-      // Release file handles / finish process termination (spec: ~3 seconds).
-      'Start-Sleep -Seconds 3',
-      `$exe = '${exe.replace(/'/g, "''")}'`,
-      // Launch the NEW launcher; retry briefly if the file is still locked.
-      '$ok = $false',
-      'for ($i = 0; $i -lt 40 -and -not $ok; $i++) {',
-      '  try { Start-Process -FilePath $exe -ErrorAction Stop; $ok = $true }',
-      '  catch { Start-Sleep -Milliseconds 750 }',
-      '}',
-      'if (-not $ok) { Start-Process -FilePath $exe }'
-    ].join('; ')
+    // The updated launcher lands at the SAME absolute path we run from.
+    const workDir = path.dirname(exe)
+    try {
+      fs.accessSync(exe, fs.constants.R_OK)
+    } catch {
+      logger.warn(`[RELAUNCH ERROR] Updated executable not readable: ${exe}`)
+      return false
+    }
+    const logFile = path.join(workDir, 'relaunch.log')
+    const script = path.join(app.getPath('temp'), 'reimagined-relaunch-helper.ps1')
+    try {
+      fs.writeFileSync(script, RELAUNCH_HELPER_PS1, 'utf8')
+    } catch (err) {
+      logger.warn(`[RELAUNCH ERROR] Could not write helper script: ${(err as Error).message}`)
+      return false
+    }
+    const pids = [installerPid, process.pid]
+      .filter((p): p is number => typeof p === 'number' && Number.isFinite(p) && p > 0)
+    if (pids.length === 0) pids.push(-1) // wait budget only
     const helper = spawn(
       'powershell',
-      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', cmd],
+      [
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', script, exe, workDir, pids.join(','), logFile
+      ],
       { detached: true, stdio: 'ignore', windowsHide: true }
     )
     helper.unref()
-    logger.info(`Relaunch helper armed — the launcher will reopen automatically after the installer (pid ${String(installerPid)}) finishes.`)
+    if (typeof helper.pid !== 'number' || !Number.isFinite(helper.pid) || helper.pid <= 0) {
+      logger.warn('[RELAUNCH ERROR] Helper process was not created.')
+      return false
+    }
+    logger.info(`[RELAUNCH] Helper started (pid ${helper.pid}) — the launcher will reopen automatically after the installer finishes.`)
+    logger.info(`[RELAUNCH] Updated executable: ${exe}`)
+    return true
   } catch (err) {
-    // Never fail the update because the relaunch could not be armed — the
-    // user can still open the launcher from the Start menu / desktop.
-    logger.warn(`Could not arm the relaunch helper: ${(err as Error).message}`)
+    logger.warn(`[RELAUNCH ERROR] Could not arm the relaunch helper: ${(err as Error).message}`)
+    return false
   }
 }
 

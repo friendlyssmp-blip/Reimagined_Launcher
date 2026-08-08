@@ -48,6 +48,8 @@ export interface ModalState {
   importShare: boolean
   /** v1.0.34 — the 3-option update prompt (no silent auto-update anymore). */
   update: boolean
+  /** v1.0.36 — the enhanced "Check for Updates" modal (checking/available/up-to-date/error). */
+  checkUpdates: boolean
   /** Crash Assistant — a game crash report detected after a launch. */
   crash: CrashReport | null
   confirm: {
@@ -137,6 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     share: null,
     importShare: false,
     update: false,
+    checkUpdates: false,
     crash: null,
     confirm: null
   })

@@ -29,7 +29,7 @@ export function UpdateModal() {
   useEffect(() => {
     const off = api.onEvent((e) => {
       if (e.type !== 'update:progress') return
-      const p = e.payload as { phase?: string; percent?: number }
+      const p = e.payload as { phase?: string; percent?: number; message?: string }
       const pct = p.percent ?? 0
       setPercent(pct)
       if (p.phase === 'download') setPhaseText('Downloading update...')
@@ -37,7 +37,7 @@ export function UpdateModal() {
       else if (p.phase === 'apply') setPhaseText('Applying files...')
       else if (p.phase === 'build') setPhaseText('Rebuilding the launcher...')
       else if (p.phase === 'restarting') setPhaseText('Relaunching… Minecraft keeps running')
-      else if (p.phase === 'done') setPhaseText('Relaunching...')
+      else if (p.phase === 'done') setPhaseText(p.message ?? 'Relaunching...')
     })
     return off
   }, [])

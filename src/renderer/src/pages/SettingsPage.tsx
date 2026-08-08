@@ -75,11 +75,11 @@ export function SettingsPage() {
   /* Check for updates (V2) — async, never blocks the UI. */
   const [checkState, setCheckState] = useState<'idle' | 'checking' | 'uptodate' | 'available' | 'failed'>('idle')
 
-  const doCheckForUpdates = async () => {
-    setCheckState('checking')
-    const res = await checkForUpdates(false, true)
-    if (res === null) setCheckState('failed')
-    else setCheckState(res.hasUpdate ? 'available' : 'uptodate')
+  /* v1.0.36 — the manual check now opens the enhanced Check Updates modal
+     (checking animation + real timer + available/up-to-date/error states).
+     The check itself is still the exact same engine call. */
+  const doCheckForUpdates = () => {
+    setModals({ checkUpdates: true })
   }
 
   const results = settingsQuery.trim()
@@ -472,6 +472,13 @@ export function SettingsPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="divider" style={{ marginTop: 6 }} />
+              <div className="panel-title">Startup Experience</div>
+              <p className="panel-sub">A premium waking-up sequence — logo reveal with purple illumination and a soft startup sound. Lightweight, never blocks initialization.</p>
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Toggle checked={settings.startupAnimation ?? true} onChange={(v) => updateSettings({ startupAnimation: v })} label="Startup Animation" />
+                <Toggle checked={settings.startupSound ?? true} onChange={(v) => updateSettings({ startupSound: v })} label="Startup Sound" />
               </div>
             </div>
           )}

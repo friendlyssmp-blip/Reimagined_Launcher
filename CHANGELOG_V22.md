@@ -805,3 +805,66 @@ on the next launch.
 - New config toggle textureDecodeCache (default on) + SafetyGate “loadcache” case.
 - Real measured stats are logged per reload (hits/misses/stored/failed) and at
   game close, feeding the ongoing performance changelog.
+
+
+## v1.0.36 — crash fix + relaunch fix + premium startup/Downloads + update modal + CurseForge
+
+### 1) CRITICAL — fixed the join-crash (bundled FPS Boost 1.0.12, game-side)
+- `ClientChunkCacheMixin.accessOk()` was a non-private static method without
+  `@Unique` — Mixin rejects exactly this at apply time, throwing an
+  `InvalidMixinException` while handling `ClientboundLoginPacket`, which
+  surfaced as the "Network Protocol Error" disconnect / freeze on world and
+  server joins. `accessOk()` and `fpsboost$applyDecodedChunk` are now
+  `@Unique`, and `fpsboost.mixins.json` is `required:false` so a version-drift
+  mixin failure only disables that one module — it can never crash login again.
+- Startup diagnostics added: Minecraft version, Fabric loader version, mod
+  version, and detected Sodium / C2ME / Iris co-installs (logged once, no PII).
+
+### 2) Reliable auto-relaunch after launcher updates (Change 2)
+- Root cause of "Relaunching..." followed by the launcher never reopening: the
+  old one-line PowerShell helper was fragile (quoting, silent failure, no
+  verification). Replaced with a real detached helper script
+  (`reimagined-relaunch-helper.ps1`, written to temp) spawned BEFORE the
+  launcher exits, receiving absolute exe path + working dir + PIDs to wait for.
+- The helper: waits for the installer and old launcher to exit, settles ~3 s
+  for Windows to release file handles, verifies the updated exe exists, starts
+  it with retries while the file is locked, logs every step to `relaunch.log`,
+  and writes `RELAUNCH_FAILED.txt` next to the exe if it can never start.
+- "Relaunching..." is only shown after the helper is confirmed running; the
+  update modal now shows the real phase message instead of a hardcoded string.
+
+### 3) Premium startup experience + complete Downloads redesign (Change 3)
+- Startup: the wake-up sequence now honors new Settings → Appearance → Startup
+  Experience toggles — Startup Animation and Startup Sound — and plays a soft
+  Aurora startup cue (ambient pad breathing in, harmonic layer, gentle bloom
+  at the reveal). Lightweight; initialization is never delayed.
+- Downloads: full redesign — every item renders as a card with the real mod
+  artwork, live progress bar, bytes, measured speed and ETA, grouped into
+  In progress / Completed / Failed, with a summary bar, Cancel on active
+  items, and Retry for failures. The download engine itself is untouched.
+
+### 4) Enhanced "Check for Updates" experience (Change 1)
+- The Settings check button (and sidebar arrow) now opens a polished modal:
+  a real elapsed timer, an indeterminate orbit animation (never a fake
+  percentage), an "Update available" state with current → new version, real
+  check duration and expandable release notes, a "You're up to date" state,
+  and a proper failure state with Retry — never claiming "no update" on error.
+- Single-flight: only one active check; rapid clicks are ignored. Same source
+  of truth as the sidebar arrow. The existing update engine is untouched.
+
+### 5) CurseForge returns — securely, with no key in the launcher (Change 5)
+- The CurseForge API key lives ONLY on the user's own backend proxy (new
+  `backend/cf-proxy`: zero-dependency Node server; key is a server-side
+  `CF_API_KEY` env var, whitelisted read-only routes, no secrets logged).
+- Paste the proxy URL in Settings → Advanced → CurseForge proxy URL, and the
+  new CurseForge tab in Mods (plus Resource Packs / Data Packs / Shaders via
+  the content-type dropdown) browses, installs and updates exactly like
+  Modrinth — one unified UI, two providers.
+- Without a proxy, a clean setup card explains the two-step connect (deploy
+  proxy → paste URL). Modrinth is untouched, offline behavior preserved, and a
+  secret scan confirms no key/token was committed.
+
+### Verification
+- Launcher: tsc node + web clean, electron-vite build clean, smoke 12/12.
+- Mod: gradle build clean with the @Unique fix.
+- Secret scan: no CurseForge key or credentials anywhere in the repo.

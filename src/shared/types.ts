@@ -52,6 +52,12 @@ export interface LauncherSettings {
 
   /* --------------------------- Extended View (v1.0.29) --------------------------- */
 
+  /** v1.0.36 — startup experience toggles (Change 3a). */
+  startupAnimation: boolean
+  startupSound: boolean
+  /** v1.0.36 — CurseForge is served by the user's own backend proxy (Change 5).
+   *  The API key never lives in the launcher; paste the proxy base URL here. */
+  curseforgeProxyUrl: string
   /** Cached distant-chunk rendering: persist visited chunks and show them as
    *  static ghost terrain beyond real render distance (Bobby-style, native). */
   extendedView: boolean

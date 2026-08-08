@@ -13,7 +13,6 @@ import { settingsManager } from '../settings/settings-manager'
 import { LauncherError } from '../core/errors'
 import type { ModrinthSearchResult, LoaderType, ProjectDetail, ProjectVersionInfo } from '@shared/types'
 
-const CF_API = 'https://api.curseforge.com/v1'
 const GAME_ID = 432 // Minecraft
 const USER_AGENT = 'ReimaginedLauncher/1.0.0 (Minecraft launcher)'
 
@@ -69,34 +68,37 @@ interface CfProject {
 /** Map a CurseForge modLoaderType enum back to a loader name. */
 const LOADER_BY_ID: Record<number, string> = { 0: 'any', 1: 'forge', 2: 'cauldron', 3: 'liteloader', 4: 'fabric', 5: 'quilt', 6: 'neoforge' }
 
-function requireKey(): string {
-  // CurseForge browsing was removed from the launcher before the public
-  // release — the launcher is Modrinth-only and never stores an API key.
-  throw new LauncherError(
-    'CF_REMOVED',
-    'CurseForge is not supported in this version.',
-    'Reimagined now browses and installs content exclusively from Modrinth.'
-  )
+/** v1.0.36 — the CurseForge key lives ONLY on the user's backend proxy
+ * (backend/cf-proxy). This function returns the proxy base URL, or throws a
+ * clear setup error. The launcher never holds, stores, or logs an API key. */
+function proxyBaseUrl(): string {
+  const proxy = settingsManager.get().curseforgeProxyUrl?.trim()
+  if (!proxy) {
+    throw new LauncherError(
+      'CF_NO_PROXY',
+      'CurseForge browsing is not connected yet.',
+      'Deploy the included backend proxy (backend/cf-proxy) with your CurseForge API key, then paste its URL in Settings → Advanced → CurseForge proxy URL.'
+    )
+  }
+  return proxy.replace(/\/+$/, '')
 }
 
 async function cfGet<T>(path: string, params: Record<string, string | number | undefined>): Promise<T> {
-  const key = requireKey()
+  const proxy = proxyBaseUrl()
   const qs = new URLSearchParams()
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== '') qs.set(k, String(v))
   })
-  const res = await fetch(`${CF_API}${path}?${qs.toString()}`, {
-    headers: { 'x-api-key': key, Accept: 'application/json', 'User-Agent': USER_AGENT }
+  const target = `${proxy}/api/cf${path}${qs.toString() ? `?${qs.toString()}` : ''}`
+  const res = await fetch(target, {
+    headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(25_000)
   })
   if (!res.ok) {
-    if (res.status === 403 || res.status === 401) {
-      throw new LauncherError(
-        'CF_BAD_KEY',
-        'CurseForge rejected the API key.',
-        'Check the key in Settings → Minecraft — it must be an active CurseForge API v3 key.'
-      )
+    if (res.status === 502 || res.status === 504) {
+      throw new LauncherError('CF_PROXY_DOWN', 'The CurseForge proxy is unreachable.', 'Check that the proxy URL in Settings → Advanced is correct and the proxy is running.')
     }
-    throw new LauncherError('CF_ERROR', `CurseForge request failed (HTTP ${res.status}).`, 'Try again in a moment.')
+    throw new LauncherError('CF_ERROR', `CurseForge request failed (HTTP ${res.status}).`, 'Try again in a moment — if it persists, check the proxy logs.')
   }
   const body = (await res.json()) as { data?: T }
   return body.data as T
@@ -281,7 +283,7 @@ class CurseForgeClient {
 
 export const curseforge = new CurseForgeClient()
 
-/** CurseForge is not supported in this version of the launcher. */
+/** True when the user has connected their own backend proxy (Change 5). */
 export function curseforgeConfigured(): boolean {
-  return false
+  return Boolean(settingsManager.get().curseforgeProxyUrl?.trim())
 }

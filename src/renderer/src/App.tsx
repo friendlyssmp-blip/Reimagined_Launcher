@@ -11,6 +11,7 @@ import { DuplicateModal } from './components/DuplicateModal'
 import { ShareModal } from './components/ShareModal'
 import { ImportModal } from './components/ImportModal'
 import { UpdateModal } from './components/UpdateModal'
+import { CheckUpdatesModal } from './components/CheckUpdatesModal'
 import { CrashModal } from './components/CrashModal'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -197,16 +198,23 @@ function Shell() {
       {modals.share && <ShareModal profile={modals.share.profile} />}
       {modals.importShare && <ImportModal initialCode={importCode} />}
       {modals.update && <UpdateModal />}
+      {modals.checkUpdates && <CheckUpdatesModal />}
       {modals.crash && <CrashModal />}
       {modals.confirm && <ConfirmDialog {...modals.confirm} />}
       <Toasts />
-      {splash && (
+      {splash && settings.startupAnimation !== false && (
         <SplashScreen
+          onStart={() => {
+            if (settings.startupSound !== false) sound.startup()
+          }}
           onDone={() => {
             setSplash(false)
             sessionStorage.setItem('reimagined:splash', '1')
           }}
         />
+      )}
+      {splash && settings.startupAnimation === false && (
+        <div style={{ display: 'none' }} />
       )}
     </div>
   )

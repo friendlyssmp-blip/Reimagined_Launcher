@@ -15,7 +15,13 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-// v1.0.11 adds CaptureCompat (OBS/Game-Capture hook compatibility: no anti-hook
+// v1.0.12 fixes the critical mixin crash: ClientChunkCacheMixin.accessOk() was a
+// non-private static method without @Unique, which Mixin rejects at apply time
+// (InvalidMixinException during ClientboundLoginPacket handling -> "Network
+// Protocol Error" on world/server join). accessOk() and applyDecodedChunk are now
+// @Unique, mixins.json is required:false so a version-drift mixin failure only
+// disables that module (never crashes login), and startup diagnostics log the
+// MC/FabricLoader versions + Sodium/C2ME/Iris presence. v1.0.11 adds CaptureCompat (OBS/Game-Capture hook compatibility: no anti-hook
 // hardening, borderless-fullscreen preference enforcement, standard present path
 // audit) and LoadingBoost (resource-pack/shader reloads keep the game window's
 // message pump responsive — no Windows "Not Responding", work stays off the
@@ -29,8 +35,8 @@ const FPS_BOOST_ID = 'reimagined-fps-boost'
 // stutters are identified from real data. v1.0.9 adds the async server-chunk
 // decode pipeline; v1.0.8 adds Extended View. ensureFpsBoost upgrades existing
 // profiles to the new bundle automatically.
-const FPS_BOOST_VERSION = '1.0.11'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.11.jar'
+const FPS_BOOST_VERSION = '1.0.12'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.12.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

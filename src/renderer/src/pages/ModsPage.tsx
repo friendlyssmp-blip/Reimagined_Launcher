@@ -9,7 +9,7 @@ import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
 
-type SourceTab = 'installed' | 'modrinth'
+type SourceTab = 'installed' | 'modrinth' | 'curseforge'
 type SortKey = 'relevance' | 'downloads' | 'newest' | 'updated' | 'name'
 type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader'
 /** Installed panel sub-tabs — organized per content type (instance menu). */
@@ -185,12 +185,39 @@ export function ModsPage() {
     [activeProfile, query, notify, modrinthIndex, contentType, profileLoader, category]
   )
 
+  /** CurseForge search (Change 5) — routed through the user's backend proxy.
+   *  Same result shape + row rendering as Modrinth; the provider badge shows
+   *  which source a hit came from. If no proxy is configured, the setup card
+   *  is shown instead of a broken search. */
+  const [cfSearching, setCfSearching] = useState(false)
+  const [cfError, setCfError] = useState<string | null>(null)
+  const doCurseforgeSearch = useCallback(
+    async (q?: string, _append = false) => {
+      if (!activeProfile) return
+      const term = q ?? query
+      setCfSearching(true)
+      setCfError(null)
+      try {
+        const cfSort = sort === 'updated' ? 'recent' : sort === 'relevance' ? 'downloads' : sort
+        const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType)
+        setResults(page.map((x) => ({ ...x, source: 'curseforge' as const })))
+      } catch (err) {
+        setCfError(friendlyError(err))
+        setResults([])
+      } finally {
+        setCfSearching(false)
+      }
+    },
+    [activeProfile, query, notify, sort, contentType]
+  )
+
   // Auto-load results the moment the Modrinth tab opens, and re-run whenever
   // the sort order, content type or category changes (fresh first page).
   useEffect(() => {
     if (tab === 'modrinth') void doSearch(undefined, 0, false)
+    else if (tab === 'curseforge') void doCurseforgeSearch(undefined, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sort, contentType, category, profileId])
+  }, [tab, sort, contentType, category, profileId, doCurseforgeSearch])
 
   // AUTO-SEARCH: as soon as the user stops typing (350 ms) the results update
   // by themselves — no Enter key needed. Typing "simple" and pausing shows
@@ -198,9 +225,14 @@ export function ModsPage() {
   // (the tab/sort/category effect above handles those changes) so switching
   // tabs never triggers a duplicate search.
   useEffect(() => {
-    if (tab !== 'modrinth') return
-    const t = setTimeout(() => void doSearch(undefined, 0, false), 350)
-    return () => clearTimeout(t)
+    if (tab === 'modrinth') {
+      const t = setTimeout(() => void doSearch(undefined, 0, false), 350)
+      return () => clearTimeout(t)
+    }
+    if (tab === 'curseforge') {
+      const t = setTimeout(() => void doCurseforgeSearch(undefined, false), 350)
+      return () => clearTimeout(t)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
 
@@ -259,6 +291,13 @@ export function ModsPage() {
     if (!activeProfile) return
     setInstallingId(r.projectId)
     try {
+      if (r.source === 'curseforge') {
+        const m = await api.mods.installCurseforge(activeProfile.id, r.projectId, { title: r.title, iconUrl: r.iconUrl, downloads: r.downloads }, contentType)
+        setInstalled(await api.mods.list(activeProfile.id))
+        notify('success', 'Installed from CurseForge', `${m.title} v${m.versionNumber}`)
+        setInstallingId(null)
+        return
+      }
       const res = await api.mods.installWithDeps(activeProfile.id, r.projectId, versionId, contentType)
       setInstalled(await api.mods.list(activeProfile.id))
       notify(
@@ -609,7 +648,7 @@ export function ModsPage() {
           <span className="mod-title link" onClick={(e) => { e.stopPropagation(); openDetail(r) }}>
             {r.title}
           </span>
-          <Badge variant="accent">Modrinth</Badge>
+          <Badge variant="accent">{r.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}</Badge>
           {isInstalled(r) && <Badge variant="success">Installed</Badge>}
         </div>
         <div className="mod-desc">{r.description}</div>
@@ -635,7 +674,7 @@ export function ModsPage() {
             e.stopPropagation()
             // Shift-click skips the confirmation and installs with deps.
             if (e.shiftKey) void installFast(r)
-            else setInstallConfirm({ provider: 'modrinth', projectId: r.projectId, projectType: contentType })
+            else setInstallConfirm({ provider: r.source === 'curseforge' ? 'curseforge' : 'modrinth', projectId: r.projectId, projectType: contentType })
           }}
           title="Install (hold Shift to install immediately with dependencies)"
         >
@@ -756,12 +795,24 @@ export function ModsPage() {
           <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${contentType === 'mod' ? 'Modrinth' : 'Modrinth packs'}… (results update as you type)`}
-            onKeyDown={(e) => e.key === 'Enter' && doSearch(undefined, 0, false)}
+            placeholder={`Search ${tab === 'curseforge' ? 'CurseForge' : contentType === 'mod' ? 'Modrinth' : 'Modrinth packs'}… (results update as you type)`}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              if (tab === 'curseforge') void doCurseforgeSearch(undefined, false)
+              else void doSearch(undefined, 0, false)
+            }}
             autoFocus
           />
-          <Button size="sm" variant="ghost" onClick={() => doSearch(undefined, 0, false)} disabled={searching}>
-            {searching ? <Spinner /> : 'Search'}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              if (tab === 'curseforge') void doCurseforgeSearch(undefined, false)
+              else void doSearch(undefined, 0, false)
+            }}
+            disabled={tab === 'curseforge' ? cfSearching : searching}
+          >
+            {tab === 'curseforge' ? (cfSearching ? <Spinner /> : 'Search') : searching ? <Spinner /> : 'Search'}
           </Button>
         </div>
 
@@ -922,11 +973,12 @@ export function ModsPage() {
         </div>
       </div>
 
-      {/* Tabs — Modrinth only (CurseForge removed from this launcher). */}
+      {/* Tabs — Installed / Modrinth / CurseForge (Change 5). */}
       <TabBar
         tabs={[
           { id: 'installed', label: `Installed (${installed.length + currentManual.length})` },
-          { id: 'modrinth', label: 'Modrinth' }
+          { id: 'modrinth', label: 'Modrinth' },
+          { id: 'curseforge', label: 'CurseForge' }
         ]}
         active={tab}
         onChange={(id) => {
@@ -1160,7 +1212,31 @@ export function ModsPage() {
       )}
 
       {/* Browse Modrinth */}
-      {tab === 'modrinth' && renderBrowse()}
+      {(tab === 'modrinth' || tab === 'curseforge') && renderBrowse()}
+      {tab === 'curseforge' && cfError && (
+        <div className="panel">
+          <div className="panel-title">CurseForge is not connected</div>
+          <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
+            {cfError}
+          </p>
+          <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, marginTop: 8 }}>
+            CurseForge requires an API key, and Reimagined keeps it out of the launcher
+            entirely: you run the included <b>backend proxy</b> (folder{' '}
+            <code style={{ fontFamily: 'monospace', background: 'var(--bg-2)', padding: '1px 5px', borderRadius: 5 }}>backend/cf-proxy</code>{' '}
+            in the repo) with your key as a server-side <code style={{ fontFamily: 'monospace', background: 'var(--bg-2)', padding: '1px 5px', borderRadius: 5 }}>CF_API_KEY</code>{' '}
+            env var, then paste its URL in Settings → Advanced → CurseForge proxy URL.
+            The key never reaches your PC or this repository.
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <Button size="sm" variant="ghost" onClick={() => void doCurseforgeSearch(undefined, false)} disabled={cfSearching}>
+              {cfSearching ? <Spinner /> : 'Retry search'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => window.open('https://github.com/friendlyssmp-blip/Reimagined_Launcher/tree/main/backend/cf-proxy', '_blank')}>
+              Proxy setup guide
+            </Button>
+          </div>
+        </div>
+      )}
 
         </Fragment>
       )}

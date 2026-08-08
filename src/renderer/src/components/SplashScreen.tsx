@@ -19,11 +19,12 @@ const PARTICLES = Array.from({ length: 16 }, (_, i) => {
  * and light particles drift past. Skippable by click or any key. It runs as
  * a pure overlay so launcher initialization is never delayed.
  */
-export function SplashScreen({ onDone }: { onDone: () => void }) {
+export function SplashScreen({ onDone, onStart }: { onDone: () => void; onStart?: () => void }) {
   const [phase, setPhase] = useState<'in' | 'out'>('in')
   const finished = useRef(false)
 
   useEffect(() => {
+    onStart?.()
     const finish = () => {
       if (finished.current) return
       finished.current = true
