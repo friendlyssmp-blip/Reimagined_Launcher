@@ -1,1 +1,1 @@
-f431a79f632cd5af408fc57910c5ffcd7acbde95fe2b66ba7065e0c26c9e9948 *dist/Reimagined-Setup-1.0.29.exe
+8ebc47abe0858989dd874e455131ac44bcf926a7fe736793423e5333b38a8718 *dist/Reimagined-Setup-1.0.30.exe

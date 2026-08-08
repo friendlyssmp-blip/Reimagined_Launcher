@@ -60,6 +60,12 @@ export interface LauncherSettings {
   /** Max disk space (MB) the per-world chunk snapshot cache may use (LRU). */
   extendedCacheLimitMB: number
 
+  /* --------------------------- Async chunk decode (v1.0.30) --------------------------- */
+
+  /** Decode incoming server chunk packets off the game thread (bounded,
+   *  relevance-ordered, applied nearest-first — never blocks the tick). */
+  asyncChunkDecode: boolean
+
   /* ------------------------------- Audio ------------------------------- */
 
   /** Master toggle for all UI sounds. */

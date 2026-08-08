@@ -576,3 +576,65 @@ GPL-licensed Bobby mod is never bundled.
 - Honest cost note: ghost geometry has a real (small) GPU draw cost; what it avoids is the
   much heavier cost of loading those chunks live. The EXTVIEW log compares both.
 
+## v1.0.30 — CHUNK STREAMING REBUILD: async server-chunk decode + never-stuck pipeline
+
+The multiplayer chunk path was the worst jank case: vanilla decodes every incoming
+server chunk packet (paletted containers + block entities) ON the game thread, so a
+join burst or a server resend stalls the client for every single packet. This pass
+rebuilds the flow end to end around three rules — never block, never unbounded,
+always relevance-ordered. The game looks/feels exactly like vanilla; only HOW the
+chunk work is scheduled changed (zero gameplay/functional changes).
+
+### Part 2 (main focus) — multiplayer / server chunk streaming
+- ASYNC NETWORK CHUNK DECODE: a new ClientChunkCache mixin intercepts
+  replaceWithPacketData (verified against the 26.2 bytecode) and moves the
+  expensive decode to a small dedicated worker pool (Reimagined-Chunk-Decode,
+  1..3 threads by hardware preset). The packet path only does O(1) bookkeeping
+  and returns — the game thread never blocks on a chunk packet.
+- BOUNDED + DROP-LEAST-RELEVANT QUEUE: the decode queue has a hard cap (96). Under
+  a join burst the FARTHEST queued chunk is dropped to make room for a nearer one;
+  the backlog can never grow without limit and never spills onto the caller
+  (no CallerRuns — a decode never runs on the game thread).
+- RELEVANCE-ORDERED, SPREAD ACROSS FRAMES: finished chunks are applied on the game
+  thread nearest-first with a per-tick budget (12/tick). A server join shows a
+  small playable area almost immediately and streams the rest progressively —
+  never one giant stall. Out-of-order arrival is irrelevant: apply order is by
+  distance to the player, not arrival.
+- LAST-WINS DEDUP + RESYNC: a second packet for the same chunk supersedes the
+  first and a superseded decode is never applied — reconnect and server-world
+  changes re-send chunks through the same path with the newest data winning.
+- WORLD-LEAVE / SERVER-SWITCH FLUSH: leaving a world cancels everything in flight;
+  stale applies are additionally rejected by comparing the captured level to the
+  live one. Light stays vanilla (ClientLevel.queueLightUpdate is already deferred).
+
+### Part 1 — local scenarios (creation / movement / rejoin) held to the same standard
+- CANCELLABLE MESH COMPILE: a CompileTask mixin skips a compile whose chunk left
+  the loaded area before its mesh finished building (returns vanilla's own
+  CANCELLED result — the wrapper releases the buffer pack exactly as after a real
+  cancellation), so the worker queue never falls permanently behind during fast
+  movement. Complements the existing distance-prioritized dynamic queue, the
+  adaptive chunk-build pool and the storm stabilizer.
+- Rejoin reuses the existing caches: the short-term ClientChunkCache storage plus
+  the Extended View persistent snapshots (unchanged).
+
+### Safety / telemetry / UI
+- Everything sits behind the SafetyGate ('chunkPipe' module): repeated failures
+  disable only this feature and the game falls back to vanilla synchronous
+  decode. The async path also stands down when Sodium is installed (it owns chunk
+  decode) and while AFK (pool collapses to 1 thread).
+- PROF line now reports real pipe numbers: dq=backlog/threads ap=applied dr=dropped
+  sk=meshSkips; the FPS overlay shows a DQ chip while a decode backlog exists;
+  CHUNKPIPE log lines report drops (throttled) and a 60s summary with real
+  measured apply/drop/decode-ms numbers for the changelog trail.
+- New settings: 'Async Chunk Decode' toggle (on by default; launcher Settings >
+  Performance + in-game K menu), seeded per-tier from the RPE like Extended View.
+- Bundled FPS Boost updated to 1.0.9 (auto-upgrades existing profiles).
+
+### Verification (this pass)
+- Mod compiles clean (26.2, Fabric); launcher typechecks node+web 0 errors;
+  smoke test 12/12 including a real cached launch.
+- The 26.2 render-graph note still applies to any GPU-side drawing: the CPU
+  pipeline here is complete and real; sustained on-server frame-time measurement
+  (frame-time spikes on join, time-to-playable) is logged via PROF/CHUNKPIPE
+  during live play.
+

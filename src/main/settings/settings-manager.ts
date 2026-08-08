@@ -37,6 +37,9 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   extendedView: true,
   extendedViewDistance: 32,
   extendedCacheLimitMB: 512,
+  // v1.0.30 — async server-chunk decode: on by default (server joins are the
+  // worst jank case; decoding off the game thread never blocks the tick).
+  asyncChunkDecode: true,
   recentActivity: [],
   audioEnabled: true,
   audioVolume: 0.7,

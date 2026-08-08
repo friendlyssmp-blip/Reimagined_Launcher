@@ -867,6 +867,9 @@ class Launcher {
       config.extendedView = s.extendedView ?? true
       config.extendedViewDistance = s.extendedViewDistance ?? 32
       config.extendedCacheLimitMB = s.extendedCacheLimitMB ?? 512
+      // v1.0.30 — async server-chunk decode (user override wins over the tier
+      // default, same pattern as Extended View above).
+      config.asyncChunkDecode = s.asyncChunkDecode ?? true
       const dir = path.join(gameDir, 'config')
       fs.mkdirSync(dir, { recursive: true })
       // v1.0.13 frame-rate safety: by default the engine applies a safe FPS

@@ -894,6 +894,32 @@ function PerformanceSection() {
         </div>
       </div>
 
+      {/* v1.0.30 — Async server-chunk decode: incoming chunk packets from a
+          server are decoded OFF the game thread (bounded, relevance-ordered,
+          applied nearest-first with a per-tick budget). The game thread never
+          blocks on a chunk packet and a join burst fills the screen
+          progressively instead of stalling — the worst jank case on servers. */}
+      <div className="panel">
+        <div className="panel-title">Async chunk decode (servers)</div>
+        <p className="panel-sub">
+          Decodes incoming server chunk packets off the game thread — bounded, ordered by
+          distance, and applied gradually so a server join or reconnect never stalls the game.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+          <Toggle
+            checked={settings.asyncChunkDecode ?? true}
+            onChange={(v) => { void updateSettings({ asyncChunkDecode: v }) }}
+            label="Async chunk decode"
+          />
+          <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5 }}>
+            When on, chunk packets are decoded by a small worker pool, the queue drops the
+            farthest queued chunk under a burst instead of growing without limit, and finished
+            chunks appear nearest-first. A reconnect or server resync re-sends chunks through
+            the same path (newest data always wins).
+          </div>
+        </div>
+      </div>
+
       <div className="panel">
         <div className="panel-title">Your hardware</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 12 }}>

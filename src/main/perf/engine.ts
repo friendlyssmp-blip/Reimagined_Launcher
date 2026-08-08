@@ -142,7 +142,12 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     // simulation radius stays exactly what the user set. Tuned per tier below.
     extendedView: true,
     extendedViewDistance: 32,
-    extendedCacheLimitMB: 512
+    extendedCacheLimitMB: 512,
+    // v1.0.30 — async server-chunk decode: decode chunk packets off the game
+    // thread (bounded, relevance-ordered, per-tick apply budget). 0 threads =
+    // auto by hardware (1..3); stands down when Sodium is present.
+    asyncChunkDecode: true,
+    decodeThreads: 0
   }
   const slowStorage = hw?.storage.type === 'HDD'
   if (tier === 'potato') {
