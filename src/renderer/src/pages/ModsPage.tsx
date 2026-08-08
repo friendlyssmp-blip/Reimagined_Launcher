@@ -1,5 +1,6 @@
 import { useState, useCallback, Fragment, useEffect, useRef } from 'react'
 import { useApp } from '../state/AppContext'
+import { sound } from '../lib/sound'
 import { Button, TextInput, Spinner, EmptyState, Badge, Toggle, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
@@ -243,7 +244,9 @@ export function ModsPage() {
     try {
       await runGuarded('Install', () => api.mods.install(activeProfile.id, r.projectId, contentType))
       setInstalled(await api.mods.list(activeProfile.id))
-      notify('success', 'Installed', r.title)
+      // v1.0.35 — install-complete payoff plays with the success checkmark.
+      sound.installComplete()
+      notify('success', 'Installed', r.title, { silent: true })
     } catch {
       // handled by runGuarded
     } finally {

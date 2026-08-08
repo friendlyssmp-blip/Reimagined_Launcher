@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '../state/AppContext'
 import { Button, Field, TextInput, Toggle, Slider, Select, Spinner } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
-import { sound, SOUND_PACKS } from '../lib/sound'
+import { sound } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
 import { ModIcon } from '../components/ModIcon'
-import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconMoon, IconCrystal, IconLeaf } from '../components/icons'
+import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket } from '../components/icons'
 
 const IconBolt = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -19,11 +19,6 @@ function PerfTierIcon({ tier, size = 14 }: { tier: string; size?: number }) {
   return <Icon style={{ width: size, height: size, flex: '0 0 auto' }} />
 }
 
-/** Custom sound-pack icon — Aurora / Crystal / (leaf default). */
-function SoundPackIcon({ id, size = 26 }: { id: string; size?: number }) {
-  const Icon = id === 'aurora' ? IconMoon : id === 'crystal' ? IconCrystal : IconLeaf
-  return <Icon style={{ width: size, height: size }} />
-}
 import type { ThemeId, LauncherSettings, PerfStatus, PerfRecommendation, PerfModOption } from '@shared/types'
 
 const themes: { id: ThemeId; label: string; colors: string[] }[] = [
@@ -67,7 +62,7 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
   { query: ['preset', 'potato', 'balanced', 'high', 'turbo'], section: 'appearance', label: 'Performance preset', desc: 'How aggressively optimizations apply' },
   { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
-  { query: ['sound pack', 'customize sounds', 'preview sounds'], section: 'audio', label: 'Customize sounds', desc: 'Pick a sound pack and preview each action' },
+  { query: ['sound pack', 'customize sounds', 'preview sounds', 'aurora'], section: 'audio', label: 'Preview sounds', desc: 'Hear each action cue (single Aurora theme)' },
   { query: ['about', 'version', 'credits'], section: 'advanced', label: 'About', desc: 'Version, credits and data directory' },
   { query: ['reset', 'clean release', 'danger'], section: 'advanced', label: 'Clean Release Reset', desc: 'Restore the launcher to a fresh installation' }
 ]
@@ -516,33 +511,16 @@ export function SettingsPage() {
                 </div>
               </div>
               <div className="panel">
-                <div className="panel-title">Customize sounds</div>
-                <p className="panel-sub">Pick a sound pack — every change applies immediately.</p>
-                <div className="theme-cards" style={{ marginTop: 12 }}>
-                  {SOUND_PACKS.map((pk) => (
-                    <button
-                      key={pk.id}
-                      className={'card' + (settings.audioPack === pk.id ? ' active' : '')}
-                      style={{ cursor: 'pointer', textAlign: 'center', padding: '14px 12px' }}
-                      onClick={() => updateSettings({ audioPack: pk.id })}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-                        <SoundPackIcon id={pk.id} size={26} />
-                      </div>
-                      <b style={{ fontSize: 13 }}>{pk.label}</b>
-                      <small className="muted" style={{ display: 'block', marginTop: 3 }}>{pk.desc}</small>
-                    </button>
-                  ))}
-                </div>
-                <div className="divider" />
                 <div className="panel-title">Preview sounds</div>
-                <p className="panel-sub">Hear each action before you enable it.</p>
+                <p className="panel-sub">Hear each action before you enable it — one theme, always Aurora.</p>
                 <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {([
                     ['hover', 'Hover'],
                     ['click', 'Click'],
                     ['notify', 'Notification'],
                     ['download', 'Download'],
+                    ['install', 'Install complete'],
+                    ['update', 'Update available'],
                     ['success', 'Success'],
                     ['error', 'Error']
                   ] as const).map(([kind, label]) => (

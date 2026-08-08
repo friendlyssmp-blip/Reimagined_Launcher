@@ -436,49 +436,13 @@ textarea {
   width: var(--sidebar-w-collapsed);
 }
 
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 16px 16px 12px;
-  flex: 0 0 auto;
-}
-.mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 17px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 2px 14px var(--accent-glow);
-  flex: 0 0 auto;
-}
-.logo-text b {
-  font-size: 14.5px;
-  letter-spacing: 0.2px;
-  color: var(--text-1);
-  display: block;
-  line-height: 1.1;
-}
-.logo-text small {
-  font-size: 10.5px;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: var(--accent-3);
-}
-.sidebar.collapsed .logo-text {
-  display: none;
-}
-
+/* v1.0.35 — the sidebar wordmark above MAIN was removed; the nav now starts
+ * the sidebar directly with an intentional top margin. */
 .nav {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 10px 10px;
+  padding: 16px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -2670,15 +2634,6 @@ select.select option {
   opacity: 0.9;
 }
 
-.sidebar-logo img {
-  max-width: 100%;
-}
-.sidebar.collapsed .logo-word {
-  display: none;
-}
-.sidebar:not(.collapsed) .logo-mark {
-  display: none;
-}
 
 /* ----------------------------------- splash ----------------------------------- */
 
@@ -2807,15 +2762,27 @@ button:disabled, .btn:disabled {
   user-select: none;
 }
 
-/* Update notification in the sidebar (under the Account category). */
+/* v1.0.35 — minimal update control under the Account category: a clean
+ * down-arrow icon (no text). Subtle hover lift; version tooltip on hover. */
 .nav-item.update-available {
   background: var(--accent-soft);
   color: var(--accent-3);
   font-weight: 600;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .nav-item.update-available:hover {
   background: var(--accent-border);
   color: #fff;
+}
+.nav-item.update-available:active {
+  transform: scale(0.94);
+}
+.nav-item.update-available svg {
+  transition: transform 0.18s var(--ease), opacity 0.18s var(--ease);
+}
+.nav-item.update-available:hover svg {
+  transform: scale(1.12) translateY(1px);
+  opacity: 0.95;
 }
 .nav-item .update-dot {
   width: 8px;
@@ -2830,6 +2797,38 @@ button:disabled, .btn:disabled {
   position: absolute;
   right: 7px;
   top: 7px;
+}
+/* Smooth tooltip ("Update available: vX.X.X") on hover — native-feeling fade. */
+.nav-item[data-tip] {
+  position: relative;
+}
+.nav-item[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 7px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease);
+  z-index: 60;
+}
+.nav-item[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+.sidebar.collapsed .nav-item[data-tip]::after {
+  left: calc(100% + 10px);
 }
 
 /* Sticky search bar inside the Mods browse view — always one keystroke away. */

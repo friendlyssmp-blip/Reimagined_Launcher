@@ -56,7 +56,9 @@ export function DownloadsPage() {
         if (fresh.length > 0) {
           fresh.forEach((d) => announced.current.add(d.id))
           if (announced.current.size > 500) announced.current.clear()
-          sound.download()
+          // v1.0.35 — the satisfying completion payoff, landing at the same
+          // moment as the success checkmark/particle animation.
+          sound.installComplete()
         }
       }
       /* Real speed: delta of downloaded bytes between the last two polls. */

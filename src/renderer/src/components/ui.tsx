@@ -191,9 +191,10 @@ export function Toasts() {
   const { toasts } = useApp()
   const last = toasts[toasts.length - 1]
   /* Play one sound per new toast, keyed on its unique id — dismissing a toast
-   * must not replay the previous toast's sound. */
+   * must not replay the previous toast's sound. A toast marked silent (v1.0.35)
+   * lets the caller play its own more specific cue (e.g. install-complete). */
   useEffect(() => {
-    if (!last) return
+    if (!last || last.silent) return
     if (last.kind === 'success') sound.success()
     else if (last.kind === 'error') sound.error()
     else sound.notify()

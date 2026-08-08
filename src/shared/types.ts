@@ -80,8 +80,6 @@ export interface LauncherSettings {
   audioError: boolean
   /** Menu music — OFF by default; enabled from Settings. */
   audioMusic: boolean
-  /** Which sound pack the premium library uses. */
-  audioPack: 'aurora' | 'crystal' | 'zen'
 
   /* ------------------------------ Updates ------------------------------ */
 

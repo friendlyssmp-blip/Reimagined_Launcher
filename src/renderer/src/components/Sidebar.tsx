@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { BrandLogo } from './BrandLogo'
 import {
   IconHome,
   IconPlay,
@@ -11,8 +10,7 @@ import {
   IconUser,
   IconLog,
   IconChevronLeft,
-  IconChevronRight,
-  IconRefresh
+  IconChevronRight
 } from './icons'
 import type { Page } from '../App'
 
@@ -64,11 +62,8 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="sidebar-logo">
-        <span className="mark logo-mark">R</span>
-        <BrandLogo height={24} className="logo-word" />
-      </div>
-
+      {/* v1.0.35 — the sidebar wordmark above MAIN was removed; the sidebar now
+       * starts directly with the navigation. The header-bar branding stays. */}
       <nav className="nav">
         {navSections.map((section) => (
           <div key={section.label}>
@@ -79,16 +74,21 @@ export function Sidebar({ page, onNavigate }: { page: Page; onNavigate: (p: Page
                 <span className="nav-label">{label}</span>
               </button>
             ))}
-            {/* Update notification — sits right under the Account category,
-             * only visible while a new GitHub release is available. */}
+            {/* v1.0.35 — minimal update control under the Account category: a
+             * clean down-arrow icon (no text). Hover shows the version tooltip.
+             * Clicking runs the exact same update flow as before. */}
             {section.label === 'System' && updateInfo?.hasUpdate && (
               <button
                 className="nav-item update-available"
                 onClick={() => setModals({ update: true })}
-                title={`Update available — v${updateInfo.latestVersion}`}
+                aria-label="Update available"
+                data-tip={`Update available: v${updateInfo.latestVersion}`}
               >
-                <IconRefresh />
-                <span className="nav-label">Update v{updateInfo.latestVersion}</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 4v11" />
+                  <path d="m6 11 6 6 6-6" />
+                </svg>
+                <span className="nav-label">Update available</span>
                 <span className="update-dot" />
               </button>
             )}

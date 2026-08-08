@@ -14,6 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
+import { sound } from '../lib/sound'
 import { Button, Spinner, Badge } from './ui'
 import { ModIcon } from './ModIcon'
 import { api, friendlyError } from '../lib/api'
@@ -109,7 +110,9 @@ export function InstallConfirmModal({
       } else {
         const mod = await api.mods.installVersion(activeProfile.id, 'modrinth', target.projectId, info.version!.id, target.projectType)
         onInstalled(mod)
-        notify('success', 'Installed', mod.title)
+        // v1.0.35 — install-complete payoff with the success checkmark.
+        sound.installComplete()
+        notify('success', 'Installed', mod.title, { silent: true })
       }
       onClose()
     } catch (err) {

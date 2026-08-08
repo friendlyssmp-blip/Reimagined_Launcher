@@ -735,3 +735,45 @@ chunk work is scheduled changed (zero gameplay/functional changes).
   the very next check (default 15–60 s). No stale window, and downloads can
   never serve a cached/partial artifact (the SHA-256 check stays exact).
 
+
+## v1.0.35 - OBS deep-fix + no "Not Responding" loads + Aurora-only sound + sidebar/update-button polish
+
+### 1) OBS recording deep-fix (bundled FPS Boost 1.0.11, game-side)
+- New CaptureCompat audit: the client has NO anti-hook hardening anywhere, so
+  OBS Game Capture and Discord overlay can inject their capture DLLs cleanly
+  (the most common cause of a silent 20-30 FPS recording penalty is capture
+  falling back to slow Display Capture when a hook is blocked - nothing here
+  blocks it).
+- Borderless windowed fullscreen is preferred for capture-hook compatibility
+  and the present/swap-chain path stays standard and hookable.
+- Capture tools (OBS/Discord) are detected and logged so a recording-session
+  FPS comparison can be measured with hook status known.
+
+### 2) No more Windows "Not Responding" while loading packs (game-side)
+- New LoadingBoost module: resource-pack/shader reloads keep the game window
+  pumping messages and rendering a loading screen for the entire load, and
+  heavy texture-decode/atlas/compile work stays fully off the window thread
+  (a single blocking op on the message-pump thread is what makes Windows
+  mark the window "Not Responding" - the game never blocks on load anymore).
+
+### 3) Sound system - single Aurora theme + new cues (launcher UI)
+- Crystal and Zen themes removed: Aurora is the only theme, used everywhere,
+  and the theme picker is gone from Settings (sound is simply on/off now).
+- Two new short Aurora-style cues: a gentle chime when an update is available
+  (the moment the 3-option prompt appears) and a satisfying completion sound
+  on any install/download finishing (mod install, update install, profile
+  ready, backups).
+- All existing sounds normalized to a soft, consistent, non-fatiguing
+  loudness; every sound respects the master volume/mute setting.
+
+### 4) Sidebar - wordmark removed
+- The large "REIMAGINED LAUNCHER" wordmark above the MAIN nav section is
+  removed (expanded and collapsed states), with clean top spacing restored.
+
+### 5) Update button - minimal down-arrow icon
+- The text update button under Account is now a minimal downward-arrow icon
+  (same click = same update flow), with a smooth hover tooltip showing
+  "Update available: vX.X.X" from the real update check. No update = no arrow.
+
+Bundled FPS Boost upgraded to 1.0.11 - profiles on older bundles auto-upgrade
+on the next launch.

@@ -94,8 +94,7 @@ function Shell() {
       error: settings?.audioError ?? true,
       // Menu music is opt-in (off by default) — the Settings toggle controls
       // it live; the first pointerdown gesture unlocks the audio context.
-      music: settings?.audioMusic ?? false,
-      pack: settings?.audioPack ?? 'aurora'
+      music: settings?.audioMusic ?? false
     })
     sound.setMusicVolume(settings?.audioVolume ?? 0.7)
     if (!(settings?.audioEnabled ?? true) || !(settings?.audioMusic ?? false)) {

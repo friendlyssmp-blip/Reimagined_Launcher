@@ -9,6 +9,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback } f
 import type { ReactNode } from 'react'
 import { api, ApiError, friendlyError } from '../lib/api'
 import { humanDuration } from '../lib/format'
+import { sound } from '../lib/sound'
 import type {
   AppInfo,
   LauncherSettings,
@@ -35,6 +36,8 @@ export interface Toast {
   kind: 'info' | 'success' | 'error'
   title: string
   desc?: string
+  /** v1.0.35 — true when the caller plays its own more specific sound. */
+  silent?: boolean
 }
 
 export interface ModalState {
@@ -88,7 +91,12 @@ interface AppContextValue {
   logout: () => Promise<void>
   launchProfile: (profileId: string) => Promise<void>
   stopLaunch: (profileId?: string) => Promise<void>
-  notify: (kind: Toast['kind'], title: string, desc?: string) => void
+  /**
+   * Show a toast. `opts.silent` suppresses the automatic success/error/notify
+   * cue (used by flows that play a more specific sound themselves, e.g. the
+   * install-complete payoff).
+   */
+  notify: (kind: Toast['kind'], title: string, desc?: string, opts?: { silent?: boolean }) => void
   setModals: (patch: Partial<ModalState>) => void
   runGuarded: (label: string, fn: () => Promise<unknown>) => Promise<void>
   updateInfo: UpdateInfo | null
@@ -148,9 +156,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setModalsState((prev) => ({ ...prev, ...patch }))
   }, [])
 
-  const notify = useCallback((kind: Toast['kind'], title: string, desc?: string) => {
+  const notify = useCallback((kind: Toast['kind'], title: string, desc?: string, opts?: { silent?: boolean }) => {
     const id = ++toastId
-    setToasts((prev) => [...prev.slice(-4), { id, kind, title, desc }])
+    setToasts((prev) => [...prev.slice(-4), { id, kind, title, desc, silent: opts?.silent }])
     const timer = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
       notifyTimer.current.delete(id)
@@ -211,26 +219,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ? prev
             : info
         )
-        if (info.hasUpdate && info.latestVersion !== notifiedVersionRef.current) {
-          notifiedVersionRef.current = info.latestVersion
-          notify('info', 'Update available', `Reimagined v${info.latestVersion} is ready — check the Update panel.`)
-        }
         if (info.hasUpdate) {
+          let openPrompt = false
           if (!silent) {
             // Manual "Check for updates" from Settings — always ask. This also
             // counts as the session's one auto-prompt: an X-close must not
             // cause the next periodic check to re-open the modal.
             updatePromptShownRef.current = true
-            setModals({ update: true })
+            openPrompt = true
           } else if (updateRemindLaterRef.current) {
             // "Remind Me Later" — no auto-prompt for the rest of the session.
           } else if (updateCancelRef.current) {
             // "Cancel" — lighter dismissal: the next periodic check re-prompts.
             updateCancelRef.current = false
-            setModals({ update: true })
+            openPrompt = true
           } else if (!updatePromptShownRef.current) {
             // First detection this session — show the prompt once.
             updatePromptShownRef.current = true
+            openPrompt = true
+          }
+          if (openPrompt) {
+            // v1.0.35 — the "update available" cue plays the moment the
+            // 3-option prompt appears (gentle, positive — routine news, not
+            // an alarm). The prompt itself is the notification, so no extra
+            // toast sound doubles up here.
+            sound.updateAvailable()
             setModals({ update: true })
           }
         }

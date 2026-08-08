@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp } from '../state/AppContext'
+import { sound } from '../lib/sound'
 import { Button, Badge, Spinner, EmptyState, Toggle, TabBar } from './ui'
 import { ModIcon } from './ModIcon'
 import { InstallConfirmModal, type InstallTarget } from './InstallConfirmModal'
@@ -297,7 +298,9 @@ export function ProjectDetail({
         .installWithDeps(activeProfile.id, projectId, '', projectType as 'mod' | 'resourcepack' | 'datapack' | 'shader')
         .then((res) => {
           onInstalledChange(res.mod)
-          notify('success', 'Installed with dependencies', res.installed.join(', '))
+          // v1.0.35 — install-complete payoff with the success checkmark.
+          sound.installComplete()
+          notify('success', 'Installed with dependencies', res.installed.join(', '), { silent: true })
         })
         .catch((err) => notify('error', 'Could not install', friendlyError(err)))
         .finally(() => setBusy(null))
@@ -310,7 +313,9 @@ export function ProjectDetail({
         .installCurseforge(activeProfile.id, projectId, { title: detail?.title, iconUrl: detail?.iconUrl, downloads: detail?.downloads }, projectType)
         .then((mod) => {
           onInstalledChange(mod)
-          notify('success', 'Installed', mod.title)
+          // v1.0.35 — install-complete payoff with the success checkmark.
+          sound.installComplete()
+          notify('success', 'Installed', mod.title, { silent: true })
         })
         .catch((err) => notify('error', 'Could not install', friendlyError(err)))
         .finally(() => setBusy(null))
@@ -350,7 +355,9 @@ export function ProjectDetail({
         .installWithDeps(activeProfile.id, projectId, v.id, projectType as 'mod' | 'resourcepack' | 'datapack' | 'shader')
         .then((res) => {
           onInstalledChange(res.mod)
-          notify('success', 'Installed with dependencies', res.installed.join(', '))
+          // v1.0.35 — install-complete payoff with the success checkmark.
+          sound.installComplete()
+          notify('success', 'Installed with dependencies', res.installed.join(', '), { silent: true })
         })
         .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
         .finally(() => setBusy(null))
@@ -362,7 +369,9 @@ export function ProjectDetail({
         .installVersion(activeProfile.id, provider, projectId, v.id, projectType)
         .then((mod) => {
           onInstalledChange(mod)
-          notify('success', 'Installed', mod.title + ' ' + v.versionNumber)
+          // v1.0.35 — install-complete payoff with the success checkmark.
+          sound.installComplete()
+          notify('success', 'Installed', mod.title + ' ' + v.versionNumber, { silent: true })
         })
         .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
         .finally(() => setBusy(null))

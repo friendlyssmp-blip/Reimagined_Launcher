@@ -15,7 +15,11 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-// v1.0.10 — Extended View write-path fix (chunk captured at the REAL eviction
+// v1.0.11 adds CaptureCompat (OBS/Game-Capture hook compatibility: no anti-hook
+// hardening, borderless-fullscreen preference enforcement, standard present path
+// audit) and LoadingBoost (resource-pack/shader reloads keep the game window's
+// message pump responsive — no Windows "Not Responding", work stays off the
+// render thread). v1.0.10 — Extended View write-path fix (chunk captured at the REAL eviction
 // point via a Storage.drop HEAD mixin, BEFORE vanilla tears the chunk down —
 // the old hook left the persistent cache nearly empty, "ED 4/120"), the
 // visibleGhostChunks sweep now iterates the real cache index instead of
@@ -25,8 +29,8 @@ const FPS_BOOST_ID = 'reimagined-fps-boost'
 // stutters are identified from real data. v1.0.9 adds the async server-chunk
 // decode pipeline; v1.0.8 adds Extended View. ensureFpsBoost upgrades existing
 // profiles to the new bundle automatically.
-const FPS_BOOST_VERSION = '1.0.10'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.10.jar'
+const FPS_BOOST_VERSION = '1.0.11'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.11.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

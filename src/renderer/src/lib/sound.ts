@@ -1,14 +1,23 @@
 /**
- * Reimagined premium UI sounds.
+ * Reimagined UI sounds — the Aurora sound library (v1.0.35).
  *
- * Soft, clean, elegant — a small synthesized sound library built on gentle
- * sine/triangle tones with slow envelopes, tuned to stay pleasant during
- * long sessions. Three sound packs (Aurora / Crystal / Zen) shift pitch and
- * timbre, and every action has its own toggle + instant preview.
- * Menu music (the bundled menu1.ogg) respects the master volume.
+ * One theme, everywhere, unconditionally. A small synthesized library built
+ * on gentle sine tones with soft rounded attacks and short durations, tuned
+ * to stay pleasant through hundreds of repetitions per session:
+ * frequent actions (hover/click/toggle) are near-subtle, meaningful moments
+ * (install complete, error, update available) stand out by contrast.
+ *
+ * Design rules (v1.0.35 quality pass):
+ *  - SHORT: every interaction cue is brief — long sounds fatigue fast.
+ *  - SOFT ATTACK, NO HARSH FREQUENCIES: rounded exponential onsets, no
+ *    clicky transients, no piercing high-end.
+ *  - CONSISTENT LOUDNESS: all cues normalized to a moderate level relative
+ *    to each other; the master volume is always respected.
+ *  - SAME FAMILY: everything shares Aurora's tonal character (warm sine
+ *    palette), including the two new cues (update available, install
+ *    complete).
+ * Menu music (the bundled menu1.ogg) also respects the master volume.
  */
-
-export type SoundPack = 'aurora' | 'crystal' | 'zen'
 
 export interface SoundSettings {
   enabled: boolean
@@ -22,7 +31,6 @@ export interface SoundSettings {
   error: boolean
   /** Menu music — off by default, enabled from Settings. */
   music: boolean
-  pack: SoundPack
 }
 
 export const DEFAULT_SOUND: SoundSettings = {
@@ -34,20 +42,7 @@ export const DEFAULT_SOUND: SoundSettings = {
   download: true,
   success: true,
   error: true,
-  music: false,
-  pack: 'aurora'
-}
-
-export const SOUND_PACKS: { id: SoundPack; label: string; desc: string }[] = [
-  { id: 'aurora', label: 'Aurora', desc: 'Default — balanced, warm' },
-  { id: 'crystal', label: 'Crystal', desc: 'Brighter, airier tones' },
-  { id: 'zen', label: 'Zen', desc: 'Deeper, softer and calmer' }
-]
-
-const PACKS: Record<SoundPack, { shift: number; type: OscillatorType }> = {
-  aurora: { shift: 1, type: 'sine' },
-  crystal: { shift: 1.13, type: 'sine' },
-  zen: { shift: 0.86, type: 'triangle' }
+  music: false
 }
 
 let cfg: SoundSettings = { ...DEFAULT_SOUND }
@@ -66,20 +61,25 @@ function ac(): AudioContext | null {
   }
 }
 
-/** A soft tone: quick gentle attack, long elegant decay. */
-function tone(freq: number, dur: number, vol: number, when = 0, type: OscillatorType = 'sine', glideTo?: number): void {
+/**
+ * A soft Aurora tone: rounded attack, elegant decay, no harsh transients.
+ * A gentle lowpass shaper on the gain envelope keeps high-frequency content
+ * from ever piercing — the most fatiguing range for repeated listening.
+ */
+function tone(freq: number, dur: number, vol: number, when = 0, glideTo?: number): void {
   if (!cfg.enabled || vol <= 0) return
   const c = ac()
   if (!c) return
   const t0 = c.currentTime + when
   const osc = c.createOscillator()
   const gain = c.createGain()
-  osc.type = type
+  osc.type = 'sine'
   osc.frequency.setValueAtTime(Math.max(40, freq), t0)
   if (glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(40, glideTo), t0 + dur)
   const v = Math.min(0.5, vol * cfg.volume)
   gain.gain.setValueAtTime(0.0001, t0)
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, v), t0 + 0.012)
+  // Soft rounded attack (16 ms) — no clicky onset.
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, v), t0 + 0.016)
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
   osc.connect(gain)
   gain.connect(c.destination)
@@ -102,50 +102,64 @@ export const sound = {
     return cfg.enabled
   },
 
-  /** Soft whisper of a tick on hover — barely there. */
+  /** Soft whisper of a tick on hover — barely there, felt more than heard. */
   hover(): void {
     if (!cfg.hover) return
-    const s = PACKS[cfg.pack].shift
-    tone(980 * s, 0.05, 0.05)
+    tone(440, 0.045, 0.035)
   },
-  /** Gentle double-tap: a soft primary note plus a quiet harmonic. */
+  /** Gentle double-tap: a soft primary note plus a quiet low harmonic. */
   click(): void {
     if (!cfg.click) return
-    const s = PACKS[cfg.pack].shift
-    tone(540 * s, 0.07, 0.1, 0, PACKS[cfg.pack].type)
-    tone(880 * s, 0.055, 0.045, 0.014)
+    tone(520, 0.065, 0.07)
+    tone(780, 0.05, 0.03, 0.012)
   },
   /** Calm notification ping. */
   notify(): void {
     if (!cfg.notify) return
-    const s = PACKS[cfg.pack].shift
-    tone(840 * s, 0.16, 0.075)
+    tone(720, 0.14, 0.06)
   },
-  /** Download finished — a quiet two-note chime. */
+  /** Download finished — a quiet, satisfying two-note chime. */
   download(): void {
     if (!cfg.download) return
-    const s = PACKS[cfg.pack].shift
-    tone(660 * s, 0.11, 0.08)
-    tone(990 * s, 0.17, 0.075, 0.07)
+    tone(587, 0.1, 0.07)
+    tone(880, 0.16, 0.06, 0.06)
   },
-  /** Success — soft ascending arpeggio. */
+  /**
+   * v1.0.35 — install/operation completed: a short, satisfying completion
+   * payoff that lands with the success checkmark — warm, rounded, and brief.
+   */
+  installComplete(): void {
+    if (!cfg.download) return
+    tone(523, 0.09, 0.075)
+    tone(784, 0.14, 0.07, 0.07)
+    tone(1046, 0.18, 0.045, 0.13)
+  },
+  /**
+   * v1.0.35 — update available: a gentle, positive \"something worth noticing\"
+   * cue. Routine news, not an alarm — soft two-note rise in the Aurora family.
+   */
+  updateAvailable(): void {
+    if (!cfg.notify) return
+    tone(660, 0.11, 0.065)
+    tone(880, 0.16, 0.06, 0.1)
+    tone(1100, 0.18, 0.035, 0.2)
+  },
+  /** Success — soft ascending arpeggio (completion moments). */
   success(): void {
     if (!cfg.success) return
-    const s = PACKS[cfg.pack].shift
-    tone(523 * s, 0.16, 0.085)
-    tone(659 * s, 0.16, 0.085, 0.09)
-    tone(784 * s, 0.24, 0.085, 0.18)
+    tone(523, 0.14, 0.07)
+    tone(659, 0.14, 0.07, 0.08)
+    tone(784, 0.2, 0.07, 0.16)
   },
   /** Error — two gentle descending tones, never harsh. */
   error(): void {
     if (!cfg.error) return
-    const s = PACKS[cfg.pack].shift
-    tone(330 * s, 0.22, 0.08, 0, PACKS[cfg.pack].type, 262 * s)
-    tone(247 * s, 0.26, 0.07, 0.09, PACKS[cfg.pack].type, 196 * s)
+    tone(330, 0.2, 0.07, 0, 262)
+    tone(247, 0.24, 0.06, 0.09, 196)
   },
   /** Instant preview for the settings panel — ignores per-action toggles so
    *  the user always hears what they're about to pick, but respects volume. */
-  preview(kind: 'hover' | 'click' | 'notify' | 'download' | 'success' | 'error'): void {
+  preview(kind: 'hover' | 'click' | 'notify' | 'download' | 'success' | 'error' | 'update' | 'install'): void {
     const prev = cfg
     cfg = { ...cfg, hover: true, click: true, notify: true, download: true, success: true, error: true }
     if (kind === 'hover') sound.hover()
@@ -153,6 +167,8 @@ export const sound = {
     else if (kind === 'notify') sound.notify()
     else if (kind === 'download') sound.download()
     else if (kind === 'success') sound.success()
+    else if (kind === 'update') sound.updateAvailable()
+    else if (kind === 'install') sound.installComplete()
     else sound.error()
     cfg = prev
   },
