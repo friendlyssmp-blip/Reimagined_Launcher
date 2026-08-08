@@ -1,8 +1,8 @@
 {
-  "version": "1.0.46",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.46.exe",
-  "sha256": "577cbd334b6890d7555dbabef277b7560c238ec0c36f656cdd924ff24587b098",
-  "publishedAt": "2026-08-08T21:13:24.635121Z",
-  "notes": "v1.0.46 - Extended View removed + Settings cleanup.\n\n1) Extended View (ghost cached terrain) removed end to end: launcher settings,\nIPC, seeding and the Settings panel, plus the bundled FPS Boost 1.0.15 extview\npackage, chunk-capture mixin and EXT HUD chip - 0 references left.\n2) Settings reorganized: Danger Zone \"Clear all logs\" removed (duplicate of\nGeneral -> Logs \"Clear Logs\"), Appearance \"Performance preset\" picker removed\n(the Performance tab tier picker is the single control), Updates panel\nexplanation paragraph removed (kept re-check + Check for Updates), and a\ncorrupted Recommendations sentence fixed.",
-  "size": 83892523
+  "version": "1.0.47",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.47.exe",
+  "sha256": "d1cdd700d97ce75b96bac4fb28a9b47ee494cb4dd1c629aea07e99d76cf0ac4a",
+  "publishedAt": "2026-08-08T21:20:30.121151Z",
+  "notes": "v1.0.47 - Update pipeline self-healing (fixes the v1.0.46 failed update).\n\n1) The v1.0.46 update showed \"failed\": its manifest url still pointed at the\n1.0.45 installer while version/sha256 described 1.0.46, so the downloaded\nfile failed checksum verification (the launcher correctly refused it). The\nmanifest is corrected; if you saw the failure, check for updates again.\n2) Updater hardening: on a checksum mismatch the launcher now refetches the\nmanifest fresh and retries the download once (covers fixed-just-now manifests\nand stale CDN copies). Only a still-mismatching manifest reports a failure.\n3) Release tooling now derives the manifest url from the version number, so\nthis class of mismatch cannot be generated again.",
+  "size": 83893019
 }

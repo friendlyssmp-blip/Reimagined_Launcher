@@ -96,6 +96,14 @@ function timeoutSignal(ms: number): AbortSignal {
   return ctrl.signal
 }
 
+/** Thrown when the downloaded update fails SHA-256 verification (v1.0.47). */
+class ChecksumError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ChecksumError'
+  }
+}
+
 /**
  * v1.0.27 — tolerate malformed update metadata. A `latest.json` with literal
  * control characters inside its strings (e.g. generated on Windows with
@@ -325,10 +333,44 @@ export const updater = {
     return { hasUpdate: false, currentVersion: appVersion, latestVersion: appVersion }
   },
 
-  /** Download the update payload (repo zip in source runs, installer .exe in packaged). */
+  /**
+   * Download the update payload (repo zip in source runs, installer .exe in
+   * packaged) with checksum-mismatch self-healing (v1.0.47).
+   *
+   * A failed checksum usually means the manifest changed under us — a release
+   * was just fixed/published (the v1.0.46 incident: the manifest url still
+   * pointed at the 1.0.45 installer while version/sha256 described 1.0.46) or
+   * a stale CDN copy of latest.json was served. In that case we refetch the
+   * manifest fresh (bypassing the 30-minute cache) and retry once; only a
+   * still-mismatching refetched manifest is reported as a genuine failure.
+   */
   async download(): Promise<{ progress: number; path: string }> {
     mkdirp(paths.updates)
-    const info = await this.getInfo()
+    let info = await this.getInfo()
+    const firstAsset = info.assetUrl
+    const firstSha = info.sha256
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const dest = await this.downloadPayload(info)
+        return { progress: 100, path: dest }
+      } catch (err) {
+        if (!(err instanceof ChecksumError)) throw err
+        if (attempt > 0) throw err
+        logger.warn('Update checksum mismatch — refetching the manifest in case it was just fixed or served from a stale CDN…')
+        try {
+          info = await this.check(true)
+        } catch {
+          /* keep the current info — the retry below fails honestly */
+        }
+        if (info.assetUrl === firstAsset && info.sha256 === firstSha) throw err
+      }
+    }
+    throw new Error('Update checksum verification failed repeatedly.')
+  },
+
+  /** Download + verify one payload for the given manifest info; returns the
+   *  file path on success. */
+  async downloadPayload(info: UpdateInfo): Promise<string> {
     const dest = downloadFile(info)
     if (exists(dest)) fs.rmSync(dest, { force: true })
 
@@ -403,12 +445,12 @@ export const updater = {
         logger.error(
           `Update checksum mismatch — expected ${info.sha256.slice(0, 12)}…, got ${actual.slice(0, 12)}… — file deleted, update cancelled.`
         )
-        throw new Error('The downloaded update failed its checksum verification and was cancelled. Try the update again in a moment.')
+        throw new ChecksumError('The downloaded update failed its checksum verification and was cancelled. Try the update again in a moment.')
       }
       logger.info('Update checksum OK — the package is genuine.')
     }
     logger.info(`Update package downloaded (${Math.round(received / 1024 / 1024)} MB) — ${dest}`)
-    return { progress: 100, path: dest }
+    return dest
   },
 
   /**

@@ -1,5 +1,30 @@
 
 ## v1.0.34 — 3-option update prompt (no silent auto-update) + bundled FPS Boost 1.0.10
+## v1.0.47 — Update pipeline self-healing (v1.0.46 failed-update fix)
+
+### 1) The v1.0.46 update failure (fixed)
+- The v1.0.46 manifest was generated with the OLD url (it still pointed at the
+  1.0.45 installer) while version/sha256/size described 1.0.46. Every client that
+  clicked Update downloaded the 1.0.45 exe, failed SHA-256 verification and showed
+  "failed". The launcher behaved correctly (it refused the tampered/mismatched file);
+  the manifest itself was wrong.
+- The manifest has been corrected to point at Reimagined-Setup-1.0.46.exe and is
+  verified end-to-end (url -> file -> sha256 match). If you saw the failure, click
+  Check for Updates again (or wait for the auto re-check) and Update will now work.
+
+### 2) Updater hardening so this class of failure self-heals (bundled in 1.0.47)
+- When the downloaded update fails SHA-256 verification, the launcher now refetches
+  the manifest FRESH (bypassing the 30-minute cache) and retries the download once.
+  This covers a manifest that was just fixed/published and stale CDN copies of
+  latest.json — the two real-world causes of "failed" updates.
+- Only if the refetched manifest still mismatches is the failure reported (the file
+  is deleted first so a later retry always downloads from scratch).
+- Future release tooling now derives the manifest url from the version number, so a
+  version/sha256/url mismatch like v1.0.46 cannot be generated again.
+
+### 3) Verification
+- tsc (node + web) clean, electron-vite build clean, smoke 12/12.
+- Live end-to-end check after publish: manifest 1.0.47, url -> installer, sha256 match.
 ## v1.0.46 — Extended View removed + Settings cleanup
 
 ### 1) Extended View removed completely (launcher + bundled FPS Boost 1.0.15)
