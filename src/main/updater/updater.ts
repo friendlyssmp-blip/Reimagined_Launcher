@@ -66,15 +66,22 @@ const LATEST_JSON_FALLBACKS = [
  * networks that need a proxy to reach GitHub. Falls back to Node fetch.
  */
 async function ghFetch(url: string, init?: RequestInit): Promise<Response> {
+  // v1.0.33 — never serve a stale manifest from the HTTP cache. Electron's
+  // `net.fetch` (Chromium stack) honors Cache-Control and keeps a local cache
+  // (raw.githubusercontent.com sends max-age=300), so after a release the
+  // launcher could keep reporting the PREVIOUS version as "latest — up to
+  // date" for up to 5 minutes from its own disk cache instead of the live
+  // feed. `cache: 'no-store'` forces every check/download to hit the network.
+  const opts: RequestInit & { cache: 'no-store' } = { ...init, cache: 'no-store' }
   const netFetch = (net as unknown as { fetch?: (u: string, i?: RequestInit) => Promise<Response> }).fetch
   if (netFetch) {
     try {
-      return await netFetch(url, init)
+      return await netFetch(url, opts)
     } catch {
       /* fall through to Node fetch */
     }
   }
-  return fetch(url, init)
+  return fetch(url, opts)
 }
 /** Whole-repository archive — always the latest committed state of `main`. */
 const CODELOAD_ZIP = `https://codeload.github.com/${OFFICIAL_REPO}/zip/refs/heads/main`

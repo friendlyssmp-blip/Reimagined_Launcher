@@ -1,7 +1,7 @@
 {
-  "version": "1.0.32",
-  "installer": "dist/Reimagined-Setup-1.0.32.exe",
-  "notes": "v1.0.32 — Follow-up to the critical update fix (v1.0.31): the direct-asset url fallback is now restricted to packaged installs only. Source/dev runs always update via the repository zip (codeload) and can no longer be hijacked by a direct exe link in the manifest url field; asset names also strip query strings/fragments. Same guarantees as v1.0.31: the manifest declares the asset as installer path + direct url, the Update button is disabled with a clear log when a packaged install has no asset (no silent repo-zip fallback), the download is logged at start and SHA-256-verified against the manifest (mismatch = file deleted + update cancelled loudly).",
-  "sha256": "0958f23a447b981b30b2283ceb1c0156039a91d2344845c607c8fa434a003d4f",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.32.exe"
+  "version": "1.0.33",
+  "installer": "dist/Reimagined-Setup-1.0.33.exe",
+  "notes": "v1.0.33 — Update staleness fix: the launcher could keep reporting the PREVIOUS version as \"latest / up to date\" for up to 5 minutes after a release. Root cause: Electron net.fetch (Chromium stack) honors Cache-Control and served the manifest from its own local HTTP cache (raw.githubusercontent.com sends max-age=300), so every 15s re-check hit the cache instead of the live feed. Fix: ghFetch now passes cache no-store, so every update check and download always hits the network fresh — a new version is detected immediately, no stale cache window. Same guarantees as 1.0.31/1.0.32: asset resolved from installer + direct url, no silent repo-zip fallback on packaged installs, SHA-256 verified downloads.",
+  "sha256": "5be7f7881b0494646b1e82e17077ffb0034ac339cd5ea05cfd070c6f6942b2dd",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.33.exe"
 }

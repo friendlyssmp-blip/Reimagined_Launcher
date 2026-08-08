@@ -681,3 +681,20 @@ chunk work is scheduled changed (zero gameplay/functional changes).
   button), download start logged, SHA-256 verified (mismatch = delete + loud
   cancel).
 
+## v1.0.33 — Update staleness fix (stale "up to date" for up to 5 min)
+
+### Root cause
+- Electron `net.fetch` (Chromium stack) honors HTTP `Cache-Control` and keeps
+  its own local cache. `raw.githubusercontent.com` sends `max-age=300`, so
+  after a release the launcher kept serving the PREVIOUS manifest from its
+  own disk cache — every 15 s re-check hit the cache, and the UI kept saying
+  "up to date" at the old version for up to ~5 minutes even though the live
+  feed had moved on (confirmed in the user's launcher log: 20+ checks in a
+  row all reporting the old latest).
+
+### Fix
+- `ghFetch` now sends `cache: 'no-store'` for every update check AND download
+  — the launcher always reads the live feed, so a new release is detected on
+  the very next check (default 15–60 s). No stale window, and downloads can
+  never serve a cached/partial artifact (the SHA-256 check stays exact).
+
