@@ -51,6 +51,15 @@ function Shell() {
   /* Splash shows once per session (skippable, never blocks init). */
   const [splash, setSplash] = useState(() => sessionStorage.getItem('reimagined:splash') !== '1')
 
+  /* v1.0.36 — Startup Animation off: skip the splash entirely and remember it
+   * so toggling the animation back on mid-session never flashes the sequence. */
+  useEffect(() => {
+    if (splash && settings.startupAnimation === false) {
+      setSplash(false)
+      sessionStorage.setItem('reimagined:splash', '1')
+    }
+  }, [splash, settings.startupAnimation])
+
   /* UI is permanently rendered at 100% logical scale (V2) — no user-facing
    * scale option. The layout stays responsive and adapts to the window size;
    * zoom-based scaling was removed so nothing ever blurs or clips.
@@ -213,9 +222,7 @@ function Shell() {
           }}
         />
       )}
-      {splash && settings.startupAnimation === false && (
-        <div style={{ display: 'none' }} />
-      )}
+
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { sound } from '../lib/sound'
 import { Button, EmptyState, Spinner, AnimatedNumber } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { humanDuration, fmtBytes } from '../lib/format'
-import { IconDownload, IconCheck, IconX, IconRefresh } from '../components/icons'
+import { IconDownload, IconRefresh } from '../components/icons'
 
 interface Download {
   id: string

@@ -68,20 +68,10 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
 ]
 
 export function SettingsPage() {
-  const { settings, updateSettings, notify, info, account, logout, setModals, updateInfo, checkForUpdates } = useApp()
+  const { settings, updateSettings, notify, info, account, logout, setModals, updateInfo } = useApp()
   const [section, setSection] = useState<SectionId>('general')
   /* Settings search (V2): filters the index below and jumps to the result. */
   const [settingsQuery, setSettingsQuery] = useState('')
-  /* Check for updates (V2) — async, never blocks the UI. */
-  const [checkState, setCheckState] = useState<'idle' | 'checking' | 'uptodate' | 'available' | 'failed'>('idle')
-
-  /* v1.0.36 — the manual check now opens the enhanced Check Updates modal
-     (checking animation + real timer + available/up-to-date/error states).
-     The check itself is still the exact same engine call. */
-  const doCheckForUpdates = () => {
-    setModals({ checkUpdates: true })
-  }
-
   const results = settingsQuery.trim()
     ? SETTINGS_INDEX.filter((s) =>
         s.label.toLowerCase().includes(settingsQuery.toLowerCase()) ||
@@ -407,18 +397,12 @@ export function SettingsPage() {
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-                <Button variant="primary" size="sm" onClick={() => void doCheckForUpdates()} disabled={checkState === 'checking'}>
-                  {checkState === 'checking' ? <><Spinner /> Checking…</> : 'Check for Updates'}
+                <Button variant="primary" size="sm" onClick={() => setModals({ checkUpdates: true })}>
+                  Check for Updates
                 </Button>
-                {checkState === 'checking' && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Contacting GitHub…</span>}
-                {checkState === 'uptodate' && <span style={{ fontSize: 12.5, color: 'var(--green, #34d399)' }}>You are up to date</span>}
-                {checkState === 'available' && updateInfo?.hasUpdate && (
-                  <>
-                    <span style={{ fontSize: 12.5, color: 'var(--accent-3)', fontWeight: 700 }}>Update available — v{updateInfo.latestVersion}</span>
-                    <Button variant="ghost" size="sm" onClick={() => setModals({ update: true })}>Update now</Button>
-                  </>
-                )}
-                {checkState === 'failed' && <span style={{ fontSize: 12.5, color: 'var(--danger, #f87171)' }}>Check failed — could not reach GitHub</span>}
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  Opens the live update check — real timing, a clear result, and a one-click update.
+                </span>
               </div>
             </div>
           )}
@@ -542,6 +526,23 @@ export function SettingsPage() {
 
           {section === 'advanced' && (
             <>
+              <div className="panel">
+                <div className="panel-title">CurseForge proxy URL</div>
+                <p className="panel-sub">CurseForge browsing runs through YOUR backend proxy (folder backend/cf-proxy in the repo) — the API key lives only on that server, never in the launcher.</p>
+                <div style={{ marginTop: 10 }}>
+                  <TextInput
+                    value={settings.curseforgeProxyUrl ?? ''}
+                    onChange={(e) => updateSettings({ curseforgeProxyUrl: e.target.value })}
+                    placeholder="https://my-cf-proxy.onrender.com"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
+                  Empty = the CurseForge tab shows its setup card. Deploy the proxy with your key as a
+                  server-side <code style={{ fontFamily: 'monospace', background: 'var(--bg-2)', padding: '1px 5px', borderRadius: 5 }}>CF_API_KEY</code>{' '}
+                  env var, then paste its base URL here.
+                </p>
+              </div>
               <div className="panel" style={{ textAlign: 'center', padding: '36px 28px' }}>
                 <BrandLogo height={40} style={{ margin: '0 auto 18px' }} />
                 <h3 style={{ fontSize: 18, marginBottom: 4 }}>Reimagined Launcher</h3>

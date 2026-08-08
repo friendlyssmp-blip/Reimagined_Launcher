@@ -217,7 +217,7 @@ export function ModsPage() {
     if (tab === 'modrinth') void doSearch(undefined, 0, false)
     else if (tab === 'curseforge') void doCurseforgeSearch(undefined, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sort, contentType, category, profileId, doCurseforgeSearch])
+  }, [tab, sort, contentType, category, profileId])
 
   // AUTO-SEARCH: as soon as the user stops typing (350 ms) the results update
   // by themselves — no Enter key needed. Typing "simple" and pausing shows

@@ -25,7 +25,7 @@ import { api, friendlyError } from '../lib/api'
 type Phase = 'checking' | 'available' | 'uptodate' | 'failed' | 'downloading' | 'installing'
 
 export function CheckUpdatesModal() {
-  const { setModals, dismissUpdatePrompt, updateInfo, info } = useApp()
+  const { setModals, dismissUpdatePrompt, updateInfo, info, checkForUpdates } = useApp()
   const [phase, setPhase] = useState<Phase>('checking')
   const [error, setError] = useState<string | null>(null)
   const [showNotes, setShowNotes] = useState(false)
@@ -61,14 +61,18 @@ export function CheckUpdatesModal() {
       setElapsedMs(performance.now() - checkStartRef.current)
     }, 100)
     try {
-      /* silent=true -> no auto-prompt and no error toast; the modal owns the
-         result UI. force=true -> a real fresh check (never stale cache). */
-      const res = await api.update.check(true)
+      /* The shared checkForUpdates (silent=true, force=true): refreshes the
+         SAME updateInfo the sidebar arrow reads (single source of truth),
+         never opens the auto-prompt, and does a real fresh check. */
+      const res = await checkForUpdates(true, true)
       const elapsed = performance.now() - checkStartRef.current
       stopTimer()
       setElapsedMs(elapsed)
       checkingRef.current = false
-      if (res?.hasUpdate) setPhase('available')
+      if (res === null) {
+        setError('Could not reach the update server. Check your connection and try again.')
+        setPhase('failed')
+      } else if (res.hasUpdate) setPhase('available')
       else setPhase('uptodate')
     } catch (err) {
       const elapsed = performance.now() - checkStartRef.current
@@ -78,7 +82,7 @@ export function CheckUpdatesModal() {
       setError(friendlyError(err))
       setPhase('failed')
     }
-  }, [])
+  }, [checkForUpdates])
 
   useEffect(() => {
     void startCheck()
@@ -243,7 +247,7 @@ export function CheckUpdatesModal() {
           )}
           {phase === 'available' && (
             <>
-              <Button variant="ghost" onClick={() => dismissUpdatePrompt('later')}>
+              <Button variant="ghost" onClick={() => { dismissUpdatePrompt('later'); close() }}>
                 Remind Me Later
               </Button>
               <Button variant="ghost" onClick={close}>
