@@ -174,6 +174,12 @@ export const api = {
     install: (projectId: string, versionId: string, name?: string) =>
       unwrap<{ profileId: string; name: string; installed: number; skipped: string[] }>(
         window.reimagined.modpacks.install(projectId, versionId, name)
+      ),
+    searchCurseforge: (opts: { query?: string; mcVersion?: string; offset?: number; limit?: number }) =>
+      unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.modpacks.searchCurseforge(opts)),
+    installCurseforge: (projectId: string, fileId: string, name?: string) =>
+      unwrap<{ profileId: string; name: string; installed: number; skipped: string[] }>(
+        window.reimagined.modpacks.installCurseforge(projectId, fileId, name)
       )
   },
 

@@ -119,7 +119,10 @@ const api = {
   modpacks: {
     search: (opts: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke(IPC.modpacksSearch, opts),
     install: (projectId: string, versionId: string, name?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modpacksInstall, { projectId, versionId, name })
+      ipcRenderer.invoke(IPC.modpacksInstall, { projectId, versionId, name }),
+    searchCurseforge: (opts: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke(IPC.modpacksSearchCurseforge, opts),
+    installCurseforge: (projectId: string, fileId: string, name?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modpacksInstallCurseforge, { projectId, fileId, name })
   },
 
   /** Detached game console window controls (used by its own renderer). */

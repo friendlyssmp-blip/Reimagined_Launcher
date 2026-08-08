@@ -74,6 +74,9 @@ export const IPC = {
   // Modpacks (Modrinth)
   modpacksSearch: 'modpacks:search',
   modpacksInstall: 'modpacks:install',
+  // Modpacks (CurseForge) — v1.0.40
+  modpacksSearchCurseforge: 'modpacks:search-curseforge',
+  modpacksInstallCurseforge: 'modpacks:install-curseforge',
 
   // Launch
   launchStart: 'launch:start',

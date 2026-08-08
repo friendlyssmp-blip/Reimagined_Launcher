@@ -17,7 +17,10 @@ const PAGE_SIZE = 24
 
 export function ModpacksPage() {
   const { profiles, setModals, notify, runGuarded, refreshProfiles, setActiveProfile } = useApp()
-  const [tab, setTab] = useState<'browse' | 'share'>('browse')
+  const [tab, setTab] = useState<'browse-modrinth' | 'browse-curseforge' | 'share'>('browse-modrinth')
+  const provider: 'modrinth' | 'curseforge' = tab === 'browse-curseforge' ? 'curseforge' : 'modrinth'
+  const [cfSetup, setCfSetup] = useState(false)
+  const [cfError, setCfError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [mcFilter, setMcFilter] = useState('any')
   const [loaderFilter, setLoaderFilter] = useState<'any' | 'fabric' | 'forge'>('any')
@@ -32,8 +35,8 @@ export function ModpacksPage() {
    * browser-style back/forward history just like the Mods page: opening a
    * pack pushes it, the back arrow returns to the previous pack or to the
    * list, and the forward arrow re-enters. */
-  const [detailPack, setDetailPack] = useState<{ projectId: string; title: string } | null>(null)
-  const [packHistory, setPackHistory] = useState<{ projectId: string; title: string }[]>([])
+  const [detailPack, setDetailPack] = useState<{ projectId: string; title: string; provider: 'modrinth' | 'curseforge' } | null>(null)
+  const [packHistory, setPackHistory] = useState<{ projectId: string; title: string; provider: 'modrinth' | 'curseforge' }[]>([])
   const [packIndex, setPackIndex] = useState(-1)
 
   useEffect(() => {
@@ -51,20 +54,33 @@ export function ModpacksPage() {
     const mySeq = append ? searchSeq.current : ++searchSeq.current
     if (append) setLoadingMore(true)
     else setSearching(true)
+    setCfError(null)
     try {
-      const r = await api.modpacks.search({
-        query,
-        mcVersion: mcFilter === 'any' ? undefined : mcFilter,
-        loader: loaderFilter,
-        offset: startOffset,
-        limit: PAGE_SIZE
-      })
+      const r =
+        provider === 'curseforge'
+          ? await api.modpacks.searchCurseforge({
+              query,
+              mcVersion: mcFilter === 'any' ? undefined : mcFilter,
+              offset: startOffset,
+              limit: PAGE_SIZE
+            })
+          : await api.modpacks.search({
+              query,
+              mcVersion: mcFilter === 'any' ? undefined : mcFilter,
+              loader: loaderFilter,
+              offset: startOffset,
+              limit: PAGE_SIZE
+            })
       if (!append && mySeq !== searchSeq.current) return // stale response
       setTotalHits(r.totalHits)
       setResults((prev) => (append ? [...prev, ...r.items] : r.items))
       setOffset(startOffset + r.items.length)
     } catch (err) {
-      notify('error', 'Search failed', friendlyError(err))
+      const code = (err as { code?: string }).code
+      setCfSetup(code === 'CF_NO_PROXY')
+      setCfError(friendlyError(err))
+      setResults([])
+      if (!cfSetup) notify('error', 'Search failed', friendlyError(err))
     } finally {
       setSearching(false)
       setLoadingMore(false)
@@ -72,7 +88,7 @@ export function ModpacksPage() {
   }
 
   useEffect(() => {
-    if (tab === 'browse') void doSearch(0, false)
+    if (tab.startsWith('browse')) void doSearch(0, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, mcFilter, loaderFilter])
 
@@ -80,7 +96,7 @@ export function ModpacksPage() {
    * needed. Debounced on QUERY only (tab/filter changes search via the effect
    * above) so switching tabs never triggers a duplicate search. */
   useEffect(() => {
-    if (tab !== 'browse') return
+    if (!tab.startsWith('browse')) return
     const t = setTimeout(() => void doSearch(0, false), 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,7 +112,7 @@ export function ModpacksPage() {
 
   /** Open a pack from the list (pushes onto the history stack). */
   const openPack = (r: ModrinthSearchResult) => {
-    const target = { projectId: r.projectId, title: r.title }
+    const target = { projectId: r.projectId, title: r.title, provider }
     const next = packIndex + 1
     setPackHistory((h) => [...h.slice(0, next), target])
     setPackIndex(next)
@@ -142,7 +158,10 @@ export function ModpacksPage() {
     if (!detailPack) return
     setInstallingId(detailPack.projectId)
     try {
-      const res = await api.modpacks.install(detailPack.projectId, versionId, detailPack.title)
+      const res =
+        detailPack.provider === 'curseforge'
+          ? await api.modpacks.installCurseforge(detailPack.projectId, versionId, detailPack.title)
+          : await api.modpacks.install(detailPack.projectId, versionId, detailPack.title)
       await refreshProfiles()
       setActiveProfile(res.profileId)
       notify(
@@ -161,7 +180,7 @@ export function ModpacksPage() {
   const installPack = async (r: ModrinthSearchResult) => {
     setInstallingId(r.projectId)
     try {
-      const versions = await api.content.versions({ provider: 'modrinth', projectId: r.projectId, projectType: 'modpack' })
+      const versions = await api.content.versions({ provider, projectId: r.projectId, projectType: 'modpack' })
       const compatible = versions.filter(
         (v) =>
           (mcFilter === 'any' || v.gameVersions.includes(mcFilter)) &&
@@ -172,7 +191,10 @@ export function ModpacksPage() {
         notify('error', 'No compatible version', 'This modpack has no version matching the current filters.')
         return
       }
-      const res = await api.modpacks.install(r.projectId, pick.id, r.title)
+      const res =
+        provider === 'curseforge'
+          ? await api.modpacks.installCurseforge(r.projectId, pick.id, r.title)
+          : await api.modpacks.install(r.projectId, pick.id, r.title)
       await refreshProfiles()
       setActiveProfile(res.profileId)
       notify(
@@ -201,7 +223,7 @@ export function ModpacksPage() {
           Modrinth data). It replaces the whole screen while open. */}
       {detailPack ? (
         <ProjectDetail
-          provider="modrinth"
+          provider={detailPack.provider}
           projectId={detailPack.projectId}
           projectType="modpack"
           installed={null}
@@ -221,27 +243,28 @@ export function ModpacksPage() {
       <div className="section-head">
         <div>
           <h2 className="page-title">Modpacks</h2>
-          <p className="page-sub">Browse and install Modrinth modpacks with one click, or share your own setup.</p>
+          <p className="page-sub">Browse and install Modrinth or CurseForge modpacks with one click, or share your own setup.</p>
         </div>
       </div>
 
       <TabBar
         tabs={[
-          { id: 'browse', label: 'Browse Modrinth' },
+          { id: 'browse-modrinth', label: 'Browse Modrinth' },
+          { id: 'browse-curseforge', label: 'Browse CurseForge' },
           { id: 'share', label: 'Share & Import' }
         ]}
         active={tab}
-        onChange={(id) => setTab(id as 'browse' | 'share')}
+        onChange={(id) => setTab(id as 'browse-modrinth' | 'browse-curseforge' | 'share')}
       />
 
-      {tab === 'browse' && (
+      {(tab === 'browse-modrinth' || tab === 'browse-curseforge') && (
         <div className="browse-layout">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minWidth: 0 }}>
             <div className="mod-search sticky-search">
               <TextInput
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search Modrinth modpacks… (results update as you type)"
+                placeholder={`Search ${provider === 'curseforge' ? 'CurseForge' : 'Modrinth'} modpacks… (results update as you type)`}
                 onKeyDown={(e) => e.key === 'Enter' && doSearch(0, false)}
                 autoFocus
               />
@@ -277,7 +300,7 @@ export function ModpacksPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span className="mod-title link">{r.title}</span>
                       {r.author && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>by {r.author}</span>}
-                      <Badge variant="accent">Modpack</Badge>
+                      <Badge variant="accent">{provider === 'curseforge' ? 'CurseForge' : 'Modpack'}</Badge>
                     </div>
                     <div className="mod-desc">{r.description}</div>
                     <div className="mod-tags">
@@ -320,9 +343,15 @@ export function ModpacksPage() {
                 <Button variant="ghost" onClick={() => doSearch(offset, true)}>Load more packs</Button>
               </div>
             )}
-            {results.length === 0 && !searching && (
+            {tab === 'browse-curseforge' && cfSetup && results.length === 0 && (
               <EmptyState
-                title="No modpacks found"
+                title="CurseForge is not connected"
+                sub="Deploy the included backend proxy (backend/cf-proxy) with your CurseForge API key, then paste its URL in Settings → Advanced → CurseForge proxy URL."
+              />
+            )}
+            {results.length === 0 && !searching && !cfSetup && (
+              <EmptyState
+                title={provider === 'curseforge' ? 'No CurseForge modpacks found' : 'No modpacks found'}
                 sub="Try a different search term, version or loader filter."
               />
             )}
@@ -331,9 +360,9 @@ export function ModpacksPage() {
           <aside className="browse-side">
             <div className="panel-title">How it works</div>
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6, lineHeight: 1.5 }}>
-              Installing a modpack creates a new independent profile with the pack's Minecraft version and
-              loader, installs every mod dependency from Modrinth, and applies the pack's config and resource
-              packs. You can launch it right away and manage it like any other profile.
+              {provider === 'curseforge'
+                ? 'Installing a CurseForge modpack downloads its archive, reads the manifest, creates a new independent profile with the pack’s Minecraft version and loader, installs every listed file through the CurseForge API and applies the pack’s config and resource packs. You can launch it right away and manage it like any other profile.'
+                : 'Installing a modpack creates a new independent profile with the pack’s Minecraft version and loader, installs every mod dependency from Modrinth, and applies the pack’s config and resource packs. You can launch it right away and manage it like any other profile.'}
             </p>
           </aside>
         </div>

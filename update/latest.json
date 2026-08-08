@@ -1,7 +1,7 @@
 {
   "notes": "v1.0.39 — Modrinth-first search with automatic CurseForge fallback.\n\nSearching the Modrinth tab now never dead-ends: if Modrinth has no match\nfor your search term, the launcher automatically runs the same search in\nCurseForge and shows those results with a clear banner (\"No Modrinth\nresults — showing X matches from CurseForge instead\"). Modrinth stays the\npriority — results only come from CurseForge when Modrinth truly has none\n(and no category filter is active). Installing from the fallback list\nworks exactly the same way.\n\nAlso confirmed: the Fabric API is always installed from Modrinth\n(api.modrinth.com) — creating a Fabric profile never touches CurseForge.\n",
   "publishedAt": "2026-08-08T13:38:00.000Z",
-  "sha256": "a53243c7bce0ad7ce05b6d34831cd5bac539c192105044d73ef2c8a819aef268",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.39.exe",
-  "version": "1.0.39"
+  "sha256": "d889dfc22a9f3e883445549d2a24da06bc32f373b8cdeba82d6e565a0b44548a",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.40.exe",
+  "version": "1.0.40"
 }

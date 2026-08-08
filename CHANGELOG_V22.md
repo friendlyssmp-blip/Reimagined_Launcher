@@ -909,3 +909,36 @@ on the next launch.
 - Confirmed: the Fabric API (and Legacy Fabric API) installs exclusively from
   Modrinth (api.modrinth.com) on profile creation and first launch — CurseForge
   is never used for it.
+
+## v1.0.40 — Mods detection fix: real icons + updates for every installed mod, CurseForge modpacks
+
+### 1) Manual mods now resolve their REAL project on CurseForge too (fixes the "R" icon)
+- Previously `identifyManualMods` only searched **Modrinth** (SHA1 hash + id). Mods that live only on
+  CurseForge (or whose build isn't on Modrinth) stayed as "Manual" with the generic logo placeholder.
+- Now, after the Modrinth hash match, the scanner also does an **exact-name match on CurseForge**
+  (`matchByExactName` — normalized title equality, never a blind first search hit). A match upgrades
+  the item to a real CurseForge-tracked mod: **correct icon, correct title, update support**.
+- Resource packs / shaders / data packs get the same CurseForge fallback inside `matchPackByName`.
+
+### 2) Update checks now work for CurseForge mods (and name-matched manual mods)
+- `checkUpdates` previously ignored everything that wasn't `source: 'modrinth'` — so CurseForge-installed
+  mods and manual mods **never** got an "Update" badge.
+- Now CurseForge-tracked mods are checked against `curseforge.listVersions` with the same real
+  release-date comparison Modrinth uses. Manual mods matched by name/id also get their exact installed
+  `versionId` resolved by filename, so the date comparison works for them too.
+
+### 3) Missing icons backfilled for CurseForge mods
+- `ensureIcons` now also backfills icons for CurseForge items (previously Modrinth-only), so older
+  installed mods without a stored icon get their real artwork.
+
+### 4) CurseForge modpack support (search + install)
+- New "Browse CurseForge" tab in Modpacks (classId 4471) — search works through your proxy like Modrinth.
+- New `installCurseforgeModpack`: downloads the pack zip, reads `manifest.json` (MC version, loader,
+  projectID/fileID list), creates a fresh profile with the pack's version + loader, resolves and
+  installs every file through the CurseForge API (routing .zip packs to resourcepacks/shaders), copies
+  `overrides/` with the config guard, adds the Fabric API for Fabric packs, and **registers every
+  installed file in the profile** so they appear in Installed with remove/update support.
+- Also fixed: clicking an installed CurseForge mod now opens its real detail page (the stale
+  "CurseForge is no longer supported" message is gone).
+
+Verified: tsc node+web clean, build clean, smoke 12/12, live proxy search for CF modpacks returns real data.

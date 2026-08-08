@@ -374,6 +374,22 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     })
   })
 
+  on(IPC.modpacksSearchCurseforge, async (payload: { query?: string; mcVersion?: string; offset?: number; limit?: number }) => {
+    const { searchCurseforgeModpacks } = await import('./mods/modpacks')
+    return searchCurseforgeModpacks({
+      query: payload?.query ?? '',
+      mcVersion: payload?.mcVersion || undefined,
+      offset: payload?.offset ?? 0,
+      limit: payload?.limit ?? 24
+    })
+  })
+
+  on(IPC.modpacksInstallCurseforge, async (payload: { projectId?: string; fileId?: string; name?: string }) => {
+    if (!payload?.projectId || !payload?.fileId) throw new Error('Missing modpack project or file id.')
+    const { installCurseforgeModpack } = await import('./mods/modpacks')
+    return installCurseforgeModpack(payload.projectId, payload.fileId, payload.name)
+  })
+
   on(IPC.modpacksInstall, async (payload: { projectId?: string; versionId?: string; name?: string }) => {
     const projectId = payload?.projectId
     const versionId = payload?.versionId

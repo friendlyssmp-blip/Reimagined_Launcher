@@ -21,7 +21,8 @@ const CLASS_IDS: Record<string, number> = {
   mod: 6, // Mods
   resourcepack: 12, // Resource Packs
   shader: 6552, // Shader Packs
-  datapack: 6 // Data packs are filed under Mods on CurseForge
+  datapack: 6, // Data packs are filed under Mods on CurseForge
+  modpack: 4471 // Modpacks
 }
 const MOD_CLASS_ID = CLASS_IDS.mod
 
@@ -277,6 +278,34 @@ class CurseForgeClient {
       url,
       size: pick.fileLength,
       version: pick.gameVersions?.find((v) => v === mcVersion) ?? pick.gameVersions?.[0] ?? ''
+    }
+  }
+
+  /**
+   * v1.0.40 — identify a manually-dropped file by its EXACT normalized title.
+   *
+   * CurseForge has no public SHA1 lookup (its /fingerprints endpoint uses a
+   * proprietary algorithm), so manual identification falls back to a precise
+   * name match: search the provider for the mod/pack's real name and accept a
+   * hit only when the normalized title is an exact match — never the first
+   * search hit blindly (same discipline as matchPackByName on Modrinth).
+   * Returns null when nothing matches exactly.
+   */
+  async matchByExactName(
+    name: string,
+    projectType: string = 'mod',
+    mcVersion?: string
+  ): Promise<{ id: string; slug: string; title: string; iconUrl?: string } | null> {
+    const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    const target = norm(name)
+    if (!target) return null
+    try {
+      const hits = await this.searchMods({ query: name, mcVersion, projectType, limit: 24 })
+      const hit = hits.find((h) => norm(h.title) === target)
+      if (!hit) return null
+      return { id: hit.projectId, slug: hit.slug, title: hit.title, iconUrl: hit.iconUrl }
+    } catch {
+      return null
     }
   }
 }

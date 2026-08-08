@@ -726,14 +726,14 @@ export function ModsPage() {
           <span
             className="link"
             style={{ textDecoration: m.disabled ? 'none' : undefined, opacity: m.disabled ? 0.55 : 1 }}
-            onClick={() => {
-              if (m.source === 'curseforge') {
-                notify('error', 'CurseForge not supported', 'This mod was installed from CurseForge in an earlier version — it can only be removed, or re-installed from Modrinth.')
-                return
-              }
-              openDetail({ provider: 'modrinth', projectId: m.id, projectType: (m.projectType ?? 'mod') as ContentType })
-            }}
-            title={m.source === 'curseforge' ? 'CurseForge is no longer supported' : 'Open full details'}
+            onClick={() =>
+              openDetail({
+                provider: m.source === 'curseforge' ? 'curseforge' : 'modrinth',
+                projectId: m.id,
+                projectType: (m.projectType ?? 'mod') as ContentType
+              })
+            }
+            title="Open full details"
           >
             {m.title}
           </span>

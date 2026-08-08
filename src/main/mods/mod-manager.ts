@@ -152,11 +152,19 @@ async function matchPackByName(
   try {
     const res = await modrinth.searchMods({ query: name, projectType, mcVersion: mc, loader, limit: 24 })
     const hit = res.items.find((i) => norm(i.title) === target)
-    if (!hit) return null
-    return { id: hit.projectId, slug: hit.slug, title: hit.title, iconUrl: hit.iconUrl }
+    if (hit) return { id: hit.projectId, slug: hit.slug, title: hit.title, iconUrl: hit.iconUrl }
   } catch {
-    return null
+    /* fall through to CurseForge */
   }
+  // v1.0.40 — packs that only live on CurseForge (or whose exact title is not
+  // on Modrinth) still resolve to their real project with icon + tracking.
+  try {
+    const cf = await curseforge.matchByExactName(name, projectType, mc)
+    if (cf) return cf
+  } catch {
+    /* name match is best-effort */
+  }
+  return null
 }
 
 /**
@@ -518,9 +526,12 @@ class ModManager {
     let changed = false
     const updatedMods = await Promise.all(
       profile.mods.map(async (mod) => {
-        if (mod.source !== 'modrinth') return mod
+        if (mod.source !== 'modrinth' && mod.source !== 'curseforge') return mod
         try {
-          const versions = await modrinth.listVersions(mod.id, mod.projectType ?? 'mod')
+          const versions =
+            mod.source === 'curseforge'
+              ? await curseforge.listVersions(mod.id, mod.projectType ?? 'mod')
+              : await modrinth.listVersions(mod.id, mod.projectType ?? 'mod')
           const latest = versions.find((v) =>
             this.versionCompatible(v, profile.minecraftVersion, profile.loader.type, mod.projectType ?? 'mod')
           )
@@ -702,12 +713,55 @@ class ModManager {
               try {
                 const pr = await modrinth.getProject(meta.id)
                 project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+                source = 'modrinth'
+                logger.info(
+                  `Manual mod "${filename}" matched to Modrinth project "${pr.slug}" (${pr.title}) by id — now tracked.`
+                )
               } catch {
                 project = null
               }
             }
+            // v1.0.40 — CurseForge fallback by exact name: mods that exist
+            // only on CurseForge (or whose build is not on Modrinth) still
+            // resolve to their REAL project with icon + update support.
+            if (!project && meta.name) {
+              try {
+                const cf = await curseforge.matchByExactName(meta.name, 'mod', profile.minecraftVersion)
+                if (cf) {
+                  project = cf
+                  source = 'curseforge'
+                  logger.info(
+                    `Manual mod "${filename}" matched to CurseForge project "${cf.slug}" (${cf.title}) by name — now tracked.`
+                  )
+                }
+              } catch {
+                /* name match is best-effort */
+              }
+            }
           } else if (meta.name) {
             project = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
+          }
+          // v1.0.40 — when a manual mod was matched by name/id (not SHA1), the
+          // installed versionId is still unknown. Resolve it by matching the
+          // local filename against the provider's version list — the same
+          // technique the SHA1 path uses — so the "Update" check can find the
+          // installed version and compare real release dates. Packs skip this
+          // (their version isn't pinned the same way).
+          if (project && source !== 'local' && projectType === 'mod' && !versionId) {
+            try {
+              const versions =
+                source === 'curseforge'
+                  ? await curseforge.listVersions(project.id, 'mod')
+                  : await modrinth.listVersions(project.id, 'mod')
+              const inst = versions.find((v) => v.filename === filename) ?? null
+              if (inst) {
+                versionId = inst.id
+                versionNumber = inst.versionNumber
+                logger.info(`Manual mod "${filename}" version resolved: ${versionNumber}`)
+              }
+            } catch {
+              /* version resolution is best-effort */
+            }
           }
           const entry: ProfileMod = {
             id: project?.id ?? meta.id ?? filename,
@@ -752,13 +806,18 @@ class ModManager {
    */
   async ensureIcons(profileId: string): Promise<void> {
     const profile = await this.requireProfile(profileId)
-    const missing = profile.mods.filter((m) => m.source === 'modrinth' && !m.iconUrl)
+    const missing = profile.mods.filter((m) => (m.source === 'modrinth' || m.source === 'curseforge') && !m.iconUrl)
     if (missing.length === 0) return
     const resolved = await Promise.all(
       missing.map(async (m) => {
         try {
-          const p = await modrinth.getProject(m.id)
-          if (p?.icon_url) return { key: `${m.id}|${m.filename}`, iconUrl: p.icon_url }
+          if (m.source === 'curseforge') {
+            const p = await curseforge.getProjectFull(m.id, m.projectType ?? 'mod')
+            if (p?.iconUrl) return { key: `${m.id}|${m.filename}`, iconUrl: p.iconUrl }
+          } else {
+            const p = await modrinth.getProject(m.id)
+            if (p?.icon_url) return { key: `${m.id}|${m.filename}`, iconUrl: p.icon_url }
+          }
         } catch {
           /* project gone — keep as-is */
         }
