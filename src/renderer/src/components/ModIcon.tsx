@@ -12,6 +12,12 @@
 import { useProjectImage } from '../lib/useProjectImage'
 
 export function ModIcon({ src, style, draggable = false }: { src?: string | null; style?: React.CSSProperties; draggable?: boolean }) {
+  // v1.0.50 — embedded icons (extracted from the mod/pack file itself) are
+  // already data: URLs — the main-process image proxy is for remote CDNs
+  // only, so render these directly.
+  if (src && src.startsWith('data:')) {
+    return <img src={src} alt="" style={style} draggable={draggable} />
+  }
   const state = useProjectImage(src)
 
   if (state.status === 'ready') {

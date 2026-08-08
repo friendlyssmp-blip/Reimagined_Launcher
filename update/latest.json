@@ -1,8 +1,8 @@
 {
-  "version": "1.0.49",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.49.exe",
-  "sha256": "f72777d1f1ddbf2a5f6168de5a7a9974787ec75e38c58cea6833d2a6bd77ed69",
-  "publishedAt": "2026-08-08T22:21:44.480742Z",
-  "notes": "v1.0.49 - Smarter install dialog (adapts to dependencies).\n\nThe install confirmation now adapts its actions to the item's real\ndependency state: no deps -> a single \"Install\" button; missing deps ->\n\"Install with Dependencies (N)\" plus \"Install Only\"; all deps already\ninstalled -> \"Install Only\" as the only action, still listing which\ndependency the item needs (marked \"Already installed\"). CurseForge keeps\nits single Install button. Verified: tsc clean, build clean, smoke 12/12.",
-  "size": 83893089
+  "version": "1.0.50",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.50.exe",
+  "sha256": "08169042a9d60f5945036fd55e27af68bc3702589a8124bfea80ce3fde54b0b1",
+  "size": 83894564,
+  "publishedAt": "2026-08-08T23:09:58Z",
+  "notes": "5 launcher fixes + Legacy Fabric support: real icons & updates for manually-installed mods (enrich pass + embedded jar/pack icons), downloads never stuck at 100% (terminal updates land on the exact entry, Cancel only while active), fully functional CurseForge tab (real category sidebar + category/loader filters), and Legacy Fabric auto-detection for Minecraft 1.13.2 and below (loader from meta.legacyfabric.net, Legacy Fabric API auto-install fixed, ornith builds visible in Browse)."
 }

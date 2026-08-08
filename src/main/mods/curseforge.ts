@@ -105,7 +105,47 @@ async function cfGet<T>(path: string, params: Record<string, string | number | u
   return body.data as T
 }
 
+interface CfCategory {
+  id: number
+  name: string
+}
+
+/** Cached Minecraft category tree from CurseForge (10 min TTL). */
+let categoriesCache: { at: number; list: CfCategory[] } | null = null
+
 class CurseForgeClient {
+  /**
+   * v1.0.50 — real CurseForge category list (gameId 432 = Minecraft) for the
+   * Browse sidebar. Cached 10 minutes; the proxy must expose
+   * /api/cf/categories (added in the same release) — when the deployed proxy
+   * is older it degrades to an empty list and the sidebar hides gracefully.
+   */
+  async getCategories(): Promise<{ id: number; name: string }[]> {
+    if (categoriesCache && Date.now() - categoriesCache.at < 10 * 60_000) {
+      return categoriesCache.list
+    }
+    try {
+      const list = await cfGet<CfCategory[]>('/categories', { gameId: GAME_ID })
+      const clean = (list ?? [])
+        .filter((c) => c && typeof c.name === 'string' && c.name.trim())
+        .map((c) => ({ id: c.id, name: c.name.trim() }))
+      categoriesCache = { at: Date.now(), list: clean }
+      return clean
+    } catch {
+      return []
+    }
+  }
+
+  /** Best-effort name → id for the category filter (falls back to a text
+   *  search filter when the categories endpoint is unavailable). */
+  private async categoryIdFor(name?: string): Promise<{ id?: number; fallback?: string }> {
+    if (!name) return {}
+    const cats = await this.getCategories()
+    const hit = cats.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (hit) return { id: hit.id }
+    return { fallback: name }
+  }
+
   /** Search the platform for a content type (mods by default). */
   async searchMods(opts: {
     query: string
@@ -113,6 +153,8 @@ class CurseForgeClient {
     limit?: number
     sort?: 'downloads' | 'newest' | 'recent' | 'name'
     projectType?: string
+    category?: string
+    loader?: LoaderType
   }): Promise<ModrinthSearchResult[]> {
     const params: Record<string, string | number> = {
       gameId: GAME_ID,
@@ -124,6 +166,16 @@ class CurseForgeClient {
     }
     if (opts.query.trim()) params.searchFilter = opts.query.trim()
     if (opts.mcVersion) params.gameVersion = opts.mcVersion
+    // v1.0.50 — real category + loader filtering for CurseForge (same
+    // semantics as Modrinth's facets): categoryId when known, else the name
+    // as a text filter; modLoaderType only for mods (packs aren't loader-scoped).
+    if (opts.category) {
+      const c = await this.categoryIdFor(opts.category)
+      if (c.id !== undefined) params.categoryId = c.id
+      else if (c.fallback) params.searchFilter = `${params.searchFilter ? params.searchFilter + ' ' : ''}${c.fallback}`
+    }
+    if (opts.loader === 'fabric') params.modLoaderType = MOD_LOADER.fabric
+    else if (opts.loader === 'forge') params.modLoaderType = MOD_LOADER.forge
 
     const hits = await cfGet<CfSearchHit[]>('/mods/search', params)
     return hits.map((h) => ({

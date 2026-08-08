@@ -307,11 +307,22 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsUpdate, (payload) => modManager.update(payload.profileId, payload.slug))
   on(IPC.modsLocalFiles, (profileId: string, projectType?: string) => modManager.localModFiles(profileId, (projectType ?? 'mod') as ProjectType))
   on(IPC.modsIdentifyManual, (profileId) => modManager.identifyManualMods(profileId))
+  on(IPC.modsEnrichManual, (profileId: string) => modManager.enrichManualMods(profileId))
   on(IPC.modsEnsureIcons, (profileId: string) => modManager.ensureIcons(profileId))
+  on(IPC.modsCategoriesCurseforge, async () => {
+    const { curseforge } = await import('./mods/curseforge')
+    return curseforge.getCategories()
+  })
   on(IPC.modsRemoveLocalFile, (payload: { profileId: string; filename: string; projectType?: string }) =>
     modManager.removeLocalFile(payload.profileId, payload.filename, (payload.projectType ?? 'mod') as ProjectType))
   on(IPC.modsSearchCurseforge, (payload) =>
-    modManager.searchCurseforge(payload.profileId, payload.query ?? '', payload.sort ?? undefined, payload.projectType ?? 'mod')
+    modManager.searchCurseforge(
+      payload.profileId,
+      payload.query ?? '',
+      payload.sort ?? undefined,
+      payload.projectType ?? 'mod',
+      payload.category ?? undefined
+    )
   )
   on(IPC.modsInstallCurseforge, (payload) =>
     modManager.installCurseforge(

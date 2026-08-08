@@ -46,9 +46,14 @@ interface FabricApiProject {
  * The stored entry keeps the display slug `fabric-api` so existing detection
  * (and the auto-install safety net) keeps matching.
  */
+export function isLegacyFabricMc(mcVersion: string): boolean {
+  const m = /^1\.(\d+)/.exec(mcVersion)
+  if (!m) return false
+  return Number(m[1]) < 14
+}
+
 export function fabricProjectFor(mcVersion: string): { project: string; slug: string; label: string } {
-  const isLegacy = /^1\.(\d+)/.test(mcVersion) && Number(mcVersion.match(/^1\.(\d+)/)![1]) < 14
-  if (isLegacy) {
+  if (isLegacyFabricMc(mcVersion)) {
     return { project: LEGACY_FABRIC_API, slug: FABRIC_API, label: 'Legacy Fabric API' }
   }
   return { project: FABRIC_API, slug: FABRIC_API, label: 'Fabric API' }
@@ -68,11 +73,14 @@ async function fabricApiProject(project: string): Promise<FabricApiProject | nul
 }
 
 /** Latest Fabric API version matching a Minecraft version (newest first). */
-async function latestForMc(project: string, mcVersion: string): Promise<FabricApiVersion | null> {
-  const params = new URLSearchParams({
-    game_versions: JSON.stringify([mcVersion]),
-    loaders: JSON.stringify(['fabric'])
-  })
+async function latestForMc(project: string, mcVersion: string, filterLoader: boolean): Promise<FabricApiVersion | null> {
+  // v1.0.50 — the Legacy Fabric API project tags its CURRENT releases with
+  // the 'ornithe' loader (its own loader), not 'fabric' — a strict loader
+  // filter silently returned zero versions for every legacy MC version, so
+  // the API was never auto-installed on legacy profiles. Legacy lookups
+  // filter on the game version only; mainline Fabric keeps the fabric filter.
+  const params = new URLSearchParams({ game_versions: JSON.stringify([mcVersion]) })
+  if (filterLoader) params.set('loaders', JSON.stringify(['fabric']))
   const versions = await getJson<FabricApiVersion[]>(
     `${MODRINTH}/project/${project}/version?${params.toString()}`,
     { timeoutMs: 15_000 }
@@ -89,9 +97,10 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
 
   const mc = profile.minecraftVersion
   const target = fabricProjectFor(mc)
+  const legacy = isLegacyFabricMc(mc)
   let latest: FabricApiVersion | null = null
   try {
-    latest = await latestForMc(target.project, mc)
+    latest = await latestForMc(target.project, mc, !legacy)
   } catch (err) {
     logger.warn(`${target.label} lookup failed for ${mc}: ${(err as Error).message}`)
     return

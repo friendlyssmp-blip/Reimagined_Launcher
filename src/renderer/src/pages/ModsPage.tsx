@@ -90,6 +90,8 @@ export function ModsPage() {
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [category, setCategory] = useState<string | null>(null)
   const [categories, setCategories] = useState<string[]>([])
+  /* v1.0.50 — CurseForge's own category list (the sidebar is per-provider). */
+  const [cfCategories, setCfCategories] = useState<string[]>([])
   const [showAllCategories, setShowAllCategories] = useState(false)
   // Infinite scroll pagination state.
   const [offset, setOffset] = useState(0)
@@ -223,7 +225,7 @@ export function ModsPage() {
       setCfError(null)
       try {
         const cfSort = sort === 'updated' ? 'recent' : sort === 'relevance' ? 'downloads' : sort
-        const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType)
+        const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType, category ?? undefined)
         setResults(page.map((x) => ({ ...x, source: 'curseforge' as const })))
       } catch (err) {
         const code = (err as { code?: string }).code
@@ -236,7 +238,7 @@ export function ModsPage() {
         setCfSearching(false)
       }
     },
-    [activeProfile, query, notify, sort, contentType]
+    [activeProfile, query, notify, sort, contentType, category]
   )
 
   // Auto-load results the moment the Modrinth tab opens, and re-run whenever
@@ -294,6 +296,18 @@ export function ModsPage() {
     api.mods
       .categories()
       .then((c) => setCategories(c.slice(0, 60)))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, contentType])
+
+  /* v1.0.50 — CurseForge categories for the same sidebar (real data from the
+   * proxy's /api/cf/categories route; older proxies degrade to an empty list
+   * and the sidebar just hides — never a fake list). */
+  useEffect(() => {
+    if (tab !== 'curseforge' || cfCategories.length > 0 || contentType !== 'mod') return
+    api.mods
+      .categoriesCurseforge()
+      .then((c) => setCfCategories(c.map((x) => x.name)))
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, contentType])
@@ -643,6 +657,10 @@ export function ModsPage() {
     let cancelled = false
     ;(async () => {
       await api.mods.identifyManual(activeProfile.id).catch(() => {})
+      // v1.0.50 — re-match ALREADY-tracked local items so they gain real
+      // provider identity (icon + versionId → Update / Change Version /
+      // Update All). Cheap: provider lookups run once per profile per session.
+      await api.mods.enrichManual(activeProfile.id).catch(() => {})
       if (cancelled) return
       // After identification, freshly-registered mods must appear immediately.
       setInstalled(await api.mods.list(activeProfile.id).catch(() => []))
@@ -935,29 +953,33 @@ export function ModsPage() {
         {contentType === 'mod' && (
           <Fragment>
             <div className="panel-title">Categories</div>
-            {categories.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>Loading categories…</p>
-            ) : (
-              <div className="category-list">
-                {categories.slice(0, showAllCategories ? undefined : 14).map((c) => (
-                  <button
-                    key={c}
-                    className={category === c ? 'active' : ''}
-                    onClick={() => setCategory(category === c ? null : c)}
-                  >
-                    {c}
-                  </button>
-                ))}
-                {categories.length > 14 && (
-                  <button className="clear" onClick={() => setShowAllCategories((v) => !v)}>
-                    {showAllCategories ? 'Show less' : `View ${categories.length - 14} more`}
-                  </button>
-                )}
-                {category && (
-                  <button className="clear" onClick={() => setCategory(null)}>Clear category</button>
-                )}
-              </div>
-            )}
+            {(() => {
+              const sidebarCategories = tab === 'curseforge' ? cfCategories : categories
+              if (sidebarCategories.length === 0) {
+                return <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>Loading categories…</p>
+              }
+              return (
+                <div className="category-list">
+                  {sidebarCategories.slice(0, showAllCategories ? undefined : 14).map((c) => (
+                    <button
+                      key={c}
+                      className={category === c ? 'active' : ''}
+                      onClick={() => setCategory(category === c ? null : c)}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                  {sidebarCategories.length > 14 && (
+                    <button className="clear" onClick={() => setShowAllCategories((v) => !v)}>
+                      {showAllCategories ? 'Show less' : `View ${sidebarCategories.length - 14} more`}
+                    </button>
+                  )}
+                  {category && (
+                    <button className="clear" onClick={() => setCategory(null)}>Clear category</button>
+                  )}
+                </div>
+              )
+            })()}
             <div className="divider" />
           </Fragment>
         )}
@@ -1025,6 +1047,9 @@ export function ModsPage() {
           if (next === 'modrinth' && !contentTypeUserSet.current && instTab !== 'worlds') {
             setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
           }
+          // v1.0.50 — provider categories are different facets: never let a
+          // stale Modrinth category leak into a CurseForge search (or back).
+          setCategory(null)
           setTab(next)
         }}
       />

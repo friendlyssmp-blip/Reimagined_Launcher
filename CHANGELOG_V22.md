@@ -1,3 +1,47 @@
+## v1.0.50 — 5 launcher fixes + Legacy Fabric support
+
+### 1) Installed list: real icons + real updates for manual mods
+- Root cause: manual mods tracked as source "local" (registered before/while the
+  matching pipeline ran) never re-matched, so they showed the Reimagined "R"
+  placeholder and had no Update / Change Version / Update All.
+- New enrich pass: already-tracked local items are re-matched against Modrinth
+  (exact SHA1 of the jar -> exact version) and CurseForge (exact name), then
+  upgraded to full provider tracking (real icon, versionId, version number) —
+  the same capability as anything installed through Browse. Verified live on a
+  real profile: Bobby's jar SHA1 resolves to its Modrinth version.
+- Items with no provider match still get a real icon extracted from the file
+  itself (fabric.mod.json "icon" for mods, pack.png for packs) instead of the
+  generic placeholder. Provider identity is never guessed: packs now carry the
+  exact platform that matched (Modrinth first, CurseForge fallback).
+
+### 2) Downloads: no more stuck-at-100% spinner; Cancel only while active
+- A completion could land on a NEWER entry with the same label while the one
+  the user watched stayed "downloading" at 100% forever. Terminal updates
+  (done/failed) now carry the exact download entry id, so the bar the user
+  sees transitions to Complete/Failed in place and moves to History — and its
+  Cancel button disappears the instant it finishes.
+
+### 3) CurseForge tab fully functional
+- Real category sidebar for CurseForge (new /api/cf/categories route on the
+  proxy; derives from search hits if the deployed proxy is older).
+- Category clicks now filter CurseForge results (categoryId via the real
+  categories list, name fallback), and mods get the profile's loader filter
+  (modLoaderType) — parity with Modrinth's sidebar/facets.
+
+### 4) Legacy Fabric (Minecraft 1.13.2 and below)
+- Creating a Fabric profile for old versions (1.8.9, 1.12.2...) used to fail:
+  mainline Fabric Loader meta rejects them (HTTP 400). The launcher now
+  detects the Legacy Fabric range automatically and resolves loader versions
+  from meta.legacyfabric.net (loader dropdown included) — verified live for
+  1.8.9 (0.19.3, artifacts on maven.fabricmc.net).
+- Fabric API auto-install fixed for legacy versions: the Legacy Fabric API
+  project tags its current builds with the "ornithe" loader, so the old strict
+  fabric-loader filter returned zero versions for every legacy MC version.
+  Legacy lookups filter on the game version only (26 builds for 1.8.9), and
+  mod browsing relaxes the loader facet so ornith builds are visible.
+
+Verified: tsc node+web clean, build clean, smoke 12/12, live checksum + manifest
+verification after publishing.
 
 ## v1.0.34 — 3-option update prompt (no silent auto-update) + bundled FPS Boost 1.0.10
 ## v1.0.49 — Smarter install dialog (adapts to dependencies)

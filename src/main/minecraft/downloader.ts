@@ -138,7 +138,7 @@ export async function runDownloadBatch(
 
   if (items.length === 0) {
     emit()
-    recordDownload({ label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: 0, totalBytes: 0 })
+    recordDownload({ id: entryId, label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: 0, totalBytes: 0 })
     batchControllers.delete(batchId)
     batchControllers.delete(entryId)
     inflight.delete(batchCtrl)
@@ -209,11 +209,11 @@ export async function runDownloadBatch(
   try {
     await Promise.all(workers)
     logger.info(`[${opts.label}] downloaded ${items.length - skipped}/${items.length} file(s)`)
-    recordDownload({ label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: totalBytes, totalBytes, iconUrl: opts.iconUrl })
+    recordDownload({ id: entryId, label: opts.label, kind: opts.kind, status: 'done', percent: 100, downloadedBytes: totalBytes, totalBytes, iconUrl: opts.iconUrl })
     return { downloaded: items.length - skipped, skipped }
   } catch (err) {
     // Never leave the entry stuck in 'downloading' — mark it failed.
-    recordDownload({ label: opts.label, kind: opts.kind, status: 'failed', percent: 0, downloadedBytes: received, totalBytes, iconUrl: opts.iconUrl })
+    recordDownload({ id: entryId, label: opts.label, kind: opts.kind, status: 'failed', percent: 0, downloadedBytes: received, totalBytes, iconUrl: opts.iconUrl })
     throw err
   } finally {
     // A cancelled batch must never keep its controller registered.

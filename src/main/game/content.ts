@@ -141,17 +141,21 @@ function notifyDownloadsChanged(): void {
   }
 }
 
-export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updatedAt'>): string {
-  // v1.0.24 — a TERMINAL update (done/failed) must always land on the entry
-  // the user is looking at. Progress/start updates still match only live
-  // 'downloading' entries; a terminal update matches the MOST RECENT entry
-  // with the same label+kind regardless of status, so a 100% bar can never
-  // be left stuck on 'downloading' while a duplicate entry takes the 'done'.
-  const isTerminal = entry.status === 'done' || entry.status === 'failed'
-  const existing = isTerminal
-    ? downloadHistory.find((d) => d.label === entry.label && d.kind === entry.kind)
-    : downloadHistory.find((d) => d.status === 'downloading' && d.label === entry.label && d.kind === entry.kind)
+export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updatedAt'> & { id?: string }): string {
+  // v1.0.50 — the downloader now passes its own stable entry id with
+  // terminal updates (done/failed), so a completion can NEVER land on a
+  // different, newer entry with the same label+kind while the one the user
+  // is watching stays 'downloading' at 100% forever (the stuck-spinner
+  // regression). The old label+kind matching remains as a fallback for
+  // callers that don't track an id.
   const now = new Date().toISOString()
+  let existing = entry.id ? downloadHistory.find((d) => d.id === entry.id) : undefined
+  if (!existing) {
+    const isTerminal = entry.status === 'done' || entry.status === 'failed'
+    existing = isTerminal
+      ? downloadHistory.find((d) => d.label === entry.label && d.kind === entry.kind)
+      : downloadHistory.find((d) => d.status === 'downloading' && d.label === entry.label && d.kind === entry.kind)
+  }
   if (existing) {
     existing.status = entry.status
     existing.percent = entry.percent

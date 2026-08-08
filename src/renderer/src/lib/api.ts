@@ -142,11 +142,13 @@ export const api = {
     update: (profileId: string, slug: string) => unwrap<ProfileMod>(window.reimagined.mods.update(profileId, slug)),
     localFiles: (profileId: string, projectType?: string) => unwrap<string[]>(window.reimagined.mods.localFiles(profileId, projectType ?? 'mod')),
     identifyManual: (profileId: string) => unwrap<{ identified: number; matched: number }>(window.reimagined.mods.identifyManual(profileId)),
+    enrichManual: (profileId: string) => unwrap<{ enriched: number; matched: number }>(window.reimagined.mods.enrichManual(profileId)),
     ensureIcons: (profileId: string) => unwrap<void>(window.reimagined.mods.ensureIcons(profileId)),
+    categoriesCurseforge: () => unwrap<{ id: number; name: string }[]>(window.reimagined.mods.categoriesCurseforge()),
     removeLocalFile: (profileId: string, filename: string, projectType?: string) =>
       unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename, projectType ?? 'mod')),
-    searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string) =>
-      unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType)),
+    searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string) =>
+      unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType, category)),
     installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string) =>
       unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType)),
     changeVersion: (profileId: string, slug: string, versionId: string) =>

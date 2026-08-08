@@ -16,6 +16,7 @@ import { LauncherError, Errors } from '../core/errors'
 import { runDownloadBatch } from '../minecraft/downloader'
 import { runQueued } from '../downloads/queue'
 import { modrinth, type ProjectType } from './modrinth'
+import { isLegacyFabricMc } from './fabric-api'
 import { curseforge } from './curseforge'
 import { profileManager } from '../profiles/profile-manager'
 import { iso } from '../utils/format'
@@ -136,23 +137,26 @@ function prettifyLocalName(filename: string): string {
 }
 
 /**
- * Best-effort Modrinth match for PACKS by EXACT normalized title — never the
- * first search hit blindly. Lets a manually-installed resource pack / shader /
- * data pack show as "Installed" in Browse with its real icon and slug.
+ * Best-effort match for PACKS by EXACT normalized title — never the first
+ * search hit blindly. Lets a manually-installed resource pack / shader /
+ * data pack show as "Installed" in Browse with its real icon, slug and
+ * provider. v1.0.50 — the matched provider is returned explicitly so the
+ * entry is tracked against the RIGHT platform (Modrinth first, CurseForge
+ * as fallback), never guessed from icon presence.
  */
 async function matchPackByName(
   name: string,
   projectType: ProjectType,
   mc: string,
   loader: LoaderType
-): Promise<{ id: string; slug: string; title: string; iconUrl?: string } | null> {
+): Promise<{ id: string; slug: string; title: string; iconUrl?: string; source: 'modrinth' | 'curseforge' } | null> {
   const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
   const target = norm(name)
   if (!target) return null
   try {
     const res = await modrinth.searchMods({ query: name, projectType, mcVersion: mc, loader, limit: 24 })
     const hit = res.items.find((i) => norm(i.title) === target)
-    if (hit) return { id: hit.projectId, slug: hit.slug, title: hit.title, iconUrl: hit.iconUrl }
+    if (hit) return { id: hit.projectId, slug: hit.slug, title: hit.title, iconUrl: hit.iconUrl, source: 'modrinth' }
   } catch {
     /* fall through to CurseForge */
   }
@@ -160,11 +164,255 @@ async function matchPackByName(
   // on Modrinth) still resolve to their real project with icon + tracking.
   try {
     const cf = await curseforge.matchByExactName(name, projectType, mc)
-    if (cf) return cf
+    if (cf) return { ...cf, source: 'curseforge' }
   } catch {
     /* name match is best-effort */
   }
   return null
+}
+
+/**
+ * v1.0.50 — extract an icon EMBEDDED in the item's own file, so a manual
+ * mod/pack with no provider match never shows a bare placeholder:
+ *  - mods:      `fabric.mod.json` → "icon" → that asset inside the jar
+ *  - zip packs: `pack.png` at the zip root
+ *  - folder packs: `pack.png` on disk
+ * Returns a `data:` URL (or null when the file has no embedded icon).
+ */
+function mimeForPath(name: string): string | null {
+  const ext = name.toLowerCase().split('.').pop() ?? ''
+  if (ext === 'png') return 'image/png'
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'gif') return 'image/gif'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'svg') return 'image/svg+xml'
+  return null
+}
+
+function bufferDataUrl(buf: Buffer, mime: string, limit = 512 * 1024): string | null {
+  if (!buf || buf.length === 0 || buf.length > limit) return null
+  return `data:${mime};base64,${buf.toString('base64')}`
+}
+
+/**
+ * Read the embedded icon for a manual item file. `buf` is the raw file for
+ * jars/zips (null for folder packs — read pack.png from disk instead).
+ */
+async function extractEmbeddedIcon(
+  filePath: string,
+  projectType: ProjectType,
+  isDir: boolean,
+  buf: Buffer | null
+): Promise<string | null> {
+  try {
+    if (projectType === 'mod' && buf) {
+      const fabric = zipReadEntry(buf, 'fabric.mod.json')
+      if (fabric) {
+        const j = JSON.parse(fabric.toString('utf-8')) as { icon?: unknown }
+        const icon = typeof j.icon === 'string' ? j.icon.trim() : ''
+        if (icon && !icon.startsWith('http')) {
+          const mime = mimeForPath(icon.split('?')[0] ?? '')
+          if (mime) {
+            const data = zipReadEntry(buf, icon)
+            const url = bufferDataUrl(data ?? Buffer.alloc(0), mime)
+            if (url) return url
+          }
+        }
+      }
+      return null
+    }
+    if (!isDir) {
+      const mime = mimeForPath('pack.png')
+      const data = buf ? zipReadEntry(buf, 'pack.png') : null
+      const url = bufferDataUrl(data ?? Buffer.alloc(0), mime ?? 'image/png')
+      if (url) return url
+      return null
+    }
+    const { readFileSync } = await import('node:fs')
+    const iconPath = path.join(filePath, 'pack.png')
+    if (exists(iconPath)) {
+      return bufferDataUrl(readFileSync(iconPath), 'image/png')
+    }
+  } catch {
+    /* icon extraction is best-effort */
+  }
+  return null
+}
+
+/** Session set — provider matching for tracked local items runs ONCE per
+ *  profile per session (139 network lookups every Installed-open would be
+ *  wasteful). Icon extraction stays cheap and runs every time. */
+const enrichNetworkOnce = new Set<string>()
+
+/**
+ * v1.0.50 — re-run provider matching for ALREADY-TRACKED local items.
+ *
+ * identifyManualMods only processes UNTRACKED files, so items registered
+ * before the matching pipeline existed (or while it was failing) stay
+ * `source: 'local'` forever: no real icon, empty versionId, and therefore
+ * no Update / Change Version / Update All participation — even for real,
+ * known mods. This pass re-reads each tracked local item's metadata and
+ * upgrades matches to FULL provider tracking:
+ *   mods:  SHA1 → Modrinth exact version, else fabric.mod.json id →
+ *          Modrinth project, else exact name → CurseForge.
+ *   packs: exact normalized title → Modrinth, else CurseForge.
+ * Items with NO provider match keep their manual identity but gain an icon
+ * extracted from the file itself (never a bare placeholder).
+ */
+async function enrichManualModsImpl(profileId: string): Promise<{ enriched: number; matched: number }> {
+  const profile = await profileManager.get(profileId)
+  if (!profile) return { enriched: 0, matched: 0 }
+  const fsp = await import('node:fs/promises')
+  const doNetwork = !enrichNetworkOnce.has(profileId)
+  if (doNetwork) enrichNetworkOnce.add(profileId)
+  let enriched = 0
+  let matched = 0
+  const byIndex = new Map<number, ProfileMod>()
+
+  const candidates = profile.mods.map((m, idx) => ({ m, idx })).filter(
+    ({ m }) => m.source === 'local' && m.id !== 'reimagined-fps-boost' && m.slug !== 'fabric-api'
+  )
+  const processOne = async ({ m, idx }: { m: ProfileMod; idx: number }): Promise<void> => {
+    try {
+      const projectType: ProjectType = (m.projectType ?? 'mod') as ProjectType
+      const dir = path.join(paths.games, profile.gameDir, folderFor(projectType))
+      const activeName = m.filename.endsWith('.disabled')
+        ? m.filename.slice(0, -'.disabled'.length)
+        : m.filename
+      const p = path.join(dir, activeName)
+      const st = await fsp.stat(p).catch(() => null)
+      if (!st) return
+      const buf = st.isFile() ? await fsp.readFile(p) : null
+      let meta: ModMeta
+      if (projectType === 'mod') {
+        meta = readModMetadata(buf ?? Buffer.alloc(0), activeName)
+      } else if (st.isDirectory()) {
+        const mcmeta = await fsp.readFile(path.join(p, 'pack.mcmeta')).catch(() => null)
+        meta = readPackMetadata(mcmeta, null, activeName)
+      } else {
+        meta = readPackMetadata(
+          zipReadEntry(buf ?? Buffer.alloc(0), 'pack.mcmeta'),
+          zipReadEntry(buf ?? Buffer.alloc(0), 'shaders/shaders.json'),
+          activeName
+        )
+      }
+
+      let project: { id: string; slug: string; title: string; iconUrl?: string } | null = null
+      let source: ProfileMod['source'] = 'local'
+      let versionId = ''
+      let versionNumber = m.versionNumber || 'manual'
+
+      if (doNetwork && projectType === 'mod') {
+        try {
+          const { createHash } = await import('node:crypto')
+          const sha1 = createHash('sha1').update(buf ?? Buffer.alloc(0)).digest('hex')
+          const hit = await modrinth.lookupVersionByHash(sha1)
+          if (hit) {
+            const pr = await modrinth.getProject(hit.projectId)
+            source = 'modrinth'
+            versionId = hit.version.id
+            versionNumber = hit.version.versionNumber
+            project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+            logger.info(`Enriched manual mod "${m.filename}" → Modrinth "${pr.slug}" (${pr.title}) by sha1`)
+          } else {
+            logger.info(`Enrich: "${m.filename}" has no Modrinth match by hash (sha1 ${sha1.slice(0, 10)}…)`)
+          }
+        } catch {
+          /* best-effort */
+        }
+        if (!project && meta.id) {
+          try {
+            const pr = await modrinth.getProject(meta.id)
+            project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
+            source = 'modrinth'
+            logger.info(`Enriched manual mod "${m.filename}" → Modrinth "${pr.slug}" by id`)
+          } catch {
+            project = null
+          }
+        }
+        if (!project && meta.name) {
+          try {
+            const cf = await curseforge.matchByExactName(meta.name, 'mod', profile.minecraftVersion)
+            if (cf) {
+              project = cf
+              source = 'curseforge'
+              logger.info(`Enriched manual mod "${m.filename}" → CurseForge "${cf.slug}" (${cf.title}) by name`)
+            }
+          } catch {
+            /* best-effort */
+          }
+        }
+        if (project && source !== 'local' && !versionId) {
+          try {
+            const versions =
+              source === 'curseforge'
+                ? await curseforge.listVersions(project.id, 'mod')
+                : await modrinth.listVersions(project.id, 'mod')
+            const inst = versions.find((v) => v.filename === activeName) ?? null
+            if (inst) {
+              versionId = inst.id
+              versionNumber = inst.versionNumber
+            } else {
+              logger.info(`Enrich: "${m.filename}" matched ${source} but no version matches its file name — update tracking needs a rename or reinstall.`)
+            }
+          } catch {
+            /* best-effort */
+          }
+        }
+      } else if (doNetwork && meta.name) {
+        try {
+          const pk = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
+          if (pk) {
+            project = pk
+            source = pk.source
+            logger.info(`Enriched manual pack "${m.filename}" → ${pk.source} "${pk.title}"`)
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+
+      const embedded = await extractEmbeddedIcon(p, projectType, Boolean(st.isDirectory()), buf)
+      if (project) {
+        byIndex.set(idx, {
+          ...m,
+          id: project.id,
+          slug: project.slug,
+          title: project.title,
+          iconUrl: project.iconUrl ?? embedded ?? m.iconUrl,
+          source,
+          versionId: versionId || m.versionId,
+          versionNumber: versionNumber || m.versionNumber,
+          updateAvailable: null
+        })
+        matched++
+      } else if (embedded && !m.iconUrl) {
+        byIndex.set(idx, { ...m, iconUrl: embedded })
+      }
+      enriched++
+    } catch {
+      /* skip unreadable items */
+    }
+  }
+
+  // Small concurrency cap — SHA1 + provider lookups are IO/network-bound.
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(6, candidates.length) }, async () => {
+    while (cursor < candidates.length) {
+      const c = candidates[cursor++]
+      if (c) await processOne(c)
+    }
+  })
+  await Promise.all(workers)
+
+  if (byIndex.size > 0) {
+    await profileManager.update(profileId, {
+      mods: profile.mods.map((m, i) => byIndex.get(i) ?? m)
+    })
+    eventBus.emit('mods:changed', { profileId, action: 'enriched', count: byIndex.size })
+    logger.info(`Enriched ${byIndex.size} tracked local item(s) in "${profile.name}" (${matched} matched to a provider)`)
+  }
+  return { enriched, matched }
 }
 
 /**
@@ -220,10 +468,14 @@ class ModManager {
   ): Promise<{ items: ModrinthSearchResult[]; totalHits: number }> {
     const profile = await this.requireProfile(profileId)
     const projectType = opts?.projectType ?? 'mod'
+    // v1.0.50 — Legacy Fabric profiles (MC ≤ 1.13.2) browse without a loader
+    // facet: their mods are tagged 'fabric' OR 'ornithe' on Modrinth, and a
+    // strict fabric-only filter would hide every ornith build.
+    const legacyFabric = profile.loader.type === 'fabric' && isLegacyFabricMc(profile.minecraftVersion)
     return modrinth.searchMods({
       query,
       mcVersion: opts?.mcVersion ?? profile.minecraftVersion,
-      loader: (opts?.loader as LoaderType | undefined) ?? profile.loader.type,
+      loader: legacyFabric ? undefined : (opts?.loader as LoaderType | undefined) ?? profile.loader.type,
       projectType,
       index,
       category: opts?.category,
@@ -242,10 +494,21 @@ class ModManager {
     profileId: string,
     query: string,
     sort?: 'downloads' | 'newest' | 'recent' | 'name',
-    projectType?: ProjectType
+    projectType?: ProjectType,
+    category?: string
   ): Promise<ModrinthSearchResult[]> {
     const profile = await this.requireProfile(profileId)
-    return curseforge.searchMods({ query, mcVersion: profile.minecraftVersion, sort, projectType: projectType ?? 'mod' })
+    // v1.0.50 — mods get the profile's real loader filter on CurseForge too
+    // (fabric → 4, forge → 1). Packs aren't loader-scoped.
+    const loader = projectType === 'mod' && profile.loader.type !== 'vanilla' ? profile.loader.type : undefined
+    return curseforge.searchMods({
+      query,
+      mcVersion: profile.minecraftVersion,
+      sort,
+      projectType: projectType ?? 'mod',
+      category,
+      loader
+    })
   }
 
   /** Every install runs inside the global queue (V2): the user's
@@ -501,6 +764,13 @@ class ModManager {
     return mod
   }
 
+  /** v1.0.50 — re-match already-tracked local items against the providers so
+   *  they gain real icons + version tracking (Update / Change Version /
+   *  Update All). Provider lookups run once per profile per session. */
+  async enrichManualMods(profileId: string): Promise<{ enriched: number; matched: number }> {
+    return enrichManualModsImpl(profileId)
+  }
+
   async remove(profileId: string, slug: string): Promise<void> {
     const profile = await this.requireProfile(profileId)
     const mod = profile.mods.find((m) => m.slug === slug)
@@ -739,7 +1009,12 @@ class ModManager {
               }
             }
           } else if (meta.name) {
-            project = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
+            const pk = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
+            if (pk) {
+              project = pk
+              source = pk.source
+              logger.info(`Manual ${projectType} "${filename}" matched to ${pk.source} project "${pk.slug}" (${pk.title}) — now tracked.`)
+            }
           }
           // v1.0.40 — when a manual mod was matched by name/id (not SHA1), the
           // installed versionId is still unknown. Resolve it by matching the
@@ -763,6 +1038,12 @@ class ModManager {
               /* version resolution is best-effort */
             }
           }
+          // v1.0.50 — an item with no provider match still shows a real icon
+          // extracted from its own file (fabric.mod.json icon / pack.png).
+          // (Re-read the buffer here — the meta reads above were scoped to
+          // their branches and can't be referenced after.)
+          const embedBuf = projectType === 'mod' || !st.isDirectory() ? await fsp.readFile(p) : null
+          const embeddedIcon = await extractEmbeddedIcon(p, projectType, Boolean(st.isDirectory()), embedBuf)
           const entry: ProfileMod = {
             id: project?.id ?? meta.id ?? filename,
             slug: project?.slug ?? meta.id ?? filename,
@@ -771,7 +1052,7 @@ class ModManager {
             versionId,
             versionNumber,
             downloads: 0,
-            iconUrl: project?.iconUrl,
+            iconUrl: project?.iconUrl ?? embeddedIcon ?? undefined,
             source,
             projectType,
             installedAt: iso(),

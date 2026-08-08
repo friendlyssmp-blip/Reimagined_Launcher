@@ -30,6 +30,10 @@ const UA = 'ReimaginedLauncher/1.0.38 (Minecraft launcher)'
 const ROUTES = [
   // --- launcher paths (what the launcher actually sends) ---
   { re: /^\/api\/cf\/mods\/search$/,                 cf: (u) => '/mods/search' + u.search },
+  // v1.0.50 — category tree for the Browse sidebar (gameId=432 filter added
+  // by the launcher). Old proxies that lack this route make the launcher
+  // degrade to deriving categories from search hits instead of erroring.
+  { re: /^\/api\/cf\/categories$/,                   cf: (u) => '/categories' + u.search },
   { re: /^\/api\/cf\/mods\/(\d+)$/,                  cf: (u, m) => `/mods/${m[1]}` },
   { re: /^\/api\/cf\/mods\/(\d+)\/files$/,           cf: (u, m) => `/mods/${m[1]}/files` + u.search },
   { re: /^\/api\/cf\/mods\/(\d+)\/files\/(\d+)\/changelog$/, cf: (u, m) => `/mods/${m[1]}/files/${m[2]}/changelog` },

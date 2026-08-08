@@ -15,7 +15,25 @@ import { runDownloadBatch, type DownloadItem } from '../downloader'
 import { mavenPathFromName, versionManager } from '../version-manager'
 
 const FABRIC_META = 'https://meta.fabricmc.net/v2'
+const LEGACY_FABRIC_META = 'https://meta.legacyfabric.net/v2'
 const FABRIC_MAVEN = 'https://maven.fabricmc.net'
+
+/**
+ * v1.0.50 — Legacy Fabric ecosystem detection. Mainline Fabric Loader only
+ * exists for Minecraft 1.14+; older versions (1.13.2 and below — the exact
+ * range Legacy Fabric publishes) use the separate Legacy Fabric meta API,
+ * whose response shape is identical to mainline's. The launcher decides
+ * internally which implementation a Fabric profile needs.
+ */
+export function isLegacyFabricMc(mcVersion: string): boolean {
+  const m = /^1\.(\d+)/.exec(mcVersion)
+  if (!m) return false
+  return Number(m[1]) < 14
+}
+
+function fabricMetaBase(mcVersion: string): string {
+  return isLegacyFabricMc(mcVersion) ? LEGACY_FABRIC_META : FABRIC_META
+}
 
 interface FabricLoaderMeta {
   loader: { version: string; stable?: boolean }
@@ -47,7 +65,7 @@ export async function getFabricLoaders(mcVersion: string): Promise<string[]> {
   // The game-version-scoped endpoint returns install objects shaped like
   // { loader: { version, stable }, intermediary, launcherMeta } — the loader
   // version lives under `.loader.version`, not on the item itself.
-  const loaders = await getJson<FabricLoaderMeta[]>(`${FABRIC_META}/versions/loader/${mcVersion}`, {
+  const loaders = await getJson<FabricLoaderMeta[]>(`${fabricMetaBase(mcVersion)}/versions/loader/${mcVersion}`, {
     timeoutMs: 20_000
   })
   // Prefer stable, newest first
@@ -61,7 +79,10 @@ export async function getFabricLoaders(mcVersion: string): Promise<string[]> {
 export async function latestFabricLoader(mcVersion: string): Promise<string> {
   const list = await getFabricLoaders(mcVersion)
   if (list.length === 0) {
-    throw new Error(`No Fabric loader version exists for Minecraft ${mcVersion}.`)
+    const eco = isLegacyFabricMc(mcVersion) ? 'Legacy Fabric' : 'Fabric'
+    throw new Error(
+      `No ${eco} loader version exists for Minecraft ${mcVersion} — this Minecraft version is not supported by ${eco}.`
+    )
   }
   return list[0]
 }
@@ -120,7 +141,7 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
   }
 
   const res = await getJson<FabricInstallResponse>(
-    `${FABRIC_META}/versions/loader/${mcVersion}/${loaderVersion}`,
+    `${fabricMetaBase(mcVersion)}/versions/loader/${mcVersion}/${loaderVersion}`,
     { timeoutMs: 20_000 }
   )
   const clientMain = res.launcherMeta.mainClass.client
