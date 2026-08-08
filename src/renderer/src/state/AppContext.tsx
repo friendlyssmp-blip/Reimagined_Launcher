@@ -43,8 +43,8 @@ export interface ModalState {
   duplicate: { profile: Profile } | null
   share: { profile: Profile } | null
   importShare: boolean
-  /** true = user opened it · 'auto' = auto-update flow is already running. */
-  update: boolean | 'auto'
+  /** v1.0.34 — the 3-option update prompt (no silent auto-update anymore). */
+  update: boolean
   /** Crash Assistant — a game crash report detected after a launch. */
   crash: CrashReport | null
   confirm: {
@@ -94,6 +94,13 @@ interface AppContextValue {
   updateInfo: UpdateInfo | null
   /** silent = no toast on failure; force = bypass the 30-min cache. */
   checkForUpdates: (silent?: boolean, force?: boolean) => Promise<UpdateInfo | null>
+  /**
+   * v1.0.34 — 3-option prompt bookkeeping (no more silent auto-update):
+   * - 'cancel': dismiss now; the next periodic check re-prompts (lighter).
+   * - 'later': suppress all auto-prompts for the rest of this session;
+   *   the prompt reappears on the next app start.
+   */
+  dismissUpdatePrompt: (mode: 'cancel' | 'later') => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -127,6 +134,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   })
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const notifiedVersionRef = useRef<string | null>(null)
+  // v1.0.34 — no more silent auto-update. The update prompt shows once per
+  // session by default; Cancel allows one re-prompt on the next periodic
+  // check; Remind Me Later suppresses auto-prompts for the whole session.
+  const updatePromptShownRef = useRef(false)
+  const updateRemindLaterRef = useRef(false)
+  const updateCancelRef = useRef(false)
   const [profileOp, setProfileOp] = useState<ProfileOp | null>(null)
 
   const notifyTimer = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
@@ -180,6 +193,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
    *
    * `force` bypasses the 30-minute cache: the manual "Check for updates"
    * button always passes force so users never see a stale "up to date".
+   *
+   * v1.0.34 — the prompt rules (auto-install was removed entirely):
+   *  - a MANUAL check (silent=false) always opens the 3-option prompt;
+   *  - an AUTO check opens it at most once per session, re-opens it once
+   *    after the user clicked Cancel (lighter dismissal), and never re-opens
+   *    it after "Remind Me Later" until the next app start.
    */
   const checkForUpdates = useCallback(
     async (silent = true, force = false): Promise<UpdateInfo | null> => {
@@ -196,13 +215,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
           notifiedVersionRef.current = info.latestVersion
           notify('info', 'Update available', `Reimagined v${info.latestVersion} is ready — check the Update panel.`)
         }
+        if (info.hasUpdate && !info.assetUrl) {
+          // Packaged install with a manifest that declares no installer asset:
+          // keep the sidebar/settings indicator but never show a prompt whose
+          // Update button would be dead. The user can still open the release
+          // page from the prompt.
+        }
+        if (info.hasUpdate) {
+          if (!silent) {
+            // Manual "Check for updates" from Settings — always ask.
+            setModals({ update: true })
+          } else if (updateRemindLaterRef.current) {
+            // "Remind Me Later" — no auto-prompt for the rest of the session.
+          } else if (updateCancelRef.current) {
+            // "Cancel" — lighter dismissal: the next periodic check re-prompts.
+            updateCancelRef.current = false
+            setModals({ update: true })
+          } else if (!updatePromptShownRef.current) {
+            // First detection this session — show the prompt once.
+            updatePromptShownRef.current = true
+            setModals({ update: true })
+          }
+        }
         return info
       } catch {
         if (!silent) notify('error', 'Update check failed', 'Could not reach GitHub. Check your connection and try again.')
         return null
       }
     },
-    [notify]
+    [notify, setModals]
+  )
+
+  /** v1.0.34 — user chose Cancel or Remind Me Later in the 3-option prompt. */
+  const dismissUpdatePrompt = useCallback(
+    (mode: 'cancel' | 'later') => {
+      if (mode === 'cancel') updateCancelRef.current = true
+      else updateRemindLaterRef.current = true
+      setModals({ update: false })
+    },
+    [setModals]
   )
 
   /** Run an action, converting failures into toasts. */
@@ -418,24 +469,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return off
   }, [ready, notify, refreshAccount, refreshProfiles, setModals])
 
-  // Silent startup update check against the official repository (forced, so
-  // a fresh launch always sees the truth — no stale cache result). Checks are
-  // ALWAYS on (no user toggle — removed in Settings). When "auto-install
-  // updates" is ON (the default), the newest release downloads and installs
-  // automatically on this start; otherwise the sidebar Update button appears
-  // so the user can decide.
+  // v1.0.34 — startup update check against the official repository (forced, so
+  // a fresh launch always sees the truth — no stale cache result). If a newer
+  // version exists the 3-option prompt (Update / Cancel / Remind Me Later)
+  // appears — the launcher NEVER updates itself without the user choosing
+  // "Update". Silent auto-install was removed entirely.
   useEffect(() => {
     if (!ready) return
     const t = setTimeout(() => {
-      void checkForUpdates(true, true).then((info) => {
-        if (info?.hasUpdate && settings?.autoInstallUpdates) {
-          setModals({ update: 'auto' })
-        }
-      })
+      void checkForUpdates(true, true)
     }, 4000)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, settings?.autoInstallUpdates])
+  }, [ready])
 
   // Re-check while the launcher stays open (configurable, default 60 s) so a
   // running launcher notices a new release quickly — the sidebar Update button
@@ -497,7 +543,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setModals,
     runGuarded,
     updateInfo,
-    checkForUpdates
+    checkForUpdates,
+    dismissUpdatePrompt
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

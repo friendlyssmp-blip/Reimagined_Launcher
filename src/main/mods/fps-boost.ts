@@ -15,16 +15,18 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-// v1.0.9 adds the async server-chunk decode pipeline: incoming chunk packets
-// are decoded off the game thread (bounded, relevance-ordered, applied
-// nearest-first) so server joins/resyncs never stall the client.
-// v1.0.8 adds Extended View: previously-loaded chunks are persisted as compact
-// static snapshots and rendered as cached "ghost" terrain far beyond the real
-// render distance (no simulation out there — Reimagined's own native
-// Bobby-style implementation). ensureFpsBoost upgrades existing profiles to
-// the new bundle automatically.
-const FPS_BOOST_VERSION = '1.0.9'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.9.jar'
+// v1.0.10 — Extended View write-path fix (chunk captured at the REAL eviction
+// point via a Storage.drop HEAD mixin, BEFORE vanilla tears the chunk down —
+// the old hook left the persistent cache nearly empty, "ED 4/120"), the
+// visibleGhostChunks sweep now iterates the real cache index instead of
+// Files.exists() per cell (was 66k+ syscalls/s — a periodic tick stall), the
+// renderer has a 4 ms/tick budget, and PerfProfiler correlates spike frames
+// with the periodic systems active that tick (spkTasks=...) so recurring
+// stutters are identified from real data. v1.0.9 adds the async server-chunk
+// decode pipeline; v1.0.8 adds Extended View. ensureFpsBoost upgrades existing
+// profiles to the new bundle automatically.
+const FPS_BOOST_VERSION = '1.0.10'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.10.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

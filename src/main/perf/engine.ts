@@ -185,7 +185,11 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
 
 /** Tier-tuned JVM flags (G1GC tuning + preset hand-off). Memory is added by the launcher. */
 export function jvmFlagsFor(tier: PerfTier): string[] {
-  const pause = tier === 'potato' || tier === 'turbo' ? 40 : tier === 'balanced' ? 60 : 80
+  // v1.0.34 — periodic-stutter pass: tighten the G1 pause target further
+  // (measured PROF data showed gcMs spikes coinciding with recurring
+  // 60→30→60 FPS drops). Lower pause goals make G1 run smaller, more
+  // frequent young collections instead of one visible large pause.
+  const pause = tier === 'potato' || tier === 'turbo' ? 35 : tier === 'balanced' ? 45 : 60
   const newSize = tier === 'potato' || tier === 'turbo' ? 25 : 30
   const maxNewSize = tier === 'potato' || tier === 'turbo' ? 50 : 60
   const presetId = tier === 'potato' ? 0 : tier === 'balanced' ? 1 : tier === 'high' ? 2 : 3

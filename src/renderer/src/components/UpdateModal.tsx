@@ -1,10 +1,14 @@
 /**
- * Update dialog.
+ * Update dialog (v1.0.34 — 3-option prompt).
  *
- * Shown when the user clicks "Update" in the sidebar (only visible when a new
- * GitHub release is available). Displays the changelog and drives the
- * download -> install -> relaunch flow with live progress from the main
- * process (update:progress events).
+ * Shown when a new GitHub release is detected. Silent auto-updating was
+ * removed entirely: the launcher NEVER downloads or installs anything without
+ * the user explicitly choosing "Update". The three options:
+ *  - Update — download → verify checksum → install → relaunch.
+ *  - Cancel — dismiss the prompt now; the next periodic check re-prompts
+ *    (lighter dismissal, for a user who just wants it gone right now).
+ *  - Remind Me Later — suppress auto-prompts for the rest of this session;
+ *    the prompt reappears on the next app start.
  */
 import { useEffect, useState } from 'react'
 import { useApp } from '../state/AppContext'
@@ -13,47 +17,13 @@ import { api, friendlyError } from '../lib/api'
 
 type Phase = 'idle' | 'downloading' | 'downloaded' | 'installing' | 'done'
 
-export function UpdateModal({ auto = false }: { auto?: boolean }) {
-  const { setModals, updateInfo } = useApp()
+export function UpdateModal() {
+  const { setModals, dismissUpdatePrompt, updateInfo } = useApp()
   const [phase, setPhase] = useState<Phase>('idle')
   const [percent, setPercent] = useState(0)
   const [phaseText, setPhaseText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  /* Auto-update mode ("Auto-update updates" = ON, the default): the newest
-   * release downloads and installs by itself on launcher start — the user
-   * just watches it happen. On failure it falls back to the manual buttons. */
-  useEffect(() => {
-    if (!auto) return
-    let cancelled = false
-    void (async () => {
-      try {
-        setBusy(true)
-        setPhase('downloading')
-        setPhaseText('Downloading update…')
-        await api.update.download()
-        if (cancelled) return
-        setPhase('downloaded')
-        setPhaseText('Installing update…')
-        setPhase('installing')
-        await api.update.install()
-        if (!cancelled) {
-          setBusy(false)
-          setPhase('done')
-        }
-      } catch (err) {
-        if (cancelled) return
-        setError(friendlyError(err))
-        setPhase('idle')
-        setPhaseText('')
-        setBusy(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [auto])
 
   /* Live progress events from the main process. */
   useEffect(() => {
@@ -72,15 +42,19 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
     return off
   }, [])
 
-  const download = async () => {
+  /** \"Update\" — download then install in one explicit user choice. */
+  const update = async () => {
     setBusy(true)
     setError(null)
     try {
       setPhase('downloading')
       setPhaseText('Downloading update...')
       await api.update.download()
-      setPhase('downloaded')
-      setPhaseText('Ready to install')
+      setPhase('installing')
+      setPhaseText('Installing update...')
+      await api.update.install()
+      setPhase('done')
+      // install() closes/relaunches the app — phase 'done' is a fallback.
     } catch (err) {
       setError(friendlyError(err))
       setPhase('idle')
@@ -90,32 +64,11 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
     }
   }
 
-  const install = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      setPhase('installing')
-      setPhaseText('Installing update...')
-      await api.update.install()
-      setPhase('done')
-    } catch (err) {
-      setError(friendlyError(err))
-      setPhase('downloaded')
-      setPhaseText('Ready to install')
-      setBusy(false)
-    }
-  }
-
   return (
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && setModals({ update: false })}>
       <div className="modal modal-lg">
         <div className="modal-head">
           <h3>Update available</h3>
-          {auto && phase !== 'done' && (
-            <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-3)', fontWeight: 700, marginRight: 'auto', marginLeft: 10 }}>
-              auto-updating…
-            </span>
-          )}
           {!busy && (
             <button className="btn btn-icon" onClick={() => setModals({ update: false })} aria-label="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -140,7 +93,7 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
           <pre
             className="update-notes"
             style={{
-              maxHeight: 260,
+              maxHeight: 220,
               overflow: 'auto',
               background: 'var(--bg-2)',
               border: '1px solid var(--border)',
@@ -156,7 +109,7 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
             {updateInfo?.notes?.trim() || 'No release notes provided.'}
           </pre>
 
-          {(phase === 'downloading' || phase === 'installing' || phase === 'done') && (
+          {(phase === 'downloading' || phase === 'installing') && (
             <div style={{ marginTop: 16 }}>
               <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{phaseText}</span>
@@ -178,23 +131,17 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
               )}
             </div>
           )}
-
-          {phase === 'downloaded' && (
-            <div className="banner banner-info" style={{ marginTop: 14 }}>
-              The update replaces the launcher&apos;s files (your profiles, saves and settings in <span className="mono">data/</span> are preserved), rebuilds and restarts automatically.
-            </div>
-          )}
         </div>
         <div className="modal-foot">
-          {!busy && auto && phase === 'idle' && (
-            <Button variant="ghost" onClick={() => setModals({ update: false })}>
-              Skip this update
-            </Button>
-          )}
-          {!busy && !auto && (
-            <Button variant="ghost" onClick={() => setModals({ update: false })}>
-              Remind me later
-            </Button>
+          {!busy && (
+            <>
+              <Button variant="ghost" onClick={() => dismissUpdatePrompt('later')}>
+                Remind me later
+              </Button>
+              <Button variant="ghost" onClick={() => dismissUpdatePrompt('cancel')}>
+                Cancel
+              </Button>
+            </>
           )}
           {!busy && updateInfo?.url && (
             <Button variant="ghost" onClick={() => window.open(updateInfo.url, '_blank')}>
@@ -202,22 +149,13 @@ export function UpdateModal({ auto = false }: { auto?: boolean }) {
             </Button>
           )}
           {phase === 'idle' && (
-            <Button variant="primary" onClick={download} disabled={!updateInfo?.assetUrl}>
-              {updateInfo?.assetUrl ? 'Download & Install' : 'No installer asset'}
-            </Button>
-          )}
-          {phase === 'downloaded' && (
-            <Button variant="primary" onClick={install}>
-              Install now
+            <Button variant="primary" onClick={() => void update()} disabled={!updateInfo?.assetUrl}>
+              {updateInfo?.assetUrl ? 'Update' : 'No installer asset'}
             </Button>
           )}
           {busy && (
             <Button disabled>
-              {phase === 'installing' || phase === 'done' ? (
-                <><Spinner /> Installing...</>
-              ) : (
-                <><Spinner /> Downloading...</>
-              )}
+              <><Spinner /> {phase === 'installing' ? 'Installing...' : 'Downloading...'}</>
             </Button>
           )}
         </div>

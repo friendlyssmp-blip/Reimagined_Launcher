@@ -1,7 +1,7 @@
 {
-  "version": "1.0.33",
-  "installer": "dist/Reimagined-Setup-1.0.33.exe",
-  "notes": "v1.0.33 — Update staleness fix: the launcher could keep reporting the PREVIOUS version as \"latest / up to date\" for up to 5 minutes after a release. Root cause: Electron net.fetch (Chromium stack) honors Cache-Control and served the manifest from its own local HTTP cache (raw.githubusercontent.com sends max-age=300), so every 15s re-check hit the cache instead of the live feed. Fix: ghFetch now passes cache no-store, so every update check and download always hits the network fresh — a new version is detected immediately, no stale cache window. Same guarantees as 1.0.31/1.0.32: asset resolved from installer + direct url, no silent repo-zip fallback on packaged installs, SHA-256 verified downloads.",
-  "sha256": "5be7f7881b0494646b1e82e17077ffb0034ac339cd5ea05cfd070c6f6942b2dd",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.33.exe"
+  "version": "1.0.34",
+  "installer": "dist/Reimagined-Setup-1.0.34.exe",
+  "notes": "v1.0.34 — (1) UPDATE PROMPT: silent auto-update is gone. Every new release now shows a 3-option prompt: Update (download + SHA-256 verify + install + relaunch), Cancel (dismiss now, the next check re-prompts), Remind me later (no prompts this session, returns next launch). The launcher NEVER updates itself without your explicit click. (2) BUNDLED FPS BOOST 1.0.10: fixes the Extended View cache that stayed empty (chunks are now captured at the real eviction point, before unload tears them down), the ghost sweep no longer makes 66k+ disk stat calls per second (a periodic stutter source), the renderer is budgeted to 4ms/tick, and the profiler now reports WHICH periodic system coincided with each spike frame (spkTasks). Profiles stuck on the old bundled version (e.g. 1.0.4) are auto-upgraded to 1.0.10 on the next launch. (3) GC tuning tightened per measured PROF data (G1 pause targets 45/60 vs 60/80).",
+  "sha256": "fbde52318a31975ae9b3926aeb9fad58c40c5e15ba3db221b9729352b2d2968c",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.34.exe"
 }

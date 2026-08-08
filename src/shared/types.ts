@@ -87,8 +87,6 @@ export interface LauncherSettings {
 
   /** Check for new releases automatically on startup (official repo only). */
   autoCheckUpdates: boolean
-  /** Auto-download + install the newest release on the next launcher start. */
-  autoInstallUpdates: boolean
   /** How often (seconds) the launcher re-checks GitHub while it is open. */
   updateCheckIntervalSec: number
 

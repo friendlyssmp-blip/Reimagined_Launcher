@@ -1,4 +1,41 @@
 
+## v1.0.34 — 3-option update prompt (no silent auto-update) + bundled FPS Boost 1.0.10
+
+### Update prompt replaces silent auto-update
+- The launcher NEVER downloads or installs an update without the user choosing
+  "Update" — the old auto-install-on-start behavior is removed entirely.
+- Every detected release now shows a 3-option prompt:
+  - **Update** — download, SHA-256 verify, install, relaunch (one click).
+  - **Cancel** — dismiss now; the next periodic check re-prompts (lighter).
+  - **Remind me later** — no auto-prompts for the rest of this session; it
+    returns on the next app launch.
+- The prompt shows once per session by default; a manual "Check for updates"
+  in Settings always asks. `autoInstallUpdates` setting removed.
+
+### Bundled FPS Boost 1.0.10 (auto-upgrades every profile on next launch)
+- **Extended View cache fixed**: chunks are now captured at the real eviction
+  point (a Storage.drop HEAD mixin) BEFORE vanilla tears the chunk data down —
+  the old hook left the persistent cache nearly empty ("ED 4/120") despite real
+  exploration.
+- **Periodic stutter source removed**: the ghost sweep now iterates the real
+  cache index instead of calling Files.exists() on every cell (was 66k+ syscalls
+  per second with a large extended distance).
+- **Renderer budget**: Extended View computes at most 1x/s, ≤12 meshes and ≤4 ms
+  per tick; a big warm cache can never hitch a tick.
+- **Real spike correlation**: PerfProfiler now reports WHICH periodic system
+  (watchdog/AFK/extview/pipeline/stabilizer) coincided with each spike frame
+  (spkTasks=...) — recurring stutters are identified from data, not guesses.
+- **Launcher gate fixed**: profiles carrying an old bundled jar (e.g. 1.0.4) were
+  never upgraded because ensureFpsBoost only ran when the mod was absent — it
+  now always runs (no-op when current, upgrades otherwise).
+
+### GC tuning (measured)
+- Tightened G1 MaxGCPauseMillis per real PROF data (balanced 45 / high 60, was
+  60 / 80) — smaller, more frequent young collections instead of one visible
+  large pause during calm gameplay.
+
+---
+
 ## v1.0.12 — Anti-Crash System (Shader Guard) + FPS Boost pushed further
 
 ### Shader Guard — real anti-crash for the shader rendering path

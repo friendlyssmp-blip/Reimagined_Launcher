@@ -53,9 +53,9 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   audioMusic: false,
   audioPack: 'aurora',
   autoCheckUpdates: true,
-  // Auto-update is ON by default: the newest release installs on the next
-  // launcher start, so users are always current without clicking anything.
-  autoInstallUpdates: true,
+  // v1.0.34: silent auto-update is gone — a detected release shows the
+  // 3-option prompt (Update / Cancel / Remind Me Later); the launcher NEVER
+  // updates itself without the user choosing "Update".
   // Re-check GitHub every 15 s while the launcher is open (15 s – 15 min).
   updateCheckIntervalSec: 15,
   // V2 download queue: 1 = strict queue (default), 3 / 5 = parallel installs.

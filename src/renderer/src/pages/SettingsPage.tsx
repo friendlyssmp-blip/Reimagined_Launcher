@@ -62,7 +62,7 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['vsync', 'render distance', 'recommendations'], section: 'performance', label: 'Recommendations', desc: 'Hardware-based suggestions you choose to apply' },
   { query: ['downloads', 'concurrency', 'parallel', 'queue'], section: 'downloads', label: 'Download queue', desc: 'How many downloads run at the same time (1 / 3 / 5)' },
   { query: ['cache', 'download cache'], section: 'downloads', label: 'Download cache', desc: 'Minecraft files cached for reuse across profiles' },
-  { query: ['updates', 'check for updates', 'auto install'], section: 'updates', label: 'Updates', desc: 'Check for updates and auto-install on start' },
+  { query: ['updates', 'check for updates', 'update prompt', 'remind'], section: 'updates', label: 'Updates', desc: 'Check for updates; each release is offered via the 3-option prompt' },
   { query: ['theme', 'colors', 'appearance'], section: 'appearance', label: 'Theme', desc: 'The launcher color identity' },
   { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
   { query: ['preset', 'potato', 'balanced', 'high', 'turbo'], section: 'appearance', label: 'Performance preset', desc: 'How aggressively optimizations apply' },
@@ -368,19 +368,13 @@ export function SettingsPage() {
               <div className="panel-title">Updates</div>
               <p className="panel-sub">
                 The launcher <b>always</b> checks the official Reimagined GitHub repository on its own — no
-                toggle needed, updates are detected while the launcher is open and the newest version installs
-                automatically on the next start.
+                toggle needed. When a new version is found you choose what happens: the launcher
+                <b> never updates itself without your explicit "Update" click</b>.
               </p>
-              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Toggle
-                  checked={settings.autoInstallUpdates ?? true}
-                  onChange={(v) => updateSettings({ autoInstallUpdates: v })}
-                  label="Auto-install updates on start"
-                />
-                <p style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5, margin: 0, paddingLeft: 50, maxWidth: 520 }}>
-                  When on, every time the launcher opens it downloads and installs the newest release by itself.
-                  When off, you just get the Update button in the sidebar.
-                </p>
+              <div className="banner banner-info" style={{ marginTop: 10 }}>
+                New releases show a prompt with three options: <b>Update</b> (download → verify → install →
+                relaunch), <b>Cancel</b> (dismiss now — the next check re-prompts), and
+                <b> Remind me later</b> (no prompts again this session; it returns on the next launch).
               </div>
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Re-check frequency while the launcher is open</div>

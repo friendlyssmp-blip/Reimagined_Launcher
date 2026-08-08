@@ -180,9 +180,16 @@ class Launcher {
           const { ensureFabricApi } = await import('../mods/fabric-api')
           await ensureFabricApi(profile)
         }
-        // Seed the bundled Reimagined FPS Boost mod the same way (only when a
-        // compatible Minecraft version — the mod targets 26.2.x).
-        if (!profile.mods.some((m) => m.id === 'reimagined-fps-boost')) {
+        // Seed / UPGRADE the bundled Reimagined FPS Boost mod (only when a
+        // compatible Minecraft version — the mod targets 26.2.x). v1.0.34:
+        // this ALWAYS runs ensureFpsBoost, not only when the mod is absent —
+        // it internally no-ops when already current and UPGRADES profiles
+        // carrying an older bundled jar. The old gate left every existing
+        // profile stuck on the first-ever bundled version (e.g. 1.0.4, which
+        // predates the async chunk pipeline and the Extended View cache fix),
+        // which is exactly why those instances showed no Extended View data
+        // and no EXTVIEW lines despite real exploration.
+        {
           const { ensureFpsBoost } = await import('../mods/fps-boost')
           await ensureFpsBoost(profile)
         }

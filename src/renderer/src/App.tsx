@@ -197,7 +197,7 @@ function Shell() {
       {modals.duplicate && <DuplicateModal profile={modals.duplicate.profile} />}
       {modals.share && <ShareModal profile={modals.share.profile} />}
       {modals.importShare && <ImportModal initialCode={importCode} />}
-      {modals.update && <UpdateModal auto={modals.update === 'auto'} />}
+      {modals.update && <UpdateModal />}
       {modals.crash && <CrashModal />}
       {modals.confirm && <ConfirmDialog {...modals.confirm} />}
       <Toasts />
