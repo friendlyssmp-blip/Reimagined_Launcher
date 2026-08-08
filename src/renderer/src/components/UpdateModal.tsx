@@ -15,7 +15,7 @@ import { useApp } from '../state/AppContext'
 import { Button, Spinner } from './ui'
 import { api, friendlyError } from '../lib/api'
 
-type Phase = 'idle' | 'downloading' | 'downloaded' | 'installing' | 'done'
+type Phase = 'idle' | 'downloading' | 'installing' | 'done'
 
 export function UpdateModal() {
   const { setModals, dismissUpdatePrompt, updateInfo } = useApp()

@@ -69,8 +69,11 @@ class SettingsManager {
   async load(): Promise<LauncherSettings> {
     if (this.loaded) return this.settings
     const saved = await readJson<Partial<LauncherSettings>>(paths.settingsFile, {})
+    // v1.0.34 — drop removed settings keys left in an old settings.json (e.g.
+    // autoInstallUpdates, which no longer exists: silent auto-update is gone).
+    const REMOVED_KEYS = new Set(['autoInstallUpdates'])
     this.settings = { ...DEFAULT_SETTINGS, ...Object.fromEntries(
-      Object.entries(saved).filter(([k, v]) => v !== '' && v !== null && v !== undefined)
+      Object.entries(saved).filter(([k, v]) => !REMOVED_KEYS.has(k) && v !== '' && v !== null && v !== undefined)
     ), recentActivity: saved.recentActivity ?? [] }
     this.loaded = true
     return this.settings

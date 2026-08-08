@@ -2,6 +2,6 @@
   "version": "1.0.34",
   "installer": "dist/Reimagined-Setup-1.0.34.exe",
   "notes": "v1.0.34 — (1) UPDATE PROMPT: silent auto-update is gone. Every new release now shows a 3-option prompt: Update (download + SHA-256 verify + install + relaunch), Cancel (dismiss now, the next check re-prompts), Remind me later (no prompts this session, returns next launch). The launcher NEVER updates itself without your explicit click. (2) BUNDLED FPS BOOST 1.0.10: fixes the Extended View cache that stayed empty (chunks are now captured at the real eviction point, before unload tears them down), the ghost sweep no longer makes 66k+ disk stat calls per second (a periodic stutter source), the renderer is budgeted to 4ms/tick, and the profiler now reports WHICH periodic system coincided with each spike frame (spkTasks). Profiles stuck on the old bundled version (e.g. 1.0.4) are auto-upgraded to 1.0.10 on the next launch. (3) GC tuning tightened per measured PROF data (G1 pause targets 45/60 vs 60/80).",
-  "sha256": "fbde52318a31975ae9b3926aeb9fad58c40c5e15ba3db221b9729352b2d2968c",
+  "sha256": "13f70857509dd4c2c1fa3ca70ee26c687142c82cc20e5717a5429a827d19538e",
   "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.34.exe"
 }

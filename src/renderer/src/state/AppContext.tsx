@@ -215,15 +215,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           notifiedVersionRef.current = info.latestVersion
           notify('info', 'Update available', `Reimagined v${info.latestVersion} is ready — check the Update panel.`)
         }
-        if (info.hasUpdate && !info.assetUrl) {
-          // Packaged install with a manifest that declares no installer asset:
-          // keep the sidebar/settings indicator but never show a prompt whose
-          // Update button would be dead. The user can still open the release
-          // page from the prompt.
-        }
         if (info.hasUpdate) {
           if (!silent) {
-            // Manual "Check for updates" from Settings — always ask.
+            // Manual "Check for updates" from Settings — always ask. This also
+            // counts as the session's one auto-prompt: an X-close must not
+            // cause the next periodic check to re-open the modal.
+            updatePromptShownRef.current = true
             setModals({ update: true })
           } else if (updateRemindLaterRef.current) {
             // "Remind Me Later" — no auto-prompt for the rest of the session.
