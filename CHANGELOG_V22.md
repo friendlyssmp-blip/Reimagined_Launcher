@@ -1043,3 +1043,23 @@ should also enable Settings -> "Force VSync off" so VSync cannot pin the
 game to 60 Hz.
 
 Verified: tsc node+web clean, build clean, smoke 12/12.
+
+
+## v1.0.45 - honest FPS counter in the FPS Boost HUD (bundled mod 1.0.14)
+
+The on-screen FPS Boost readout showed 120-130 while vanilla F3 showed 48-60.
+Real 30s PERF windows in the game log proved F3 right: avg=55-58 with lows of
+6-11 FPS. The HUD was using a per-frame exponential moving average (EMA) that
+reacts to fast individual frames which are never actually delivered to the
+display, inflating the number upward.
+
+- The HUD now shows the SAME metric as vanilla F3: frames rendered in the
+  last 1-second window. No more optimistic readings - what you see is real.
+- The EMA is kept internally only for the Smart Render Distance governor.
+- Bundled FPS Boost updated to 1.0.14 (auto-upgrades existing profiles).
+
+Note on "feels laggy at 90 FPS": on a 60 Hz panel with VSync off, frames above
+60 are never shown (tearing instead of smoothness), and the PERF lows (6-11)
+are real micro-stutters - the perceived lag comes from those, not the average.
+
+Verified: mod build clean, tsc node+web clean, launcher build clean, smoke 12/12.
