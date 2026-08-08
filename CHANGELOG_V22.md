@@ -882,3 +882,18 @@ on the next launch.
   proxy (backend/cf-proxy, deployed on Render) — never in the launcher or
   repository. Verified live: /health OK and real search/project/files data
   flowing through the proxy.
+
+
+## v1.0.38 — CurseForge 404 fixed + honest error states
+- Root cause of the launcher showing "CurseForge request failed (HTTP 404)":
+  the launcher sends CurseForge API paths under `/api/cf/mods/...`
+  (`/mods/search`, `/mods/:id`, `/mods/:id/files`, `/changelog`, `/file`), but
+  the deployed proxy only whitelisted shorter browser-test paths — so every
+  launcher request hit the 404 fallback. The proxy now whitelists the exact
+  launcher paths (short aliases kept for manual testing) and is verified
+  locally and live. The fix ships on the proxy itself: CurseForge works even
+  without updating the launcher.
+- The CurseForge tab now distinguishes "not connected" (no proxy URL
+  configured → setup card with the deploy guide) from real failures (proxy
+  down / HTTP error → compact banner with Retry), so a transient error never
+  misleads the user into thinking the proxy isn't set up.

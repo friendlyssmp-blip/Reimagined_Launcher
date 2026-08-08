@@ -1,7 +1,7 @@
 {
-  "notes": "v1.0.37 — CurseForge is now connected out of the box.\n\nCurseForge browsing (Mods, Resource Packs, Data Packs, Shaders) now works\nimmediately after updating: the launcher ships with the Reimagined CurseForge\nproxy URL pre-configured as the default. The proxy keeps the CurseForge API\nkey on the server side only (your own backend/cf-proxy instance) — the key\nnever touches your PC or the repository. Anyone can still change or clear the\nproxy URL in Settings → Advanced → CurseForge proxy URL.\n\nEverything from v1.0.36 remains: the join-crash fix (FPS Boost 1.0.12),\nreliable auto-relaunch after updates, the premium startup + Downloads\nredesign, and the enhanced Check-for-Updates modal.\n",
-  "publishedAt": "2026-08-08T13:10:00.000Z",
-  "sha256": "c3a03cc969085ed086245c11a01cc78bf92f4207326c2f9ba04b1de6c8fece67",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.37.exe",
-  "version": "1.0.37"
+  "notes": "v1.0.38 — CurseForge fix + clearer errors.\n\nFixed the CurseForge 404: the backend proxy now accepts the exact paths the\nlauncher sends (/api/cf/mods/search, /mods/:id, /mods/:id/files, changelog,\nsingle file) — previously only shorter browser-test paths matched, so every\nlauncher request returned HTTP 404. The fix is deployed to the proxy itself,\nso CurseForge now works even without updating the launcher; this release also\nmakes error states honest: the \"not connected\" setup card only appears when no\nproxy URL is configured, while real failures (proxy down / HTTP error) show a\ncompact Retry banner instead of a misleading setup message.\n",
+  "publishedAt": "2026-08-08T13:28:00.000Z",
+  "sha256": "5bee964785f590bafce6c5e25ace6e61d329cca183792ced724d6dc84696f566",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.38.exe",
+  "version": "1.0.38"
 }

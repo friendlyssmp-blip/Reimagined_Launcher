@@ -191,6 +191,7 @@ export function ModsPage() {
    *  is shown instead of a broken search. */
   const [cfSearching, setCfSearching] = useState(false)
   const [cfError, setCfError] = useState<string | null>(null)
+  const [cfSetup, setCfSetup] = useState(false)
   const doCurseforgeSearch = useCallback(
     async (q?: string, _append = false) => {
       if (!activeProfile) return
@@ -202,6 +203,10 @@ export function ModsPage() {
         const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType)
         setResults(page.map((x) => ({ ...x, source: 'curseforge' as const })))
       } catch (err) {
+        const code = (err as { code?: string }).code
+        // Setup card ONLY when no proxy is configured; real failures (proxy
+        // down, HTTP error) get a compact retry banner instead.
+        setCfSetup(code === 'CF_NO_PROXY')
         setCfError(friendlyError(err))
         setResults([])
       } finally {
@@ -1213,7 +1218,7 @@ export function ModsPage() {
 
       {/* Browse Modrinth */}
       {(tab === 'modrinth' || tab === 'curseforge') && renderBrowse()}
-      {tab === 'curseforge' && cfError && (
+      {tab === 'curseforge' && cfSetup && (
         <div className="panel">
           <div className="panel-title">CurseForge is not connected</div>
           <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
@@ -1233,6 +1238,19 @@ export function ModsPage() {
             </Button>
             <Button size="sm" variant="ghost" onClick={() => window.open('https://github.com/friendlyssmp-blip/Reimagined_Launcher/tree/main/backend/cf-proxy', '_blank')}>
               Proxy setup guide
+            </Button>
+          </div>
+        </div>
+      )}
+      {tab === 'curseforge' && cfError && !cfSetup && (
+        <div className="panel warn-panel">
+          <div className="panel-title">CurseForge request failed</div>
+          <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
+            {cfError}
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <Button size="sm" variant="ghost" onClick={() => void doCurseforgeSearch(undefined, false)} disabled={cfSearching}>
+              {cfSearching ? <Spinner /> : 'Retry'}
             </Button>
           </div>
         </div>
