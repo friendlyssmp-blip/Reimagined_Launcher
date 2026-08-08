@@ -56,8 +56,8 @@ export function InstallConfirmModal({
       try {
         if (!activeProfile) throw new Error('No profile selected.')
         const [detail, versions] = await Promise.all([
-          api.content.detail({ provider: 'modrinth', projectId: target.projectId, projectType: target.projectType }),
-          api.content.versions({ provider: 'modrinth', projectId: target.projectId, projectType: target.projectType })
+          api.content.detail({ provider: target.provider, projectId: target.projectId, projectType: target.projectType }),
+          api.content.versions({ provider: target.provider, projectId: target.projectId, projectType: target.projectType })
         ])
         // Prefer a version compatible with the profile's MC version + loader
         // (packs aren't loader-specific), so the dialog never offers an
@@ -76,7 +76,12 @@ export function InstallConfirmModal({
         const pinned = target.versionId ? versions.find((v) => v.id === target.versionId) : null
         const version = (pinned && compatible.some((v) => v.id === pinned.id) ? pinned : compatible[0]) ?? versions[0]
         if (!version) throw new Error('No compatible version of this project exists for this profile.')
-        const deps = await api.mods.dependencies(activeProfile.id, target.projectId, version.id, target.projectType)
+        // Dependencies are only resolvable from Modrinth — CurseForge exposes
+        // no dependency tree through the proxy, so CF items install alone.
+        const deps =
+          target.provider === 'modrinth'
+            ? await api.mods.dependencies(activeProfile.id, target.projectId, version.id, target.projectType)
+            : []
         if (!cancelled) setInfo({ detail, version, deps })
       } catch (err) {
         if (!cancelled) setError(friendlyError(err))
@@ -99,7 +104,7 @@ export function InstallConfirmModal({
     if (!activeProfile || !info || !info.version) return
     setBusy(withDeps ? 'deps' : 'only')
     try {
-      if (withDeps) {
+      if (withDeps && target.provider === 'modrinth') {
         const res = await api.mods.installWithDeps(activeProfile.id, target.projectId, info.version.id, target.projectType)
         onInstalled(res.mod, res)
         notify(
@@ -108,7 +113,9 @@ export function InstallConfirmModal({
           res.installed.join(', ') + (res.skipped.length > 0 ? ` — skipped: ${res.skipped.join('; ')}` : '')
         )
       } else {
-        const mod = await api.mods.installVersion(activeProfile.id, 'modrinth', target.projectId, info.version!.id, target.projectType)
+        // Modrinth = the pinned version; CurseForge = the pinned file id —
+        // both go through installVersion with the REAL provider now.
+        const mod = await api.mods.installVersion(activeProfile.id, target.provider, target.projectId, info.version!.id, target.projectType)
         onInstalled(mod)
         // v1.0.35 — install-complete payoff with the success checkmark.
         sound.installComplete()
@@ -168,7 +175,9 @@ export function InstallConfirmModal({
                 <div className="panel-title" style={{ fontSize: 12 }}>Dependencies</div>
                 {allDeps.length === 0 ? (
                   <p style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 6 }}>
-                    No additional dependencies required.
+                    {target.provider === 'curseforge'
+                      ? 'CurseForge does not expose dependency data — the item installs alone.'
+                      : 'No additional dependencies required.'}
                   </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 240, overflowY: 'auto' }}>
@@ -214,22 +223,28 @@ export function InstallConfirmModal({
         {info && busy === null && (
           <div className="modal-foot">
             <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--text-3)' }}>
-              {missingRequired.length > 0
-                ? 'Required dependencies are missing — install them for the item to work correctly.'
-                : missing.length > 0
-                  ? 'Optional dependencies can be added with “with dependencies”.'
-                  : 'Everything is already installed — installing only adds the item.'}
+              {target.provider === 'curseforge'
+                ? 'CurseForge does not expose dependency data — the item installs alone.'
+                : missingRequired.length > 0
+                  ? 'Required dependencies are missing — install them for the item to work correctly.'
+                  : missing.length > 0
+                    ? 'Optional dependencies can be added with “with dependencies”.'
+                    : 'Everything is already installed — installing only adds the item.'}
             </div>
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button
-              variant="ghost"
-              onClick={() => void doInstall(false)}
-              title={missingRequired.length > 0 ? 'Install the item alone — it may not work without its required dependencies' : 'Install only the item'}
-            >
-              Install Only
-            </Button>
+            {target.provider !== 'curseforge' && (
+              <Button
+                variant="ghost"
+                onClick={() => void doInstall(false)}
+                title={missingRequired.length > 0 ? 'Install the item alone — it may not work without its required dependencies' : 'Install only the item'}
+              >
+                Install Only
+              </Button>
+            )}
             <Button variant="primary" onClick={() => void doInstall(true)}>
-              Install with Dependencies{missing.length > 0 ? ` (${missing.length})` : ''}
+              {target.provider === 'curseforge'
+                ? 'Install'
+                : `Install with Dependencies${missing.length > 0 ? ` (${missing.length})` : ''}`}
             </Button>
           </div>
         )}

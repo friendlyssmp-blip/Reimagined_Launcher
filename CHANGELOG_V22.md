@@ -1,5 +1,36 @@
 
 ## v1.0.34 — 3-option update prompt (no silent auto-update) + bundled FPS Boost 1.0.10
+## v1.0.48 — CurseForge installs fixed (no more Modrinth errors)
+
+### 1) The bug
+CurseForge search results showed up fine, but clicking Install mentioned Modrinth
+and failed. The install confirmation modal was hardcoded to Modrinth: it loaded
+project details, versions and dependencies through Modrinth and called the
+Modrinth-only install paths with the CurseForge numeric project id — so every
+CurseForge install broke before anything downloaded.
+
+### 2) The fix (renderer only — the backend was already correct)
+- InstallConfirmModal is now provider-aware: detail/versions load through the
+  real provider (CurseForge via the proxy), dependencies are skipped for
+  CurseForge (its API exposes no dependency tree through the proxy — the item
+  installs alone, with an honest note), and both install actions route through
+  installVersion with the real provider. CurseForge gets a single "Install"
+  button instead of the Modrinth-only dependency buttons.
+- ProjectDetail: the CurseForge branch now runs BEFORE the shift-click
+  install-with-dependencies fast path (which is Modrinth-only and was being
+  called with CurseForge project ids). Shift-click on a CurseForge item now
+  installs the item correctly instead of erroring.
+- Tooltips and hint text are provider-aware so nothing promises Modrinth-style
+  dependency behavior for CurseForge items.
+
+### 3) Verification
+- Live E2E against the CurseForge proxy: search -> files -> download-url ->
+  real jar download with a valid zip header (Sodium, project 394468).
+- tsc clean, build clean, smoke 12/12.
+
+### 4) Note
+Modrinth behavior is unchanged — the Modrinth code paths are byte-identical;
+only CurseForge routing was added.
 ## v1.0.47 — Update pipeline self-healing (v1.0.46 failed-update fix)
 
 ### 1) The v1.0.46 update failure (fixed)

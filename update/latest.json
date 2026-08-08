@@ -1,8 +1,8 @@
 {
-  "version": "1.0.47",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.47.exe",
-  "sha256": "d1cdd700d97ce75b96bac4fb28a9b47ee494cb4dd1c629aea07e99d76cf0ac4a",
-  "publishedAt": "2026-08-08T21:20:30.121151Z",
-  "notes": "v1.0.47 - Update pipeline self-healing (fixes the v1.0.46 failed update).\n\n1) The v1.0.46 update showed \"failed\": its manifest url still pointed at the\n1.0.45 installer while version/sha256 described 1.0.46, so the downloaded\nfile failed checksum verification (the launcher correctly refused it). The\nmanifest is corrected; if you saw the failure, check for updates again.\n2) Updater hardening: on a checksum mismatch the launcher now refetches the\nmanifest fresh and retries the download once (covers fixed-just-now manifests\nand stale CDN copies). Only a still-mismatching manifest reports a failure.\n3) Release tooling now derives the manifest url from the version number, so\nthis class of mismatch cannot be generated again.",
-  "size": 83893019
+  "version": "1.0.48",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.48.exe",
+  "sha256": "332914a8fb76a4e88e467448f0e060da820254ad9019d3a6e5caa7b1eb1b8d19",
+  "publishedAt": "2026-08-08T22:03:11.362308Z",
+  "notes": "v1.0.48 - CurseForge installs fixed (no more Modrinth errors).\n\nCurseForge search results showed up fine, but clicking Install mentioned\nModrinth and failed: the install confirmation modal was hardcoded to\nModrinth (detail/versions/deps loaded from Modrinth, install calls used\nthe Modrinth-only paths with the CurseForge numeric id). The modal is now\nprovider-aware: CurseForge items load through the proxy, install through\ninstallVersion with the real provider, and get a single Install button\n(CurseForge exposes no dependency tree, so items install alone).\nProjectDetail also routes CurseForge before the Modrinth-only shift-click\ndependency path. Modrinth behavior is unchanged. Verified live against\nthe proxy (search -> files -> download-url -> real jar download).",
+  "size": 83893073
 }

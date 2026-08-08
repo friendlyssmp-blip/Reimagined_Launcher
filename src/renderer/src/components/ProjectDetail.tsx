@@ -291,6 +291,23 @@ export function ProjectDetail({
       if (latest) installPackVersion(latest.id)
       return
     }
+    // CurseForge first — its shift-click fast path is the same install (the
+    // proxy exposes no dependency tree for CF), so the Modrinth-only
+    // installWithDeps is never called with a CurseForge project id.
+    if (provider === 'curseforge') {
+      setBusy('latest')
+      void api.mods
+        .installCurseforge(activeProfile.id, projectId, { title: detail?.title, iconUrl: detail?.iconUrl, downloads: detail?.downloads }, projectType)
+        .then((mod) => {
+          onInstalledChange(mod)
+          // v1.0.35 — install-complete payoff with the success checkmark.
+          sound.installComplete()
+          notify('success', 'Installed', mod.title, { silent: true })
+        })
+        .catch((err) => notify('error', 'Could not install', friendlyError(err)))
+        .finally(() => setBusy(null))
+      return
+    }
     // Shift-click fast path — install immediately WITH dependencies.
     if (e?.shiftKey) {
       setBusy('latest')
@@ -301,21 +318,6 @@ export function ProjectDetail({
           // v1.0.35 — install-complete payoff with the success checkmark.
           sound.installComplete()
           notify('success', 'Installed with dependencies', res.installed.join(', '), { silent: true })
-        })
-        .catch((err) => notify('error', 'Could not install', friendlyError(err)))
-        .finally(() => setBusy(null))
-      return
-    }
-    if (provider === 'curseforge') {
-      // CurseForge is no longer supported — direct fallback for legacy items.
-      setBusy('latest')
-      void api.mods
-        .installCurseforge(activeProfile.id, projectId, { title: detail?.title, iconUrl: detail?.iconUrl, downloads: detail?.downloads }, projectType)
-        .then((mod) => {
-          onInstalledChange(mod)
-          // v1.0.35 — install-complete payoff with the success checkmark.
-          sound.installComplete()
-          notify('success', 'Installed', mod.title, { silent: true })
         })
         .catch((err) => notify('error', 'Could not install', friendlyError(err)))
         .finally(() => setBusy(null))
@@ -348,6 +350,22 @@ export function ProjectDetail({
         .finally(() => setBusy(null))
       return
     }
+    // CurseForge first — the same install handles plain and shift-click (no
+    // dependency tree is available for CF through the proxy).
+    if (provider === 'curseforge') {
+      setBusy('v:' + v.id)
+      void api.mods
+        .installVersion(activeProfile.id, provider, projectId, v.id, projectType)
+        .then((mod) => {
+          onInstalledChange(mod)
+          // v1.0.35 — install-complete payoff with the success checkmark.
+          sound.installComplete()
+          notify('success', 'Installed', mod.title + ' ' + v.versionNumber, { silent: true })
+        })
+        .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
+        .finally(() => setBusy(null))
+      return
+    }
     // Shift-click fast path — install immediately WITH dependencies.
     if (e?.shiftKey) {
       setBusy('v:' + v.id)
@@ -358,20 +376,6 @@ export function ProjectDetail({
           // v1.0.35 — install-complete payoff with the success checkmark.
           sound.installComplete()
           notify('success', 'Installed with dependencies', res.installed.join(', '), { silent: true })
-        })
-        .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
-        .finally(() => setBusy(null))
-      return
-    }
-    if (provider === 'curseforge') {
-      setBusy('v:' + v.id)
-      void api.mods
-        .installVersion(activeProfile.id, provider, projectId, v.id, projectType)
-        .then((mod) => {
-          onInstalledChange(mod)
-          // v1.0.35 — install-complete payoff with the success checkmark.
-          sound.installComplete()
-          notify('success', 'Installed', mod.title + ' ' + v.versionNumber, { silent: true })
         })
         .catch((err) => notify('error', 'Could not install this version', friendlyError(err)))
         .finally(() => setBusy(null))
@@ -556,7 +560,7 @@ export function ProjectDetail({
                 variant="primary"
                 onClick={(e) => installLatest(e)}
                 disabled={busy !== null}
-                title="Install (hold Shift to install immediately with dependencies)"
+                title={provider === 'curseforge' ? 'Install from CurseForge' : 'Install (hold Shift to install immediately with dependencies)'}
               >
                 {busy === 'latest' ? <><Spinner /> Installing…</> : 'Install'}
               </Button>
@@ -771,7 +775,11 @@ export function ProjectDetail({
                           size="sm"
                           disabled={busy !== null}
                           onClick={(e) => (installed ? void changeVersion(v.id) : void installVersion(v, e))}
-                          title={installed ? 'Switch to this version' : 'Install (hold Shift to install immediately with dependencies)'}
+                          title={installed
+                            ? 'Switch to this version'
+                            : provider === 'curseforge'
+                              ? 'Install this version from CurseForge'
+                              : 'Install (hold Shift to install immediately with dependencies)'}
                         >
                           {busy === 'v:' + v.id || busy === 'cv:' + v.id ? <Spinner /> : installed ? 'Switch' : 'Install'}
                         </Button>
