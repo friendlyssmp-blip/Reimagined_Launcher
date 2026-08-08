@@ -60,7 +60,7 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['updates', 'check for updates', 'update prompt', 'remind'], section: 'updates', label: 'Updates', desc: 'Check for updates; each release is offered via the 3-option prompt' },
   { query: ['theme', 'colors', 'appearance'], section: 'appearance', label: 'Theme', desc: 'The launcher color identity' },
   { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
-  { query: ['preset', 'potato', 'balanced', 'high', 'turbo'], section: 'appearance', label: 'Performance preset', desc: 'How aggressively optimizations apply' },
+  { query: ['preset', 'potato', 'balanced', 'high', 'turbo', 'tier'], section: 'performance', label: 'Performance preset (tier)', desc: 'Engine profile applied on every launch' },
   { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
   { query: ['sound pack', 'customize sounds', 'preview sounds', 'aurora'], section: 'audio', label: 'Preview sounds', desc: 'Hear each action cue (single Aurora theme)' },
   { query: ['about', 'version', 'credits'], section: 'advanced', label: 'About', desc: 'Version, credits and data directory' },
@@ -351,12 +351,7 @@ export function SettingsPage() {
           {section === 'updates' && (
             <div className="panel">
               <div className="panel-title">Updates</div>
-              <p className="panel-sub">
-                The launcher <b>always</b> checks the official Reimagined GitHub repository on its own — no
-                toggle needed. When a new version is found you choose what happens: the launcher
-                <b> never updates itself without your explicit "Update" click</b>.
-              </p>
-              <div style={{ marginTop: 14 }}>
+<div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Re-check frequency while the launcher is open</div>
                 <select
                   className="select sort-select"
@@ -419,40 +414,7 @@ export function SettingsPage() {
               <div style={{ marginTop: 10 }}>
                 <Toggle checked={settings.performanceMode ?? false} onChange={(v) => updateSettings({ performanceMode: v })} label="Performance mode (2D previews, fewer animations)" />
               </div>
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Performance preset</div>
-                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 0, marginBottom: 10, lineHeight: 1.5 }}>
-                  How aggressively the Reimagined Client's native optimizations apply (chunk-build threads, culling thresholds, auto render distance).
-                </p>
-                <div className="row" style={{ gap: 8 }}>
-                  {(['potato', 'balanced', 'high', 'turbo'] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => updateSettings({ preset: p })}
-                      style={{
-                        flex: 1,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        padding: '9px 12px',
-                        borderRadius: 10,
-                        border: `1px solid ${settings.preset === p ? 'var(--accent-3)' : 'var(--border)'}`,
-                        background: settings.preset === p ? 'var(--accent-soft, rgba(139,92,246,0.12))' : 'var(--bg-2)',
-                        color: settings.preset === p ? 'var(--accent-3)' : 'var(--text-2)',
-                        fontSize: 12.5,
-                        fontWeight: settings.preset === p ? 700 : 500,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <PerfTierIcon tier={p} size={14} />
-                      {p === 'potato' ? 'Potato' : p === 'balanced' ? 'Balanced' : p === 'high' ? 'High' : 'Turbo'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="divider" style={{ marginTop: 6 }} />
+<div className="divider" style={{ marginTop: 6 }} />
               <div className="panel-title">Startup Experience</div>
               <p className="panel-sub">A premium waking-up sequence — logo reveal with purple illumination and a soft startup sound. Lightweight, never blocks initialization.</p>
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -553,32 +515,7 @@ export function SettingsPage() {
                 <div className="panel-title">Danger Zone</div>
                 <p className="panel-sub">Actions that cannot be undone</p>
                 <div className="row" style={{ flexWrap: 'wrap' }}>
-                  <Button
-                    variant="danger"
-                    onClick={() =>
-                      setModals({
-                        confirm: {
-                          title: 'Clear all logs?',
-                          message: 'This is a destructive action. Are you sure you want to continue?',
-                          confirmLabel: 'Continue',
-                          danger: true,
-                          onConfirm: () =>
-                            setModals({
-                              confirm: {
-                                title: 'Really clear all logs?',
-                                message: 'The on-disk launcher log will be emptied. This cannot be undone. Confirm once more to proceed.',
-                                confirmLabel: 'Clear all logs',
-                                danger: true,
-                                onConfirm: () => void api.logs.clear().then(() => notify('success', 'Logs cleared'))
-                              }
-                            })
-                        }
-                      })
-                    }
-                  >
-                    Clear all logs
-                  </Button>
-                  <Button
+<Button
                     variant="danger"
                     onClick={() =>
                       setModals({
@@ -834,63 +771,6 @@ function PerformanceSection() {
         ) : null}
       </div>
 
-      {/* v1.0.29 — Extended View: cached distant-chunk terrain (Bobby-style,
-          but Reimagined's own native implementation). Persisted snapshots of
-          visited chunks render as static ghost terrain beyond real RD — no
-          simulation, no entities, no server traffic out there. */}
-      <div className="panel">
-        <div className="panel-title">Extended View</div>
-        <p className="panel-sub">
-          Shows previously-explored terrain far beyond your render distance using cached data — costs
-          almost nothing extra since those chunks aren't actually simulated.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-          <Toggle
-            checked={settings.extendedView ?? true}
-            onChange={(v) => { void updateSettings({ extendedView: v }) }}
-            label="Extended View (cached distant terrain)"
-          />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <Field label={`Extra distance: +${settings.extendedViewDistance ?? 32} chunks`}>
-              <Select
-                value={String(settings.extendedViewDistance ?? 32)}
-                onChange={(e) => void updateSettings({ extendedViewDistance: Number(e.target.value) })}
-              >
-                {[8, 16, 24, 32, 48, 64, 96].map((d) => <option key={d} value={d}>+{d} chunks</option>)}
-              </Select>
-            </Field>
-            <Field label={`Disk cache limit: ${(settings.extendedCacheLimitMB ?? 512) >= 1024 ? `${(settings.extendedCacheLimitMB ?? 512) / 1024} GB` : `${settings.extendedCacheLimitMB ?? 512} MB`}`}>
-              <Select
-                value={String(settings.extendedCacheLimitMB ?? 512)}
-                onChange={(e) => void updateSettings({ extendedCacheLimitMB: Number(e.target.value) })}
-              >
-                {[128, 256, 512, 1024, 2048, 4096].map((mb) => <option key={mb} value={mb}>{mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}</option>)}
-              </Select>
-            </Field>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={async () => {
-              try {
-                const res = await api.extendedView.clearCache(profileId || undefined)
-                notify('success', 'Extended View cache cleared', `Freed ${Math.round(res.freed / 1048576)} MB across ${res.instances} instance(s).`)
-              } catch (err) {
-                notify('error', 'Could not clear cache', friendlyError(err))
-              }
-            }}>
-              Clear cache
-            </Button>
-            <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-              Reclaims disk space used by chunk snapshots (per-world, evicted oldest-first over the limit).
-            </span>
-          </div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-            Chunks you visit are saved as compact static snapshots; when they leave render distance they stay as ghost terrain
-            instead of being discarded. The real simulation radius is <b>never</b> changed — ghosts are static geometry only,
-            no entity/block/server load, and they hand off seamlessly to the live chunk as you approach.
-          </div>
-        </div>
-      </div>
-
       {/* v1.0.30 — Async server-chunk decode: incoming chunk packets from a
           server are decoded OFF the game thread (bounded, relevance-ordered,
           applied nearest-first with a per-tick budget). The game thread never
@@ -939,9 +819,7 @@ function PerformanceSection() {
 
       <div className="panel">
         <div className="panel-title">Recommendations</div>
-        <p className="panel-sub">Based on your hardware and measured sessions — you decide what t
-o apply."
-        </p>
+        <p className="panel-sub">Based on your hardware and measured sessions — you decide what to apply.</p>
         {recs.length === 0 ? (
           <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginTop: 12 }}>
             {loading ? 'Analyzing your machine…' : 'Nothing to suggest right now — your setup already matches your hardware.'}

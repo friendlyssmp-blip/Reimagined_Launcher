@@ -1,5 +1,34 @@
 
 ## v1.0.34 — 3-option update prompt (no silent auto-update) + bundled FPS Boost 1.0.10
+## v1.0.46 — Extended View removed + Settings cleanup
+
+### 1) Extended View removed completely (launcher + bundled FPS Boost 1.0.15)
+- The Extended View ghost-terrain system is gone: the persistent chunk-snapshot cache,
+  the "ED: X/Y" HUD chip, the in-game capture hook and the Settings panel are all removed.
+  It did not deliver the cached distant terrain it promised and added perceived lag, so it
+  was deleted end to end rather than kept half-working.
+- Launcher: extendedView / extendedViewDistance / extendedCacheLimitMB settings removed,
+  IPC clear-cache handler removed, seeding/engine references removed (0 references left).
+- Mod: extview package deleted, chunk-capture mixin removed, EXT HUD chip removed,
+  config fields cleaned. Bundled FPS Boost is now 1.0.15 and auto-upgrades profiles.
+- Any cache folders written by older versions are simply no longer read or written.
+
+### 2) Settings reorganized — duplicates removed
+- Danger Zone "Clear all logs" removed (it was an exact duplicate of General -> Logs
+  -> "Clear Logs"; both clear the on-disk launcher log). Danger Zone keeps Clean Release
+  Reset, which double-confirms.
+- Appearance "Performance preset" picker removed — the Performance tab tier picker is the
+  single control (it applies the preset together with the engine profile).
+- Updates panel: removed the explanatory paragraph about the 3-option update prompt —
+  the panel now keeps only the re-check frequency selector and the Check for Updates
+  button (plus the installed/latest status line).
+- Fixed a corrupted sentence in the Recommendations panel ("you decide what t\no apply"
+  -> "you decide what to apply").
+
+### 3) Verification
+- Extended View: 0 references in launcher and mod sources.
+- tsc (node + web) clean, electron-vite build clean, smoke 12/12.
+- Bundled FPS Boost 1.0.15 (82 KB, was 107 KB with Extended View).
 
 ### Update prompt replaces silent auto-update
 - The launcher NEVER downloads or installs an update without the user choosing

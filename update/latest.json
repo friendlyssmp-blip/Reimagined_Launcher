@@ -1,7 +1,8 @@
 {
-  "version": "1.0.45",
+  "version": "1.0.46",
   "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.45.exe",
-  "sha256": "875efd16fa0471184de0829b33bc01fb30ab027412ece1957e237f00aff245b6",
+  "sha256": "577cbd334b6890d7555dbabef277b7560c238ec0c36f656cdd924ff24587b098",
   "publishedAt": "2026-08-08T20:32:54.495927Z",
-  "notes": "v1.0.45 - honest FPS counter in the FPS Boost HUD (bundled mod 1.0.14).\n\nThe on-screen FPS Boost readout showed 120-130 while vanilla F3 showed\n48-60. Real 30s PERF windows in the game log proved F3 right: avg=55-58\nwith lows of 6-11 FPS. The HUD was using a per-frame exponential moving\naverage that reacts to fast individual frames never actually delivered to\nthe display, inflating the number upward.\n\nFixes:\n- The HUD now shows the SAME metric as vanilla F3: frames rendered in the\n  last 1-second window. No more optimistic readings.\n- The EMA is kept internally only for the Smart Render Distance governor.\n- Bundled FPS Boost updated to 1.0.14 (auto-upgrades existing profiles).\n\nNote on 'feels laggy at 90 FPS': on a 60 Hz panel with VSync off, frames\nabove 60 are never shown (tearing instead of smoothness), and the PERF\nlows (6-11) are real micro-stutters - perceived lag comes from those,\nnot the average.\n"
+  "notes": "v1.0.45 - honest FPS counter in the FPS Boost HUD (bundled mod 1.0.14).\n\nThe on-screen FPS Boost readout showed 120-130 while vanilla F3 showed\n48-60. Real 30s PERF windows in the game log proved F3 right: avg=55-58\nwith lows of 6-11 FPS. The HUD was using a per-frame exponential moving\naverage that reacts to fast individual frames never actually delivered to\nthe display, inflating the number upward.\n\nFixes:\n- The HUD now shows the SAME metric as vanilla F3: frames rendered in the\n  last 1-second window. No more optimistic readings.\n- The EMA is kept internally only for the Smart Render Distance governor.\n- Bundled FPS Boost updated to 1.0.14 (auto-upgrades existing profiles).\n\nNote on 'feels laggy at 90 FPS': on a 60 Hz panel with VSync off, frames\nabove 60 are never shown (tearing instead of smoothness), and the PERF\nlows (6-11) are real micro-stutters - perceived lag comes from those,\nnot the average.\n",
+  "size": 83892523
 }

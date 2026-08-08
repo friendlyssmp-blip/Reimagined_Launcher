@@ -593,33 +593,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return res
   })
 
-  // v1.0.29 — Extended View: wipe the per-instance cached chunk snapshots
-  // (<games>/<profile.gameDir>/config/reimagined-extended-view). Without a
-  // profileId, every instance's cache is cleared. Returns the freed bytes.
-  on(IPC.extendedViewClearCache, async (profileId?: string) => {
-    const fs = await import('node:fs/promises')
-    let profiles: Awaited<ReturnType<typeof profileManager.list>>
-    if (profileId) {
-      const one = await profileManager.get(profileId)
-      profiles = one ? [one] : []
-    } else {
-      profiles = await profileManager.list()
-    }
-    let freed = 0
-    for (const p of profiles) {
-      const dir = path.join(paths.games, p.gameDir, 'config', 'reimagined-extended-view')
-      // Recursive byte count — fs.stat on a directory is ~0 on Windows, which
-      // would report "Freed 0 MB" after wiping gigabytes.
-      freed += await dirBytes(fs, dir)
-      try {
-        await fs.rm(dir, { recursive: true, force: true })
-      } catch {
-        // best effort — a locked file is not worth failing the whole call
-      }
-    }
-    logger.info(`Extended View cache cleared (${Math.round(freed / 1048576)} MB, ${profiles.length} instance(s))`)
-    return { freed, instances: profiles.length }
-  })
 
   /* ------------------------------ shader / crash safety ------------------------------ */
 

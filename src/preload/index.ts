@@ -193,12 +193,7 @@ const api = {
     remove: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostRemove, profileId)
   },
 
-  /** Extended View (v1.0.29) — wipe the cached chunk snapshots for an instance
-   *  (all instances when profileId is omitted). Returns freed bytes. */
-  extendedView: {
-    clearCache: (profileId?: string): Promise<unknown> => ipcRenderer.invoke(IPC.extendedViewClearCache, profileId)
-  },
-  
+
   /** Subscribe to main-process push events. Returns an unsubscribe fn. */
   onEvent: (cb: (event: AppEvent) => void): (() => void) => {
     const listener = (_e: unknown, event: AppEvent): void => cb(event)

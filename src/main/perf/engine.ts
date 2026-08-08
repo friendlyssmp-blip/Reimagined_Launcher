@@ -146,13 +146,6 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     // and the cap silently confused users into thinking their GPU was bad.
     unlimitedFps: false,
     maxFps: 260,
-    // v1.0.29 — Extended View (Bobby-style, native): persist previously-loaded
-    // chunks as compact static snapshots and render them as ghost terrain far
-    // beyond the real render distance. Zero simulation out there — the live
-    // simulation radius stays exactly what the user set. Tuned per tier below.
-    extendedView: true,
-    extendedViewDistance: 32,
-    extendedCacheLimitMB: 512,
     // v1.0.30 — async server-chunk decode: decode chunk packets off the game
     // thread (bounded, relevance-ordered, per-tick apply budget). 0 threads =
     // auto by hardware (1..3); stands down when Sodium is present.
@@ -164,13 +157,13 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     // v1.0.44 — maxFps 60 -> 260: the forced potato cap is gone. Everything
     // else stays conservative (RD 8-10, LOD 48, reduced FX) — stability; only
     // the FPS ceiling is lifted so weak iGPUs show their real uncapped FPS.
-    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 260, extendedViewDistance: 16, extendedCacheLimitMB: 256 }
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 260 }
   }
   if (tier === 'balanced') {
-    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: 260, extendedViewDistance: 16, extendedCacheLimitMB: 512 }
+    return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: 260 }
   }
   if (tier === 'high') {
-    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: 260, extendedViewDistance: 24, extendedCacheLimitMB: 768 }
+    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: 260 }
   }
   // Turbo — maximum FPS, clearly a trade-off preset (never the default).
   // Note: limitEntityAnimations stays OFF — the v1.0.1 bundled mod removed the
@@ -191,8 +184,7 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     fogDistanceCutoff: true,    // fog-assisted distance cutoff for distant terrain
     particleDensity: 0.25,      // quarter-density particles
     maxFps: 260,
-    extendedViewDistance: 8,    // Turbo keeps the extra radius small — fidelity
-    extendedCacheLimitMB: 256   // trades for absolute FPS
+
   }
 }
 

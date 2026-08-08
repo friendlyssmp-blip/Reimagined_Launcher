@@ -210,11 +210,6 @@ export const api = {
     install: () => unwrap<void>(window.reimagined.update.install())
   },
 
-  /** Reimagined Performance Engine (RPE). */
-  extendedView: {
-    clearCache: (profileId?: string) =>
-      unwrap<{ freed: number; instances: number }>(window.reimagined.extendedView.clearCache(profileId))
-  },
 
   /** Reimagined Performance Engine (RPE). */
   perf: {

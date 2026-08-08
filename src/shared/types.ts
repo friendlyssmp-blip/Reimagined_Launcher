@@ -60,13 +60,6 @@ export interface LauncherSettings {
   /** v1.0.36 — CurseForge is served by the user's own backend proxy (Change 5).
    *  The API key never lives in the launcher; paste the proxy base URL here. */
   curseforgeProxyUrl: string
-  /** Cached distant-chunk rendering: persist visited chunks and show them as
-   *  static ghost terrain beyond real render distance (Bobby-style, native). */
-  extendedView: boolean
-  /** Additional ghost radius in chunks rendered beyond the real render distance. */
-  extendedViewDistance: number
-  /** Max disk space (MB) the per-world chunk snapshot cache may use (LRU). */
-  extendedCacheLimitMB: number
 
   /* --------------------------- Async chunk decode (v1.0.30) --------------------------- */
 

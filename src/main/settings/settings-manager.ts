@@ -38,14 +38,6 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // v1.0.43 — force VSync off in options.txt on launch: with VSync on a
   // 60 Hz panel caps FPS at 60 no matter the frame cap. Opt-in, off by default.
   forceVsyncOff: false,
-  // v1.0.29 — Extended View: on by default (genuinely low-cost, purely additive
-  // static visuals beyond render distance — cached terrain is NOT simulated).
-  extendedView: true,
-  // v1.0.41 - Extended View default lowered (32 -> 16): ghost geometry
-  // beyond RD still costs GPU draw calls; 16 keeps the visual benefit
-  // without eating frames on mid-range GPUs.
-  extendedViewDistance: 16,
-  extendedCacheLimitMB: 512,
   // v1.0.30 — async server-chunk decode: on by default (server joins are the
   // worst jank case; decoding off the game thread never blocks the tick).
   asyncChunkDecode: true,
