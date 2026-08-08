@@ -35,6 +35,9 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // default. `unlimitedFps` is a clearly-warned, explicit opt-in that removes
   // the cap — OFF by default (uncapped FPS can trigger thermal shutdown).
   unlimitedFps: false,
+  // v1.0.43 — force VSync off in options.txt on launch: with VSync on a
+  // 60 Hz panel caps FPS at 60 no matter the frame cap. Opt-in, off by default.
+  forceVsyncOff: false,
   // v1.0.29 — Extended View: on by default (genuinely low-cost, purely additive
   // static visuals beyond render distance — cached terrain is NOT simulated).
   extendedView: true,

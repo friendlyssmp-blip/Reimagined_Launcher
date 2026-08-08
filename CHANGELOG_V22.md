@@ -1001,3 +1001,23 @@ real instance (Fabric -26.2-, options.txt had maxFps:60 + enableVsync:true):
 the launcher now rewrites it to maxFps:260 on the next launch, and the bundled
 FPS Boost auto-upgrades 1.0.12 -> 1.0.13 (ensureFpsBoost runs on every launch
 and upgrades profiles carrying an older bundled jar).
+
+
+## v1.0.43 — FPS control refinements (VSync off, launch confirmation, jar cleanup)
+
+Three follow-ups on top of the v1.0.41/v1.0.42 FPS restoration:
+
+- NEW setting "Force VSync off": a 60 Hz panel with VSync on caps the game at
+  60 FPS no matter the frame cap. When enabled, the launcher writes
+  enableVsync:false into options.txt on every launch (new engine.applyVsyncSetting,
+  only touches that one line; works with both the capped and unlimited paths).
+- Launch confirmation logs: every launch now logs the ACTUAL FPS state the game
+  starts with (options.txt maxFps + enableVsync, unlimitedFps flag, tier) and
+  the FPS Boost jar(s) present in mods/ — so any future FPS report is
+  debuggable from real logs, not guesses.
+- Stale jar cleanup: ensureFpsBoost now sweeps the profile's mods dir and
+  removes any leftover Reimagined FPS Boost-*.jar / *.jar.disabled from older
+  launcher versions (even when the profile is already current), so instances
+  never accumulate dead FPS Boost copies.
+
+Verified: tsc node+web clean, build clean, smoke 12/12.

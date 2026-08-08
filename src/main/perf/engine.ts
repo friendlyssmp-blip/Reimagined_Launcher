@@ -265,6 +265,35 @@ export function applyFrameCap(gameDir: string, maxFps: number): void {
   }
 }
 
+/**
+ * v1.0.43 — force VSync off in an instance's real options.txt. A 60 Hz panel
+ * with VSync on caps the game at 60 FPS regardless of the frame cap, so when
+ * the user enables "force VSync off" the launcher rewrites the enableVsync
+ * line on every launch. Never touches any other setting.
+ */
+export function applyVsyncSetting(gameDir: string, forceOff: boolean): void {
+  if (!forceOff) return
+  try {
+    const file = path.join(gameDir, 'options.txt')
+    let content = ''
+    try {
+      content = fs.readFileSync(file, 'utf-8')
+    } catch {
+      content = ''
+    }
+    const patched = content.replace(/^enableVsync:.*$/m, 'enableVsync:false')
+    if (patched === content) {
+      const sep = content && !content.endsWith('\n') ? '\n' : ''
+      fs.writeFileSync(file, content + sep + 'enableVsync:false\n', 'utf-8')
+    } else {
+      fs.writeFileSync(file, patched, 'utf-8')
+    }
+    logger.info('RPE: VSync forced off for this session (user setting).')
+  } catch (err) {
+    logger.warn('RPE: could not force VSync off: ' + (err as Error).message)
+  }
+}
+
 /* ------------------------------ sessions & learning ------------------------------ */
 
 interface TuningState {

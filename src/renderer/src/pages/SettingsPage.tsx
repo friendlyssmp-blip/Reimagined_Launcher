@@ -753,6 +753,22 @@ function PerformanceSection() {
           </div>
         </div>
 
+        {/* v1.0.43 — VSync: a 60 Hz panel with VSync on caps FPS at 60 no
+            matter the frame cap; this forces it off for unlocked frames. */}
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <Toggle
+            checked={settings.forceVsyncOff ?? false}
+            onChange={(v) => {
+              void updateSettings({ forceVsyncOff: v })
+              notify('success', v ? 'VSync forced off' : 'VSync left to the game', v ? 'The launcher will write enableVsync:false into options.txt on the next launch so your monitor refresh rate cannot cap the FPS.' : 'VSync is left exactly as you set it in the game.')
+            }}
+            label="Force VSync off (unlock to your monitor-free FPS)"
+          />
+          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>
+            With VSync on, a 60 Hz monitor caps the game at 60 FPS no matter the frame cap. Enabling this makes the launcher write enableVsync:false on every launch — useful on high-refresh panels with unlocked FPS.
+          </div>
+        </div>
+
         {/* v1.0.26 — recording/streaming guidance (borderless fullscreen is
             applied automatically by the in-game FPS Boost for capture-hook
             compatibility; hardware encoding is a user-side choice). */}

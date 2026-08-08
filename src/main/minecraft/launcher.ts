@@ -906,6 +906,29 @@ class Launcher {
         rpe.applyFrameCap(gameDir, Number(config.maxFps) || 120)
         logger.info(`RPE: seeded FPS Boost config for tier "${tier}" (render cap ${String(config.smartRdCap)}, fps cap ${String(config.maxFps)})`)
       }
+      // v1.0.43 — VSync: a 60 Hz panel with VSync on caps FPS at 60 no matter
+      // the frame cap. When the user enables "force VSync off" the launcher
+      // rewrites the enableVsync line so the game runs at the unlocked rate.
+      rpe.applyVsyncSetting(gameDir, s.forceVsyncOff ?? false)
+      // v1.0.43 — launch confirmation log: the ACTUAL state the game will
+      // start with (options.txt maxFps + vsync) and the FPS Boost jar present.
+      try {
+        const opt = fs.readFileSync(path.join(gameDir, 'options.txt'), 'utf-8')
+        const mf = opt.match(/^maxFps:(\d+)/m)
+        const vs = opt.match(/^enableVsync:(\w+)/m)
+        logger.info(`RPE: launch FPS state -> options.txt maxFps=${mf ? mf[1] : 'n/a'} enableVsync=${vs ? vs[1] : 'n/a'} unlimitedFps=${String(settingsManager.get().unlimitedFps)} tier=${tier}`)
+      } catch {
+        logger.info('RPE: launch FPS state -> options.txt not readable yet')
+      }
+      try {
+        const mdir = path.join(gameDir, 'mods')
+        const jars = fs.existsSync(mdir)
+          ? fs.readdirSync(mdir).filter((f) => f.startsWith('Reimagined FPS Boost-') && f.endsWith('.jar'))
+          : []
+        logger.info(`RPE: FPS Boost jars in mods/ -> ${jars.length ? jars.join(', ') : 'none'}`)
+      } catch {
+        /* best-effort */
+      }
     } catch (err) {
       logger.warn(`Could not write FPS Boost config: ${(err as Error).message}`)
     }

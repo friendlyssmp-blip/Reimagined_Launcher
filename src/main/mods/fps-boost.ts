@@ -171,6 +171,26 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
   const dest = path.join(modsDir, FPS_BOOST_FILENAME)
 
   try {
+    // v1.0.43 — sweep stale bundled jars (older versions left on disk by
+    // previous launcher versions or lost profile entries) so instances never
+    // accumulate dead FPS Boost copies.
+    try {
+      if (fs.existsSync(modsDir)) {
+        for (const f of fs.readdirSync(modsDir)) {
+          const stale =
+            f.startsWith('Reimagined FPS Boost-') &&
+            (f.endsWith('.jar') || f.endsWith('.jar.disabled')) &&
+            f !== FPS_BOOST_FILENAME &&
+            f !== FPS_BOOST_FILENAME + '.disabled'
+          if (stale) {
+            fs.rmSync(path.join(modsDir, f), { force: true })
+            logger.info(`Reimagined FPS Boost: removed stale ${f}`)
+          }
+        }
+      }
+    } catch {
+      /* best-effort: a locked or missing mods dir is not an error */
+    }
     // Re-read the store so concurrent writers (e.g. ensureFabricApi) never
     // clobber each other's mods list.
     const fresh = await profileManager.get(profile.id)

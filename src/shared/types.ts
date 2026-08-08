@@ -47,6 +47,8 @@ export interface LauncherSettings {
    * trigger thermal/power shutdown on some hardware; clearly warned in UI.
    */
   unlimitedFps: boolean
+  /** v1.0.43 — force VSync off in options.txt on launch (uncaps 60 Hz panels). */
+  forceVsyncOff: boolean
   /** Recently performed activities shown on the Home page. */
   recentActivity: RecentActivity[]
 
