@@ -30,6 +30,49 @@ let cacheBytes = 0
 /** In-flight dedupe so the same URL is never downloaded twice at once. */
 const inflight = new Map<string, Promise<string | null>>()
 
+/**
+ * Modrinth thumbnail URL (…/data/{id}/{hash}_96.webp) → best available URL.
+ *
+ * v1.0.57 — Modrinth's API started returning 96×96 `_96.webp` thumbnails as
+ * `icon_url`, which look blurry everywhere in the launcher (Installed rows,
+ * browse cards, detail header). Projects that have the legacy full-res
+ * `icon.png` (512×512) keep serving it — we probe for it once per thumbnail
+ * URL and use it when present, falling back to the thumbnail otherwise.
+ * (Advancement Plaques, Chat Animation… have no `icon.png`; sodium, c2me,
+ * cloth-config and bobby do — so this upgrade fixes exactly the ones that
+ * look bad.)
+ */
+const MODRINTH_THUMB = /^https:\/\/cdn\.modrinth\.com\/data\/([^/]+)\/[^/]+_\d+\.(?:webp|png)$/
+/** thumbnailUrl → bestUrl (or null when the thumbnail stays). Bounded. */
+const bestUrlCache = new Map<string, string | null>()
+
+async function bestIconUrl(url: string): Promise<string> {
+  const m = MODRINTH_THUMB.exec(url)
+  if (!m) return url
+  const known = bestUrlCache.get(url)
+  if (known !== undefined) return known ?? url
+  const candidate = `https://cdn.modrinth.com/data/${m[1]}/icon.png`
+  let best: string | null = null
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 8_000)
+    try {
+      const res = await fetch(candidate, { method: 'HEAD', headers: headers(), signal: ctrl.signal })
+      if (res.ok) best = candidate
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch {
+    /* unreachable CDN — keep the thumbnail */
+  }
+  bestUrlCache.set(url, best ?? null)
+  if (bestUrlCache.size > 400) {
+    const oldest = bestUrlCache.keys().next().value as string
+    bestUrlCache.delete(oldest)
+  }
+  return best ?? url
+}
+
 function isHttpUrl(url: string): boolean {
   return /^https?:\/\//i.test(url)
 }
@@ -81,23 +124,24 @@ async function downloadOnce(url: string): Promise<string | null> {
 /** Fetch an image as a data URL with retries + cache + dedupe. Never throws. */
 export async function fetchImageDataUrl(url: string): Promise<string | null> {
   if (!isHttpUrl(url)) return null
-  const hit = cache.get(url)
+  const effective = await bestIconUrl(url)
+  const hit = cache.get(effective)
   if (hit) return hit
-  const busy = inflight.get(url)
+  const busy = inflight.get(effective)
   if (busy) return busy
 
   const p = (async () => {
     let last: string | null = null
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      last = await downloadOnce(url)
+      last = await downloadOnce(effective)
       if (last) break
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 500 * attempt))
       }
     }
     return last
-  })().finally(() => inflight.delete(url))
+  })().finally(() => inflight.delete(effective))
 
-  inflight.set(url, p)
+  inflight.set(effective, p)
   return p
 }

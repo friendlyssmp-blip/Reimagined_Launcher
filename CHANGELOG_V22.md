@@ -1,3 +1,17 @@
+## v1.0.57 — Modrinth icons render at full resolution again
+
+### Installed / browse / detail icons (Modrinth)
+- **Root cause**: Modrinth's API started returning 96x96 `_96.webp` thumbnails
+  as `icon_url`, so installed items, browse cards and detail headers showed
+  blurry logos (CurseForge avatars stayed sharp, which made Modrinth look
+  broken in comparison).
+- **Fix**: the image proxy now upgrades any Modrinth thumbnail URL to the
+  project's full-res `icon.png` (512x512, e.g. sodium, c2me, cloth-config,
+  bobby) with a one-time probe per URL, falling back to the thumbnail for
+  projects that have no full-res icon (advancement-plaques, chat-animation).
+  Applies everywhere icons render: Installed rows, Modrinth/CurseForge
+  results, project detail, install confirm, update-all preview, downloads.
+
 ## v1.0.56 — TNT/inventory frame-rate fixes + per-shader hardware-fit badges
 
 ### FPS Boost mod 1.0.16 — the two dips from the FPS test V2
