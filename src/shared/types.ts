@@ -332,7 +332,10 @@ export interface ProjectDetail {
   followers: number
   categories: string[]
   updatedAt: string
-  gallery: { url: string; title?: string }[]
+  /* v1.0.54 — `raw` is the provider's highest-resolution source when one
+   * exists (Modrinth original), used for the hero and lightbox so zooming
+   * reveals real detail instead of stretching an optimised image. */
+  gallery: { url: string; raw?: string; title?: string }[]
   versions: ProjectVersionInfo[]
   url: string
   /** Client/server compatibility (Modrinth only — CurseForge has no equivalent). */

@@ -1,3 +1,62 @@
+## v1.0.54 — hover audio pool, crisp transitions, gallery zoom + bug sweep
+
+### 1) Hover audio pool (every interaction is heard)
+- `sound.ts` now runs a small voice pool with priorities instead of
+  aggressive cooldowns: important feedback (0) > clicks/tabs/panels (1) >
+  hover ticks (2). Up to ~8 hovers can play at once; when the pool fills,
+  the OLDEST lowest-priority voice is faded out — a hover never interrupts
+  a click or an important cue, and an important cue can always claim a slot.
+- Hover no longer has a suppressing cooldown (only a 1ms same-event dedupe),
+  so sweeping the mouse across 10–20 buttons now sounds EVERY hover. When
+  many hovers overlap, their individual gain eases down automatically — a
+  soft roll, never a machine-gun or a volume spike.
+- Startup atmosphere is a more developed intro bed (deep sub pad + warm pad
+  + fifth shimmer + faint air — all soft, nothing piercing), and the whole
+  cue still respects master volume and the mixer/limiter.
+
+### 2) Startup fixes
+- The redundant REIMAGINED wordmark below the splash logo was removed — the
+  logo itself carries the branding; the scene now settles on the logo as the
+  single hero before the signature beat.
+- The startup sound could play TWICE (a parent re-render re-fired the inline
+  splash callbacks). Splash callbacks now use stable identities + refs and
+  the splash effect runs exactly once; all beat timers are cleared on
+  unmount.
+
+### 3) Crisp, GPU-clean transitions (no more blur/lag feel)
+- Page transitions no longer scale text mid-flight: `pageIn` is a pure
+  translate + opacity, and the between-page "dip" is opacity-only (the old
+  `scale(0.998)` on the gradient+text layer was the blurry/laggy look).
+- `.page-enter` is promoted to its own compositor layer during the entrance;
+  `prefers-reduced-motion` now disables the ambient layer and all decorative
+  entrance animations (including splash children).
+
+### 4) Gallery sharp + full-screen zoom
+- Screenshots use the provider's highest-resolution source (`raw` original
+  from Modrinth) in the hero and the lightbox — verified the image proxy
+  never downscales, so zooming reveals real detail.
+- The full-screen lightbox adds scroll-wheel zoom (1x–6x, centred on the
+  cursor), with the zoom % in the counter and a reset on navigating between
+  screenshots.
+
+### 5) Update dialog: no more stale flash
+- The moment the download completes, the dialog switches to a final
+  "Closing launcher…" state — the old Cancel/Remind Me Later/Close buttons
+  can never flash back during the ~1.5s before the app exits. If the
+  automatic relaunch hasn't happened within ~3s, a "Relaunch Reimagined"
+  fallback appears instead of a silently dead screen.
+
+### 6) Redundant search bar removed
+- The global top-bar search hides on the Mods and Modpacks screens, where a
+  page-specific search already sits directly below it — no more confusing
+  double search input.
+
+### 7) Sweep + polish
+- Checkboxes (confirm dialogs, toggle rows) now use the Reimagined accent
+  instead of the raw OS widget.
+- "Update All" preview's confirm button shows the REAL total count (not the
+  40-row preview cap) with a clear note that the cap is only the preview.
+
 ## v1.0.53 — premium audio system + living UI motion
 
 ### 1) Premium audio system (same sounds, totally new soundscape)

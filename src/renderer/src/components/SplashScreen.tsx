@@ -21,9 +21,6 @@ const TRAIL = Array.from({ length: 10 }, (_, i) => ({
   size: 2 + (i % 3)
 }))
 
-/* REIMAGINED — letters revealed one by one with light traces. */
-const LETTERS = 'REIMAGINED'.split('')
-
 /* Final outward particle burst at the signature moment (3.3s). */
 const BURST = Array.from({ length: 12 }, (_, i) => {
   const a = (i / 12) * Math.PI * 2
@@ -35,65 +32,76 @@ const BURST = Array.from({ length: 12 }, (_, i) => {
 })
 
 /**
- * Premium startup sequence (v1.0.52) — a cinematic, ~4.5s intro:
+ * Premium startup sequence (v1.0.52, tuned v1.0.54) — a cinematic, ~4.5s intro:
  *
  *   0.00–0.50s  dark atmosphere: faint ambient particles + purple radial glow
  *   0.50–1.40s  an energy line draws a thin luminous ring around the centre
- *               (SVG dash animation with a brightening flash on completion)
  *   1.40–2.30s  the Reimagined logo is physically CONSTRUCTED — a clip-path
  *               wipe with a light sweep across its surface + converging glow
- *   2.30–3.10s  REIMAGINED typography locks in, letter by letter
+ *   2.30–3.10s  the logo settles as the single hero element (the redundant
+ *               REIMAGINED wordmark below it was removed — the logo itself
+ *               already carries the branding)
  *   3.10–3.70s  signature: one final ring sweep, a soft purple light pass
  *               and a tiny outward particle burst — then everything settles
  *   3.70–4.55s  the whole scene dissolves into the launcher behind it
  *
  * Pure CSS transforms/opacity + one SVG — no heavy canvas, no fake progress,
  * skippable by click or any key, and it never blocks launcher init.
+ *
+ * v1.0.54 — onStart/onDone are read through refs and the effect runs once,
+ * so a parent re-render can never re-fire the startup sound (the old
+ * inline-arrow props caused the double startup sound). All beat timers are
+ * tracked and cleared on unmount.
  */
 export function SplashScreen({ onDone, onStart }: { onDone: () => void; onStart?: () => void }) {
   const [phase, setPhase] = useState<'in' | 'out'>('in')
   const finished = useRef(false)
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
+  const onStartRef = useRef(onStart)
+  onStartRef.current = onStart
 
   useEffect(() => {
-    onStart?.()
+    onStartRef.current?.()
+    const timers: number[] = []
     const finish = () => {
       if (finished.current) return
       finished.current = true
       setPhase('out')
-      window.setTimeout(onDone, 620)
+      window.setTimeout(() => onDoneRef.current(), 620)
     }
     // ~4.3s scene + 0.62s dissolve keeps the WHOLE sequence under the 5s cap.
     const t = window.setTimeout(finish, 4300)
+    timers.push(t)
     /* v1.0.53 — one continuous audio composition, each beat landing ~40–70ms
      * AFTER its visual moment so sound feels attached to the motion. Skipping
      * (finished) suppresses any phases still queued. */
-    const beat = (at: number, phase: 'ring' | 'logo' | 'word' | 'signature' | 'transition') => {
-      window.setTimeout(() => {
-        if (!finished.current) sound.startupPhase(phase)
-      }, Math.round(at * 1000))
+    const beat = (at: number, phase: 'ring' | 'logo' | 'signature' | 'transition') => {
+      timers.push(
+        window.setTimeout(() => {
+          if (!finished.current) sound.startupPhase(phase)
+        }, Math.round(at * 1000))
+      )
     }
     beat(0.55, 'ring')
     beat(1.46, 'logo')
-    beat(2.36, 'word')
     beat(3.16, 'signature')
     beat(3.76, 'transition')
     window.addEventListener('pointerdown', finish)
     window.addEventListener('keydown', finish)
     return () => {
-      window.clearTimeout(t)
-      /* v1.0.53 — if the splash unmounts early (toggle off, app close), flag it
-       * so no queued beat sound can fire after the scene is gone. */
+      for (const id of timers) window.clearTimeout(id)
       finished.current = true
       window.removeEventListener('pointerdown', finish)
       window.removeEventListener('keydown', finish)
     }
-  }, [onDone])
+  }, [])
 
   const skip = () => {
     if (finished.current) return
     finished.current = true
     setPhase('out')
-    window.setTimeout(onDone, 620)
+    window.setTimeout(() => onDoneRef.current(), 620)
   }
 
   return (
@@ -134,17 +142,10 @@ export function SplashScreen({ onDone, onStart }: { onDone: () => void; onStart?
         />
       ))}
 
-      {/* 1.40s — the logo is constructed, not faded in */}
+      {/* 1.40s — the logo is constructed, not faded in; the single hero */}
       <div className="splash-logo-wrap">
         <div className="splash-logo-sheen" />
         <img src="./brand/logo.png" alt="Reimagined" draggable={false} className="splash-logo" />
-      </div>
-
-      {/* 2.30s — REIMAGINED typography, letter by letter */}
-      <div className="splash-word" aria-hidden="true">
-        {LETTERS.map((l, i) => (
-          <span key={i} style={{ animationDelay: `${2.3 + i * 0.075}s` }}>{l}</span>
-        ))}
       </div>
 
       {/* 3.10s — signature: one final ring sweep + light pass + tiny burst */}

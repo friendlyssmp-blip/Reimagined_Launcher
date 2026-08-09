@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Sidebar } from './components/Sidebar'
 import { DownloadFlyover } from './components/DownloadFlyover'
@@ -94,6 +94,19 @@ function Shell() {
       sessionStorage.setItem('reimagined:splash', '1')
     }
   }, [splash, settings.startupAnimation])
+
+  /* v1.0.54 — stable identities for the splash callbacks. SplashScreen reads
+   * them through refs and its effect runs once, so no parent re-render can
+   * re-fire the startup sound (the inline-arrow props caused it to play
+   * twice) or reset the splash finish state. */
+  const startSplashSound = useCallback(() => {
+    if (settings.startupSound !== false) sound.startup()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const finishSplash = useCallback(() => {
+    setSplash(false)
+    sessionStorage.setItem('reimagined:splash', '1')
+  }, [])
 
   /* UI is permanently rendered at 100% logical scale (V2) — no user-facing
    * scale option. The layout stays responsive and adapts to the window size;
@@ -246,7 +259,10 @@ function Shell() {
       <Sidebar page={page} onNavigate={navigate} />
       <div className={`main ${switching ? 'switching' : ''}`}>
         <TitleBar />
-        <TopBar onNavigate={navigate} />
+        {/* v1.0.54 — the global top-bar search is redundant on screens that
+            have their own page-level search directly below it (Mods browse,
+            Modpacks) — hide it there, keep it everywhere else. */}
+        <TopBar onNavigate={navigate} hideSearch={page === 'mods' || page === 'modpacks'} />
         {/* The scroll surface is NOT keyed (scroll position survives nav); the
            keyed ErrorBoundary remounts the page subtree, so .page-enter inside
            replays the page-level entrance animation on every section switch. */}
@@ -281,15 +297,7 @@ function Shell() {
       {modals.confirm && <ConfirmDialog {...modals.confirm} />}
       <Toasts />
       {splash && settings.startupAnimation !== false && (
-        <SplashScreen
-          onStart={() => {
-            if (settings.startupSound !== false) sound.startup()
-          }}
-          onDone={() => {
-            setSplash(false)
-            sessionStorage.setItem('reimagined:splash', '1')
-          }}
-        />
+        <SplashScreen onStart={startSplashSound} onDone={finishSplash} />
       )}
 
     </div>

@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import { IconSearch, IconTerminal, IconSettings, IconBell } from './icons'
 import type { Page } from '../App'
 
-export function TopBar({ onNavigate }: { onNavigate: (p: Page) => void }) {
+export function TopBar({ onNavigate, hideSearch = false }: { onNavigate: (p: Page) => void; hideSearch?: boolean }) {
   const { account, activeProfile, running, setModals, notify } = useApp()
 
   return (
@@ -35,18 +35,22 @@ export function TopBar({ onNavigate }: { onNavigate: (p: Page) => void }) {
         )}
       </div>
 
-      <div className="top-search">
-        <IconSearch />
-        <input
-          className="input"
-          placeholder={activeProfile ? `Search ${activeProfile.name}...` : 'Search mods...'}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-              onNavigate('mods')
-            }
-          }}
-        />
-      </div>
+      {/* v1.0.54 — hidden on screens that have their own page-level search
+          (Mods, Modpacks) so there is never a confusing double search bar. */}
+      {!hideSearch && (
+        <div className="top-search">
+          <IconSearch />
+          <input
+            className="input"
+            placeholder={activeProfile ? `Search ${activeProfile.name}...` : 'Search mods...'}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                onNavigate('mods')
+              }
+            }}
+          />
+        </div>
+      )}
 
       <div className="topbar-actions">
         <button

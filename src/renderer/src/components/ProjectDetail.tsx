@@ -290,8 +290,16 @@ export function ProjectDetail({
   // = install immediately with dependencies).
   const [confirm, setConfirm] = useState<InstallTarget | null>(null)
   /* Part 1 (V2) — gallery lightbox: click any screenshot to view it full-size
-   * with prev/next navigation; Esc or click-outside closes. */
+   * with prev/next navigation; Esc or click-outside closes. v1.0.54 adds
+   * scroll-wheel zoom centred on the cursor (reset on navigate / reopen). */
   const [lightbox, setLightbox] = useState<number | null>(null)
+  const [lbZoom, setLbZoom] = useState(1)
+  const [lbOrigin, setLbOrigin] = useState('50% 50%')
+  /* v1.0.54 — reset zoom whenever a different screenshot is opened/navigated. */
+  useEffect(() => {
+    setLbZoom(1)
+    setLbOrigin('50% 50%')
+  }, [lightbox])
   /* Modpack Includes tab data (fetched from the .mrpack index on demand). */
   const [includes, setIncludes] = useState<PackFile[] | null>(null)
   const [includesLoading, setIncludesLoading] = useState(false)
@@ -777,11 +785,13 @@ export function ProjectDetail({
       </div>
 
       {/* Big preview — the project's main gallery image, full-width hero.
-          Clicking it opens the lightbox directly at the first screenshot. */}
+          Clicking it opens the lightbox directly at the first screenshot.
+          v1.0.54 — uses the highest-resolution source when the provider
+          exposes one (Modrinth raw original) instead of the optimised one. */}
       {detail.gallery?.[0]?.url && (
         <div className="detail-hero">
           <ProjectImage
-            src={detail.gallery[0].url}
+            src={detail.gallery[0].raw ?? detail.gallery[0].url}
             alt={detail.gallery[0].title ?? detail.title}
             onClick={() => setLightbox(0)}
             title="View gallery (click to enlarge)"
@@ -1002,12 +1012,35 @@ export function ProjectDetail({
                 </button>
               </>
             )}
-            <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="lightbox-stage"
+              onClick={(e) => e.stopPropagation()}
+              onWheel={(e) => {
+                /* v1.0.54 — wheel zoom centred on the cursor, 1x..6x. Never
+                 * lets the wheel bubble to anything behind the overlay. */
+                e.stopPropagation()
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                if (rect.width === 0 || rect.height === 0) return
+                const px = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100))
+                const py = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100))
+                setLbZoom((z) => {
+                  const next = z * (e.deltaY < 0 ? 1.14 : 1 / 1.14)
+                  return Math.min(6, Math.max(1, next))
+                })
+                setLbOrigin(`${px}% ${py}%`)
+              }}
+            >
               <ProjectImage
-                src={detail.gallery[lightbox].url}
+                src={detail.gallery[lightbox].raw ?? detail.gallery[lightbox].url}
                 alt={detail.gallery[lightbox].title ?? detail.title}
+                style={{
+                  transform: lbZoom > 1 ? `scale(${lbZoom})` : undefined,
+                  transformOrigin: lbOrigin,
+                  transition: 'transform 0.12s var(--ease)',
+                  willChange: lbZoom > 1 ? 'transform' : undefined
+                }}
               />
-              <div className="lightbox-counter">{lightbox + 1} / {detail.gallery.length}</div>
+              <div className="lightbox-counter">{lightbox + 1} / {detail.gallery.length} · {lbZoom > 1 ? `${Math.round(lbZoom * 100)}% · scroll to reset` : 'scroll to zoom'}</div>
             </div>
           </div>,
           document.body

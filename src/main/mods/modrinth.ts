@@ -261,7 +261,7 @@ interface FullProjectResponse {
   downloads: number
   followers: number
   categories: string[]
-  gallery?: { url: string; title?: string; description?: string }[]
+  gallery?: { url: string; raw?: string; title?: string; description?: string }[]
   date_modified?: string
   project_type?: string
   client_side?: 'required' | 'optional' | 'unsupported'
@@ -304,7 +304,9 @@ export async function getProjectFull(projectId: string, projectType: ProjectType
     updatedAt: project.date_modified ?? '',
     gallery: (project.gallery ?? [])
       .filter((g) => g?.url)
-      .map((g) => ({ url: g.url, title: g.title ?? g.description ?? undefined })),
+      /* v1.0.54 — keep the raw original alongside the optimised url so the
+       * detail hero / lightbox can show the sharpest available source. */
+      .map((g) => ({ url: g.url, raw: g.raw ?? undefined, title: g.title ?? g.description ?? undefined })),
     versions: await listVersions(projectId, projectType),
     url: `https://modrinth.com/${project.project_type ?? projectType === 'mod' ? 'mod' : projectType}/${project.slug}`,
     clientSide: project.client_side,

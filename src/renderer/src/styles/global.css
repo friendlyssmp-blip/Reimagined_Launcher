@@ -176,8 +176,10 @@ textarea {
   to { opacity: 1; }
 }
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.992); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  /* v1.0.54 — no scale: scaling text mid-transition renders subpixel-blurry
+   * and reads as "laggy". A pure translate keeps every glyph crisp. */
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
@@ -284,6 +286,23 @@ textarea {
 .app[data-bg-lite] .bg-orb { display: none; }
 .app[data-bg-lite] .bg-dot { opacity: 0.07; }
 .app[data-bg-lite] .bg-dot:nth-child(n+9) { display: none; }
+/* v1.0.54 (sweep) — the app's checkboxes (confirm dialog, toggle rows) were
+ * the raw OS widget; give them the Reimagined accent + consistent size. */
+input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* v1.0.54 — honour the OS reduced-motion preference: kill the ambient layer
+ * and strip decorative entrance animations entirely (scroll stays instant). */
+@media (prefers-reduced-motion: reduce) {
+  .bg-live { display: none; }
+  .page-enter, .tab-fade, .modal, .lightbox-overlay,
+  .splash, .splash * { animation: none !important; }
+}
 .sidebar,
 .main {
   position: relative;
@@ -334,11 +353,11 @@ textarea {
   transition: opacity 0.13s var(--ease), transform 0.13s var(--ease);
 }
 
-/* v1.0.53 — between pages the current content takes a quick breath (dips) and
-   the incoming page rises in via .page-enter. Sub-450ms, no hard cut. */
+/* v1.0.53/54 — between pages the current content takes a quick breath (dips)
+   and the incoming page rises in via .page-enter. Sub-450ms, no hard cut.
+   v1.0.54: opacity-only — the old 0.998 scale blurred the gradient + text. */
 .main.switching .content {
   opacity: 0.94;
-  transform: scale(0.998);
 }
 
 /* Page-level entrance — App wraps each section in .page-enter (remounted per
@@ -347,6 +366,9 @@ textarea {
 .page-enter {
   height: 100%;
   animation: pageIn 0.3s var(--ease);
+  /* v1.0.54 — promote to its own compositor layer during the entrance so
+   * the transition is pure GPU compositing (crisp, no repaint). */
+  will-change: transform, opacity;
 }
 
 /* --------------------------------- titlebar --------------------------------- */
@@ -2897,39 +2919,9 @@ select.select option {
   100% { opacity: 0; background-position: -60% 0; }
 }
 
-/* 2.30–3.10s — REIMAGINED typography locks in, letter by letter. */
-.splash-word {
-  position: absolute;
-  top: calc(50% + clamp(54px, 10.5vh, 88px));
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: clamp(3px, 0.6vw, 8px);
-  font-size: clamp(19px, 4vh, 32px);
-  font-weight: 700;
-  letter-spacing: 0.42em;
-  color: #f4f2ff;
-  opacity: 0;
-  animation: wordLock 1.05s cubic-bezier(0.22, 1, 0.36, 1) 2.25s both;
-  pointer-events: none;
-  text-shadow: 0 0 18px rgba(139, 92, 246, 0.35);
-}
-@keyframes wordLock {
-  0% { opacity: 0; letter-spacing: 0.72em; transform: translateY(6px); }
-  60% { opacity: 1; }
-  100% { opacity: 1; letter-spacing: 0.42em; transform: translateY(0); }
-}
-.splash-word span {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(8px);
-  animation: letterIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes letterIn {
-  0% { opacity: 0; transform: translateY(8px); filter: blur(3px); }
-  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
-}
+/* 2.30–3.10s — v1.0.54: the redundant REIMAGINED wordmark below the logo was
+ * removed (the logo itself carries the branding); the hero logo simply
+ * settles as the single focal point before the signature beat. */
 
 /* 3.10–3.70s — signature: one final controlled ring sweep, then settle. */
 .splash-sig-ring {
@@ -3447,6 +3439,8 @@ select.select:hover {
   border-radius: 12px;
   box-shadow: 0 24px 90px rgba(0, 0, 0, 0.65);
   border: 1px solid var(--border-strong);
+  transform-origin: center;
+  cursor: zoom-in;
 }
 .lightbox-close {
   position: absolute;

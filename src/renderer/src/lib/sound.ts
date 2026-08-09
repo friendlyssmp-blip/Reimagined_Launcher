@@ -1,29 +1,34 @@
 /**
- * Reimagined UI sounds — the Aurora sound library (premium v1.0.53).
+ * Reimagined UI sounds — the Aurora sound library (premium v1.0.54).
  *
  * One theme, everywhere, unconditionally. A small synthesized library built
  * on gentle sine tones with soft rounded attacks, extended releases and the
- * same tonal family as before — the v1.0.53 pass is about CONTINUITY, not
- * new sounds:
+ * same tonal family as before — continuity over new sounds:
  *
  *  - SAME IDENTITY: every existing cue keeps its exact notes and character.
  *  - MIXER: all tones route through an sfx bus, music through a music bus,
  *    both into a master gain and a soft limiter (compressor) so several UI
  *    sounds at once can never spike or clip.
- *  - NO HARD CUTOFFS: every tone now carries a natural release + a micro-tail
- *    (a faint harmonic resonance for ~60–200ms) instead of ending abruptly,
- *    so consecutive sounds feel connected — click ──╮ then ╰─ subtle tail.
- *  - DUCKING: when an important cue plays (notify / install complete / update
- *    available / success / error), the menu music dips ~45% for a third of a
- *    second and glides back — barely noticeable, always smooth.
- *  - INTELLIGENT REPEATS: hover has a 55ms cooldown and clicks a 28ms one,
- *    with a tiny ±1.5% pitch jitter so rapid interaction sounds like a roll,
- *    never a machine-gun. Cues also self-limit in-flight voices.
- *  - CONTEXT CUES: tab(), panelOpen(), panelClose(), menuOpen() — each is the
- *    same family, shaped to feel like the UI is expanding / settling.
+ *  - NO HARD CUTOFFS: every tone carries a natural release + a micro-tail (a
+ *    faint harmonic resonance for ~60–200ms) instead of ending abruptly.
+ *  - DUCKING: an important cue (notify / install complete / update available /
+ *    success / error) dips the menu music ~45% for a third of a second.
+ *  - VOICE POOL (v1.0.54): instead of aggressive cooldowns, short UI sounds
+ *    share a small pool of concurrent voices with priorities:
+ *      0 important feedback (notify, install, download, success, error…)
+ *      1 clicks / tabs / panels / menus
+ *      2 hover ticks
+ *    Rapid mouse sweeps now sound EVERY hover (hover has no suppressing
+ *    cooldown — only a 1ms same-event dedupe), the pool allows ~8 hover
+ *    voices at once, and when it fills the OLDEST lowest-priority voice is
+ *    faded out — a hover never interrupts important feedback, and an
+ *    important cue can always claim a slot from a hover. When many hovers
+ *    overlap their individual gain eases down automatically so the result
+ *    is a soft roll, never a machine-gun or a volume spike.
+ *  - CONTEXT CUES: tab(), panelOpen(), panelClose(), menuOpen().
  *  - STARTUP PHASES: startupPhase('atmosphere'|'ring'|'logo'|'word'|
- *    'signature'|'transition') lets the splash drive one continuous
- *    composition; startup() stays as an alias for the atmosphere phase.
+ *    'signature'|'transition'); startup() stays as an alias for the
+ *    atmosphere phase.
  *  - MASTER VOLUME is always respected; the Settings surface is unchanged.
  */
 
@@ -64,8 +69,70 @@ let musicBase = 0.45 /* music bus level before ducking, relative to master */
 let ducking = false
 let lastHoverAt = 0
 let lastClickAt = 0
-/* Per-cue in-flight voice counters — prevents runaway stacking. */
-const voices = new Map<string, number>()
+
+/* ------------------------- voice pool (v1.0.54) ------------------------- */
+/* A small set of concurrent short voices with priorities. Voices never hard-
+ * cancel each other by default; only when the pool is full does the oldest
+ * LOWEST-priority voice get faded out to make room (a hover can be replaced
+ * by a click, but never the other way around). */
+const POOL_MAX = 10
+/** Priorities — LOWER number = more important. */
+const PRIO_IMPORTANT = 0
+const PRIO_CLICK = 1
+const PRIO_HOVER = 2
+interface Voice {
+  key: string
+  prio: number
+  started: number
+  stop: () => void
+}
+const pool: Voice[] = []
+
+/**
+ * Reserve a voice slot. Returns null when the pool is full AND the incoming
+ * sound is not important enough to justify evicting an older one. The
+ * returned release() removes the slot (eviction fades the tone out first).
+ */
+function acquireVoice(key: string, prio: number, lifeMs: number): (() => void) | null {
+  if (pool.length >= POOL_MAX) {
+    /* Find the oldest voice with the LOWEST priority (highest number). */
+    let worst = -1
+    let worstPrio = -Infinity
+    for (let i = 0; i < pool.length; i++) {
+      const v = pool[i]
+      if (v.prio > worstPrio) {
+        worstPrio = v.prio
+        worst = i
+      } else if (v.prio === worstPrio && (worst < 0 || v.started < pool[worst].started)) {
+        worst = i
+      }
+    }
+    if (worst >= 0 && worstPrio > prio) {
+      /* The incoming sound matters more — fade the old voice out instantly. */
+      pool[worst].stop()
+      pool.splice(worst, 1)
+    } else {
+      return null
+    }
+  }
+  const voice: Voice = { key, prio, started: Date.now(), stop: () => {} }
+  pool.push(voice)
+  let done = false
+  const release = () => {
+    if (done) return
+    done = true
+    const idx = pool.indexOf(voice)
+    if (idx >= 0) pool.splice(idx, 1)
+  }
+  window.setTimeout(release, lifeMs)
+  return release
+}
+
+function activeCount(key: string): number {
+  let n = 0
+  for (const v of pool) if (v.key === key) n++
+  return n
+}
 
 function ac(): AudioContext | null {
   if (typeof window === 'undefined') return null
@@ -119,26 +186,6 @@ function duck(durMs = 320): void {
   }, durMs)
 }
 
-/** Cooldown + in-flight voice accounting for a cue key. Returns false to skip. */
-function gate(key: string, cooldownMs: number, maxVoices: number): boolean {
-  const now = Date.now()
-  if (key === 'hover' && now - lastHoverAt < cooldownMs) return false
-  if (key === 'click' && now - lastClickAt < cooldownMs) return false
-  const active = voices.get(key) ?? 0
-  if (active >= maxVoices) return false
-  voices.set(key, active + 1)
-  const release = () => {
-    const next = (voices.get(key) ?? 1) - 1
-    if (next <= 0) voices.delete(key)
-    else voices.set(key, next)
-  }
-  /* Release after the tone's full life (dur + tail + slack). */
-  window.setTimeout(release, 900)
-  if (key === 'hover') lastHoverAt = now
-  if (key === 'click') lastClickAt = now
-  return true
-}
-
 /** Subtle ±1.5% pitch variation so repeats never sound mechanical. */
 function jitter(base: number): number {
   return base * (1 + (Math.random() - 0.5) * 0.03)
@@ -146,14 +193,13 @@ function jitter(base: number): number {
 
 /**
  * A soft Aurora tone: rounded attack, elegant decay, natural release and a
- * faint harmonic micro-tail. The gain never slams to zero — the envelope
- * steps down to a whisper at the end of the note, then dissolves over the
- * tail, so adjacent sounds feel connected instead of chopped.
+ * faint harmonic micro-tail. Returns a stop() handle so the voice pool can
+ * fade a replaced voice out in ~30ms instead of hard-cutting it.
  */
-function tone(freq: number, dur: number, vol: number, when = 0, glideTo?: number, tail = 90): void {
-  if (!cfg.enabled || vol <= 0) return
+function tone(freq: number, dur: number, vol: number, when = 0, glideTo?: number, tail = 90): () => void {
+  if (!cfg.enabled || vol <= 0) return () => {}
   const c = ac()
-  if (!c || !sfxBus) return
+  if (!c || !sfxBus) return () => {}
   const t0 = c.currentTime + when + 0.004 /* tiny timing offset — feels natural */
   const osc = c.createOscillator()
   const gain = c.createGain()
@@ -175,9 +221,11 @@ function tone(freq: number, dur: number, vol: number, when = 0, glideTo?: number
   osc.start(t0)
   osc.stop(t0 + dur + tail / 1000 + 0.06)
   /* Faint harmonic resonance riding the tail — the "small acoustic space". */
+  let res: OscillatorNode | null = null
+  let rg: GainNode | null = null
   if (tail > 40) {
-    const res = c.createOscillator()
-    const rg = c.createGain()
+    res = c.createOscillator()
+    rg = c.createGain()
     res.type = 'sine'
     res.frequency.value = Math.max(40, freq * 2)
     const rv = Math.min(0.5, v * 0.09)
@@ -189,6 +237,31 @@ function tone(freq: number, dur: number, vol: number, when = 0, glideTo?: number
     res.start(t0 + dur - 0.01)
     res.stop(t0 + dur + tail / 1000 + 0.06)
   }
+  let stopped = false
+  const stop = (): void => {
+    if (stopped) return
+    stopped = true
+    try {
+      const t1 = c.currentTime
+      gain.gain.cancelScheduledValues(t1)
+      gain.gain.setTargetAtTime(0.0001, t1, 0.015)
+      if (rg) {
+        rg.gain.cancelScheduledValues(t1)
+        rg.gain.setTargetAtTime(0.0001, t1, 0.02)
+      }
+    } catch {
+      /* ignore */
+    }
+    window.setTimeout(() => {
+      try {
+        osc.stop()
+        res?.stop()
+      } catch {
+        /* already stopped */
+      }
+    }, 90)
+  }
+  return stop
 }
 
 export const sound = {
@@ -210,14 +283,30 @@ export const sound = {
     return cfg.enabled
   },
 
-  /** Soft whisper of a tick on hover — barely there, felt more than heard. */
+  /**
+   * Soft whisper of a tick on hover. v1.0.54 — NO suppressing cooldown: every
+   * legitimate hover gets a voice (the app-level lastHovered dedupe already
+   * prevents per-element repeats). When several hovers overlap their gains
+   * ease down so rapid sweeps roll instead of stacking loud.
+   */
   hover(): void {
-    if (!cfg.hover || !gate('hover', 55, 3)) return
-    tone(440, 0.05, 0.035, 0, undefined, 60)
+    if (!cfg.hover) return
+    /* 1ms dedupe only guards the same physical event double-firing. */
+    const now = Date.now()
+    if (now - lastHoverAt < 1) return
+    lastHoverAt = now
+    const release = acquireVoice('hover', PRIO_HOVER, 170)
+    if (!release) return
+    const n = activeCount('hover')
+    const norm = n >= 6 ? 0.55 : n >= 4 ? 0.78 : 1
+    tone(440, 0.05, 0.035 * norm, 0, undefined, 60)
   },
   /** Gentle double-tap: a soft primary note plus a quiet low harmonic. */
   click(): void {
-    if (!cfg.click || !gate('click', 28, 4)) return
+    if (!cfg.click || Date.now() - lastClickAt < 28) return
+    lastClickAt = Date.now()
+    const release = acquireVoice('click', PRIO_CLICK, 220)
+    if (!release) return
     const f = jitter(520)
     tone(f, 0.07, 0.07, 0, undefined, 90)
     tone(f * 1.5, 0.055, 0.03, 0.014, undefined, 70)
@@ -225,33 +314,33 @@ export const sound = {
   /** Calm notification ping — important cue: duck the music. */
   notify(): void {
     if (!cfg.notify) return
+    acquireVoice('notify', PRIO_IMPORTANT, 600)
     duck(340)
     tone(720, 0.16, 0.06, 0, undefined, 180)
   },
   /** Download finished — a quiet, satisfying two-note chime. */
   download(): void {
     if (!cfg.download) return
+    acquireVoice('download', PRIO_IMPORTANT, 600)
     duck(320)
     tone(587, 0.12, 0.07, 0, undefined, 140)
     tone(880, 0.18, 0.06, 0.07, undefined, 180)
   },
-  /**
-   * v1.0.35 — install/operation completed: a short, satisfying completion
-   * payoff that lands with the success checkmark — warm, rounded, and brief.
-   */
+  /** v1.0.35 — install/operation completed: a short, satisfying completion
+   *  payoff that lands with the success checkmark — warm, rounded, brief. */
   installComplete(): void {
     if (!cfg.download) return
+    acquireVoice('install', PRIO_IMPORTANT, 700)
     duck(360)
     tone(523, 0.1, 0.075, 0, undefined, 130)
     tone(784, 0.15, 0.07, 0.07, undefined, 160)
     tone(1046, 0.2, 0.045, 0.13, undefined, 200)
   },
-  /**
-   * v1.0.35 — update available: a gentle, positive "something worth noticing"
-   * cue. Routine news, not an alarm — soft two-note rise in the Aurora family.
-   */
+  /** v1.0.35 — update available: a gentle, positive "something worth
+   *  noticing" cue. Routine news, not an alarm. */
   updateAvailable(): void {
     if (!cfg.notify) return
+    acquireVoice('update', PRIO_IMPORTANT, 700)
     duck(380)
     tone(660, 0.12, 0.065, 0, undefined, 150)
     tone(880, 0.17, 0.06, 0.1, undefined, 180)
@@ -274,9 +363,12 @@ export const sound = {
     if (!cfg.enabled) return
     switch (phase) {
       case 'atmosphere':
-        /* Low warm pad breathing in with the dark atmosphere. */
-        tone(110, 1.6, 0.05, 0, 165, 300)
-        tone(220, 1.3, 0.032, 0.12, 330, 260)
+        /* v1.0.54 — a more developed intro bed: deep sub pad, warm pad,
+         * fifth shimmer and a faint high air — all soft, nothing piercing. */
+        tone(55, 2.4, 0.05, 0, 82, 400)
+        tone(110, 1.9, 0.05, 0.06, 165, 340)
+        tone(220, 1.5, 0.028, 0.16, 330, 280)
+        tone(880, 0.8, 0.012, 0.55, undefined, 220)
         break
       case 'ring':
         /* The energy ring draws — a faint rising shimmer. */
@@ -289,7 +381,7 @@ export const sound = {
         tone(880, 0.5, 0.026, 0.2, undefined, 220)
         break
       case 'word':
-        /* REIMAGINED typography — subtle secondary accent. */
+        /* Typography accent — kept as a soft secondary shimmer. */
         tone(660, 0.16, 0.04, 0.05, undefined, 140)
         tone(880, 0.22, 0.028, 0.12, undefined, 180)
         break
@@ -308,6 +400,7 @@ export const sound = {
   /** Success — soft ascending arpeggio (completion moments). */
   success(): void {
     if (!cfg.success) return
+    acquireVoice('success', PRIO_IMPORTANT, 700)
     duck(340)
     tone(523, 0.16, 0.07, 0, undefined, 170)
     tone(659, 0.16, 0.07, 0.08, undefined, 170)
@@ -316,6 +409,7 @@ export const sound = {
   /** Error — two gentle descending tones, never harsh. */
   error(): void {
     if (!cfg.error) return
+    acquireVoice('error', PRIO_IMPORTANT, 700)
     duck(340)
     tone(330, 0.22, 0.07, 0, 262, 190)
     tone(247, 0.26, 0.06, 0.09, 196, 200)
@@ -325,25 +419,37 @@ export const sound = {
 
   /** Switching tabs — a quick, connected two-note glide. */
   tab(): void {
-    if (!cfg.click || !gate('click', 24, 4)) return
+    if (!cfg.click || Date.now() - lastClickAt < 24) return
+    lastClickAt = Date.now()
+    const release = acquireVoice('tab', PRIO_CLICK, 200)
+    if (!release) return
     tone(540, 0.07, 0.055, 0, undefined, 80)
     tone(810, 0.1, 0.028, 0.028, undefined, 100)
   },
   /** A panel opens — the click family with a soft rising layer (expanding). */
   panelOpen(): void {
-    if (!cfg.click || !gate('click', 20, 4)) return
+    if (!cfg.click || Date.now() - lastClickAt < 20) return
+    lastClickAt = Date.now()
+    const release = acquireVoice('panel', PRIO_CLICK, 240)
+    if (!release) return
     tone(480, 0.09, 0.06, 0, 560, 110)
     tone(720, 0.13, 0.028, 0.05, undefined, 130)
   },
   /** A panel closes — softer, shorter, gently falling (settling). */
   panelClose(): void {
-    if (!cfg.click || !gate('click', 20, 4)) return
+    if (!cfg.click || Date.now() - lastClickAt < 20) return
+    lastClickAt = Date.now()
+    const release = acquireVoice('panel', PRIO_CLICK, 220)
+    if (!release) return
     tone(560, 0.08, 0.042, 0, 470, 90)
     tone(420, 0.11, 0.026, 0.04, undefined, 110)
   },
   /** A menu opens — the interface feels like it is expanding. */
   menuOpen(): void {
-    if (!cfg.click || !gate('click', 24, 3)) return
+    if (!cfg.click || Date.now() - lastClickAt < 24) return
+    lastClickAt = Date.now()
+    const release = acquireVoice('menu', PRIO_CLICK, 200)
+    if (!release) return
     tone(520, 0.08, 0.05, 0, 600, 100)
   },
 

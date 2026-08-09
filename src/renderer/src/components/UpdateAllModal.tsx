@@ -61,7 +61,7 @@ export function UpdateAllModal({
             </div>
           ))}
           {hidden > 0 && (
-            <p style={{ color: 'var(--text-3)', fontSize: 12, margin: '4px 2px' }}>…and {hidden} more</p>
+            <p style={{ color: 'var(--text-3)', fontSize: 12, margin: '4px 2px' }}>…and {hidden} more (all will be updated — this is just a preview limit)</p>
           )}
           {rows.length === 0 && (
             <p style={{ color: 'var(--text-3)', fontSize: 13, margin: 0 }}>Nothing to update right now.</p>
@@ -72,8 +72,8 @@ export function UpdateAllModal({
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={onConfirm} disabled={busy || rows.length === 0}>
-            {busy ? <><Spinner /> Updating…</> : `Update All (${rows.length})`}
+          <Button variant="primary" onClick={onConfirm} disabled={busy || items.length === 0}>
+            {busy ? <><Spinner /> Updating…</> : `Update All (${items.length})`}
           </Button>
         </div>
       </div>

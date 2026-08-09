@@ -1,8 +1,8 @@
 {
-  "version": "1.0.53",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.53.exe",
-  "sha256": "3df9aacd5dfeb0020ef0578c0f87161185e2b8078e77c5b6db5b8e1cb07b8e26",
-  "size": 83904161,
-  "publishedAt": "2026-08-09T13:42:15Z",
-  "notes": "Premium audio system (mixer, micro-tails, ducking, anti-clipping, context cues, splash-synced beats) + living UI (page transitions, subtle depth, breathing background with weak-hardware fallback, signature purple line). Same sounds, one cohesive soundscape."
+  "version": "1.0.54",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.54.exe",
+  "sha256": "5a3a78a7028f97a25fcff69d8a8a8478cffe2280369fe61e12dadf61bf7a97d8",
+  "size": 83906026,
+  "publishedAt": "2026-08-09T14:14:43Z",
+  "notes": "Hover audio pool (every hover is heard, priorities protect clicks/important cues, no more machine-gun or dead hovers), crisp GPU transitions (no more text-scale blur), startup sound fixed (played twice) + redundant splash wordmark removed, gallery screenshots now full-res with scroll-wheel zoom in the lightbox, update dialog no longer flashes the stale 3-option prompt before closing (with a manual-relaunch fallback), redundant global search hidden on Mods/Modpacks, styled checkboxes, Update All shows the real count."
 }
