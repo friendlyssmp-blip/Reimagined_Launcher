@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Sidebar } from './components/Sidebar'
 import { DownloadFlyover } from './components/DownloadFlyover'
@@ -46,16 +46,34 @@ export type Page =
 function Shell() {
   const { ready, modals, theme, settings, setModals, account } = useApp()
   const [page, setPage] = useState<Page>('home')
+  /* v1.0.53 — a quick, purposeful breath between pages: the current content
+   * dips for ~120ms, the new page mounts and rises in (page-enter), landing
+   * well under the 450ms target. Removes the hard cut without heavy work. */
+  const [switching, setSwitching] = useState(false)
+  const switchTimer = useRef(0)
   /* v1.0.41 — login gate: without a signed-in account the launcher only shows
    * Home (login), Settings and Account. Play, Instances, Modpacks, Downloads
    * and Logs require a session — navigating to them redirects home. */
   // 'expired' (session expired) counts as NOT logged in - only a live
   // 'online' session unlocks Play/Instances/Modpacks/Downloads/Logs.
   const loggedIn = account.status === 'online'
+  /* Live snapshot of the login state so the delayed page switch re-checks it. */
+  const loggedInRef = useRef(loggedIn)
+  loggedInRef.current = loggedIn
   const navigate = (p: Page): void => {
     const locked = p === 'play' || p === 'profiles' || p === 'mods' || p === 'modpacks' || p === 'downloads' || p === 'logs'
-    setPage(locked && !loggedIn ? 'home' : p)
+    const next = locked && !loggedIn ? 'home' : p
+    if (next === page) return
+    setSwitching(true)
+    window.clearTimeout(switchTimer.current)
+    switchTimer.current = window.setTimeout(() => {
+      /* v1.0.53 — re-check the login gate at fire time (logout during the
+       * 120ms window must never land on a locked page). */
+      setPage(locked && !loggedInRef.current ? 'home' : next)
+      window.setTimeout(() => setSwitching(false), 300)
+    }, 120)
   }
+  useEffect(() => () => window.clearTimeout(switchTimer.current), [])
   /* If the account signs out while a locked page is open, drop back home. */
   useEffect(() => {
     if (!loggedIn && page !== 'home' && page !== 'settings' && page !== 'account') {
@@ -155,7 +173,15 @@ function Shell() {
     }
     const onClick = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null
-      if (t && t.closest('button, .nav-item, .chip, [role="button"]')) sound.click()
+      if (!t) return
+      /* v1.0.53 — elements that play their own cue (tabs, overflow menus) are
+       * excluded so the generic click never double-fires or starves them. */
+      if (t.closest('.tab, .overflow-menu, .modal-overlay')) return
+      /* Navigation items get the connected tab cue; everything else the click. */
+      if (t.closest('button, .nav-item, .chip, [role="button"]')) {
+        if (t.closest('.nav-item')) sound.tab()
+        else sound.click()
+      }
     }
     /* Menu music starts on the first user gesture (autoplay policies). */
     const startMusic = () => {
@@ -189,10 +215,36 @@ function Shell() {
     )
   }
 
+  /* v1.0.53 — living background: CSS-only slow purple orbs + sparse dust, GPU
+   * cheap, and it steps down on weak machines (≤4 threads or potato preset)
+   * so the launcher stays light while Minecraft runs. */
+  const liteBg =
+    (typeof navigator !== 'undefined' && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4) ||
+    settings?.preset === 'potato'
+
   return (
-    <div className="app" data-theme={theme}>
+    <div className="app" data-theme={theme} data-bg-lite={liteBg ? '1' : undefined}>
+      <div className="bg-live" aria-hidden="true">
+        <span className="bg-orb bg-orb-1" />
+        <span className="bg-orb bg-orb-2" />
+        <span className="bg-orb bg-orb-3" />
+        {BG_DOTS.map((d, i) => (
+          <span
+            key={i}
+            className="bg-dot"
+            style={{
+              left: `${d.left}%`,
+              top: `${d.top}%`,
+              width: d.size,
+              height: d.size,
+              animationDelay: `${d.delay}s`,
+              animationDuration: `${d.dur}s`
+            }}
+          />
+        ))}
+      </div>
       <Sidebar page={page} onNavigate={navigate} />
-      <div className="main">
+      <div className={`main ${switching ? 'switching' : ''}`}>
         <TitleBar />
         <TopBar onNavigate={navigate} />
         {/* The scroll surface is NOT keyed (scroll position survives nav); the
@@ -243,6 +295,18 @@ function Shell() {
     </div>
   )
 }
+
+/* Deterministic sparse dust for the living background — pure transform/opacity. */
+const BG_DOTS = Array.from({ length: 12 }, (_, i) => {
+  const seed = ((i * 1301 + 5731) % 233280) / 233280
+  return {
+    left: 2 + seed * 96,
+    top: 4 + ((i * 53) % 92),
+    size: 1 + ((i * 3) % 2),
+    delay: (i % 6) * 7,
+    dur: 26 + ((i * 17) % 30)
+  }
+})
 
 export default function App() {
   return (

@@ -45,6 +45,10 @@
   --radius-sm: 7px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dur: 0.18s;
+  /* v1.0.53 — unified motion language */
+  --motion-fast: 0.12s;
+  --motion: 0.2s;
+  --motion-slow: 0.34s;
 
   /* Layout (unchanged — components depend on these) */
   --sidebar-w: 214px;
@@ -56,6 +60,9 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-2: 0 10px 34px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 6px 24px rgba(139, 92, 246, 0.22);
+  /* v1.0.53 — subtle depth hierarchy (noticeable subconsciously, never heavy) */
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.28), 0 12px 30px rgba(0, 0, 0, 0.3);
+  --shadow-elev: 0 2px 8px rgba(0, 0, 0, 0.36), 0 14px 34px rgba(0, 0, 0, 0.36);
 
   /* Type */
   --font: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
@@ -169,8 +176,8 @@ textarea {
   to { opacity: 1; }
 }
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(12px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
@@ -229,6 +236,83 @@ textarea {
   transition: background-color 0.25s var(--ease);
 }
 
+/* v1.0.53 — living background: slow purple orbs + sparse dust, pure
+ * transform/opacity (GPU-cheap), almost imperceptible, and it steps down on
+ * weak machines so the launcher stays light while Minecraft runs. */
+.bg-live {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.1), transparent 62%);
+  will-change: transform, opacity;
+  animation: bgOrbDrift 52s ease-in-out infinite, bgOrbBreathe 9s ease-in-out infinite;
+}
+.bg-orb-1 { width: 640px; height: 640px; left: -160px; top: -170px; }
+.bg-orb-2 { width: 520px; height: 520px; right: -180px; top: 20%; animation-duration: 64s, 11s; animation-delay: -18s, -4s; }
+.bg-orb-3 { width: 460px; height: 460px; left: 22%; bottom: -220px; animation-duration: 58s, 8s; animation-delay: -32s, -6s; }
+@keyframes bgOrbDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(44px, -30px) scale(1.05); }
+  66% { transform: translate(-30px, 22px) scale(0.97); }
+}
+@keyframes bgOrbBreathe {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.58; }
+}
+.bg-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--accent-3);
+  opacity: 0.12;
+  animation-name: bgDotRise;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes bgDotRise {
+  0% { opacity: 0; transform: translateY(0); }
+  12% { opacity: 0.18; }
+  88% { opacity: 0.1; }
+  100% { opacity: 0; transform: translateY(-90px); }
+}
+/* Weak machines (<=4 threads or potato preset): drop the orbs, halve the dust. */
+.app[data-bg-lite] .bg-orb { display: none; }
+.app[data-bg-lite] .bg-dot { opacity: 0.07; }
+.app[data-bg-lite] .bg-dot:nth-child(n+9) { display: none; }
+.sidebar,
+.main {
+  position: relative;
+  z-index: 1;
+}
+
+/* v1.0.53 — Reimagined signature: a thin purple line that draws itself in. */
+@keyframes sigBar {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes sigDraw {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 0.85; }
+}
+/* A hairline of purple light draws across the top of every modal on open. */
+.modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-border), transparent);
+  opacity: 0.85;
+  animation: sigDraw 0.5s var(--ease) 0.08s both;
+  pointer-events: none;
+}
+
 .main {
   flex: 1;
   min-width: 0;
@@ -247,6 +331,14 @@ textarea {
     radial-gradient(700px 300px at -8% 110%, rgba(139, 92, 246, 0.07), transparent 60%),
     var(--bg-1);
   animation: fadeIn var(--dur) ease;
+  transition: opacity 0.13s var(--ease), transform 0.13s var(--ease);
+}
+
+/* v1.0.53 — between pages the current content takes a quick breath (dips) and
+   the incoming page rises in via .page-enter. Sub-450ms, no hard cut. */
+.main.switching .content {
+  opacity: 0.94;
+  transform: scale(0.998);
 }
 
 /* Page-level entrance — App wraps each section in .page-enter (remounted per
@@ -254,7 +346,7 @@ textarea {
    of a hard cut. Height 100% so inner pages that use height:100% still fill. */
 .page-enter {
   height: 100%;
-  animation: pageIn 0.24s var(--ease);
+  animation: pageIn 0.3s var(--ease);
 }
 
 /* --------------------------------- titlebar --------------------------------- */
@@ -496,6 +588,8 @@ textarea {
   border-radius: 0 3px 3px 0;
   background: var(--accent);
   box-shadow: 0 0 10px var(--accent-glow);
+  transform-origin: top;
+  animation: sigBar 0.4s var(--ease);
 }
 .nav-item svg {
   flex: 0 0 auto;
@@ -622,12 +716,14 @@ textarea {
   white-space: nowrap;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
     color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 .btn:hover:not(:disabled) {
   background: var(--bg-4);
   border-color: var(--accent-border);
   color: var(--text-1);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(168, 85, 247, 0.12);
 }
 .btn:active:not(:disabled) {
   transform: translateY(0) scale(0.97);
@@ -976,6 +1072,7 @@ select.select option {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 18px;
+  box-shadow: var(--shadow-panel);
 }
 .panel-title {
   font-size: 13px;
@@ -1036,6 +1133,7 @@ select.select option {
   border-radius: 14px;
   box-shadow: var(--shadow-2), 0 0 0 1px var(--accent-glow);
   animation: slideUp 0.2s var(--ease);
+  position: relative;
   overflow: hidden;
 }
 .modal-lg {

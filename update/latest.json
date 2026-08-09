@@ -1,8 +1,8 @@
 {
-  "version": "1.0.52",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.52.exe",
-  "sha256": "29848a13df203b7c68c009de89333897cc9b867c7e47421f200259cfebb06ec7",
-  "size": 83902188,
-  "publishedAt": "2026-08-09T03:42:15Z",
-  "notes": "Versions you can actually see (undefined version bug fixed at the source: raw Modrinth payloads are normalized), CurseForge no longer times out (60s + retry for the sleeping Render proxy) and Modrinth rate-limits are handled (retry + paced enrich), cross-provider already-installed detection between Modrinth and CurseForge (incl. dependencies), sanitized HTML descriptions/changelogs, content type now travels into CurseForge with per-type categories, default A-Z name sort, searchable version pickers, styled overflow menu, and no more false \"Update Available\"."
+  "version": "1.0.53",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.53.exe",
+  "sha256": "3df9aacd5dfeb0020ef0578c0f87161185e2b8078e77c5b6db5b8e1cb07b8e26",
+  "size": 83904161,
+  "publishedAt": "2026-08-09T13:42:15Z",
+  "notes": "Premium audio system (mixer, micro-tails, ducking, anti-clipping, context cues, splash-synced beats) + living UI (page transitions, subtle depth, breathing background with weak-hardware fallback, signature purple line). Same sounds, one cohesive soundscape."
 }

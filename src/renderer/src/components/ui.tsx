@@ -16,6 +16,13 @@ export function IconButton({ className = '', children, ...rest }: ButtonHTMLAttr
 }
 
 export function Modal({ title, onClose, children, footer, size }: { title: ReactNode; onClose?: () => void; children: ReactNode; footer?: ReactNode; size?: 'lg' }) {
+  /* v1.0.53 — the panel feels alive: a soft expanding cue on open, a gentle
+   * settling cue on close (component unmount). */
+  useEffect(() => {
+    sound.panelOpen()
+    return () => sound.panelClose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   return (
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className={`modal ${size === 'lg' ? 'modal-lg' : ''}`}>
@@ -99,6 +106,16 @@ export function AnimatedNumber({ value, format }: { value: number; format?: (v: 
 export function TabBar({ tabs, active, onChange, className = '' }: { tabs: { id: string; label: ReactNode }[]; active: string; onChange: (id: string) => void; className?: string }) {
   const listRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; width: number } | null>(null)
+  /* v1.0.53 — tab switches get the connected two-note cue (skip the mount). */
+  const firstTab = useRef(true)
+  useEffect(() => {
+    if (firstTab.current) {
+      firstTab.current = false
+      return
+    }
+    sound.tab()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
   useLayoutEffect(() => {
     const measure = () => {
       const el = listRef.current?.querySelector<HTMLElement>('[data-active="true"]')

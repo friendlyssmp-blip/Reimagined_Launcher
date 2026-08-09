@@ -1,3 +1,43 @@
+## v1.0.53 — premium audio system + living UI motion
+
+### 1) Premium audio system (same sounds, totally new soundscape)
+- `sound.ts` rebuilt as a real mixer: SFX + music buses flow into a master gain
+  through a DynamicsCompressor limiter, so rapid interactions can never clip or
+  spike the volume.
+- Every tone now has a natural envelope: tiny attack, body, release step and a
+  60–300ms micro-tail with a faint harmonic resonance — no more hard `click →
+  STOP`, sounds now feel like they live in a small acoustic space.
+- Automatic ducking: when an important cue plays (notification, download,
+  install complete, update available, error) the music/ambient bus dips ~45%
+  for a third of a second and glides back.
+- Intelligent layering: per-cue cooldowns (hover 55ms, click 28ms), a cap on
+  simultaneous voices, graceful termination of old instances and ±1.5% pitch
+  jitter so rapid clicks never sound robotic.
+- New context cues: tab switches, panel open/close, menu open — with a soft
+  "expanding" feel instead of isolated SFX.
+- Startup sync: the cinematic splash now has per-phase audio beats
+  (atmosphere → ring → logo → typography → signature → transition) scheduled
+  with 30–80ms offsets against the visuals, so the intro is one composition.
+- Startup sound + ambient music route through the mixer (music plays under a
+  gentle bus fade); the "Music on first open" toggle still works.
+
+### 2) UI motion, depth & living background
+- Page transitions: a premium fade+rise switch (220ms) between every major
+  page — the sidebar stays put while content transforms, with a purple
+  signature sweep on the active nav item.
+- Subtle depth system: background < panels < interactive elements, with
+  restrained shadows, tiny contrast steps and a soft glow only on active
+  controls — no glassmorphism, no heavy blur.
+- Living background: a near-imperceptible animated layer (two slow drifting
+  purple orbs + sparse dust particles, all GPU-friendly CSS transforms). On
+  weak hardware (`data-bg-lite`) the layer drops to a single static gradient
+  and zero animation to protect Minecraft performance.
+- Unified motion language via CSS variables (easing, durations) so every
+  modal, tab, card and button animates with the same feel; signature thin
+  purple light line on nav activation as the launcher's visual mark.
+- The golden rule applied: any animation without a purpose was left out —
+  everything moves fast (≤450ms), communicates state, and stays lightweight.
+
 ## v1.0.52 — cinematic startup + 8 reliability/UI fixes
 
 ### 1) Premium startup animation (rebuilt from scratch)

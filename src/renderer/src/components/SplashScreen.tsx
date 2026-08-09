@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { sound } from '../lib/sound'
 
 /* Deterministic ambient field — pure transform/opacity, GPU-cheap. */
 const AMBIENT = Array.from({ length: 26 }, (_, i) => {
@@ -63,10 +64,26 @@ export function SplashScreen({ onDone, onStart }: { onDone: () => void; onStart?
     }
     // ~4.3s scene + 0.62s dissolve keeps the WHOLE sequence under the 5s cap.
     const t = window.setTimeout(finish, 4300)
+    /* v1.0.53 — one continuous audio composition, each beat landing ~40–70ms
+     * AFTER its visual moment so sound feels attached to the motion. Skipping
+     * (finished) suppresses any phases still queued. */
+    const beat = (at: number, phase: 'ring' | 'logo' | 'word' | 'signature' | 'transition') => {
+      window.setTimeout(() => {
+        if (!finished.current) sound.startupPhase(phase)
+      }, Math.round(at * 1000))
+    }
+    beat(0.55, 'ring')
+    beat(1.46, 'logo')
+    beat(2.36, 'word')
+    beat(3.16, 'signature')
+    beat(3.76, 'transition')
     window.addEventListener('pointerdown', finish)
     window.addEventListener('keydown', finish)
     return () => {
       window.clearTimeout(t)
+      /* v1.0.53 — if the splash unmounts early (toggle off, app close), flag it
+       * so no queued beat sound can fire after the scene is gone. */
+      finished.current = true
       window.removeEventListener('pointerdown', finish)
       window.removeEventListener('keydown', finish)
     }

@@ -726,6 +726,8 @@ export function ProjectDetail({
                 onClick={() => {
                   const rect = overflowRef.current?.getBoundingClientRect()
                   setOverflowAlign(rect && rect.left < 220 ? 'left' : 'right')
+                  /* v1.0.53 — the menu feels like it is expanding. */
+                  if (!overflowOpen) sound.menuOpen()
                   setOverflowOpen((v) => !v)
                 }}
                 title="More actions"
