@@ -3,7 +3,7 @@
  *
  * When browsing shader packs, every card (and the detail page) shows a badge
  * telling the user whether THIS machine can realistically run that pack:
- * green "Apto para tu PC", amber "Limitado", or red "No apto para tu PC"
+ * green "Suitable for your PC", amber "Limited", or red "Not suitable for your PC"
  * (always installable — it is their call, but they know the risk up front).
  *
  * The verdict is based on the real Shader Guard assessment (VRAM / vendor /
@@ -27,36 +27,36 @@ export function shaderFitFor(
     return lite
       ? {
           level: 'limited',
-          label: 'Apto (versión ligera)',
-          hint: 'Shader ligero — tu GPU (poca VRAM) puede correrlo, pero con cuidado.'
+          label: 'Suitable (light version)',
+          hint: 'Lightweight shader — your GPU (low VRAM) can handle it, but with care.'
         }
       : {
           level: 'no',
-          label: 'No apto para tu PC',
-          hint: 'Instalar bajo tu propio riesgo — tu GPU tiene poca VRAM y puede crashear o ir muy lento.'
+          label: 'Not suitable for your PC',
+          hint: 'Install at your own risk — your GPU has low VRAM and may crash or run very slowly.'
         }
   }
   if (vram >= 4) {
-    return { level: 'ok', label: 'Apto para tu PC', hint: 'Tu GPU puede con este shader sin problemas.' }
+    return { level: 'ok', label: 'Suitable for your PC', hint: 'Your GPU can run this shader without issues.' }
   }
   if (vram >= 2) {
     return {
       level: 'limited',
-      label: 'Limitado',
-      hint: 'Puede ir corto de VRAM a distancia de renderizado alta — prueba con la distancia baja.'
+      label: 'Limited',
+      hint: 'May run low on VRAM at high render distance — try lowering the render distance.'
     }
   }
   if (support?.level === 'unsupported') {
     return {
       level: 'no',
-      label: 'No apto para tu PC',
-      hint: 'Instalar bajo tu propio riesgo — tu GPU/driver no soporta shaders de forma fiable.'
+      label: 'Not suitable for your PC',
+      hint: 'Install at your own risk — your GPU/driver does not support shaders reliably.'
     }
   }
   return {
     level: 'limited',
-    label: 'Sin verificar',
-    hint: 'No se pudo evaluar tu hardware — instalar bajo tu propio riesgo.'
+    label: 'Unverified',
+    hint: 'Could not evaluate your hardware — install at your own risk.'
   }
 }
 

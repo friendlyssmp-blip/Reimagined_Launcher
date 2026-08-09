@@ -12,7 +12,12 @@ export function AccountPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
   if (!signedIn) {
     return (
       <div className="panel" style={{ textAlign: 'center', padding: 52, maxWidth: 460, margin: '60px auto' }}>
-        <div className="progress-ring" style={{ marginBottom: 18 }}><IconUser style={{ width: 24, height: 24 }} /></div>
+        {/* v1.0.60 — was .progress-ring, which SPINS forever (it's the loader
+            style) — the idle "Not signed in" screen looked like it was loading
+            endlessly. The empty-state badge is a static, polished treatment. */}
+        <div className="empty-illustration" style={{ margin: '0 auto 18px', width: 76, height: 76 }}>
+          <IconUser style={{ width: 34, height: 34 }} />
+        </div>
         <h3 style={{ fontSize: 16, marginBottom: 8 }}>Not signed in</h3>
         <p className="panel-sub" style={{ marginBottom: 20 }}>
           Sign in with Microsoft to launch Minecraft and sync your account across the launcher.
@@ -58,7 +63,7 @@ export function AccountPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
         </div>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div className="hero-tagline">{account.status === 'online' ? 'Online' : account.status === 'expired' ? 'Session expired' : 'Offline'}</div>
-          <h2 style={{ fontSize: 24, color: '#fff', textShadow: '2px 2px 0 #3a3a3a, 4px 4px 0 rgba(0,0,0,0.5)' }}>{p.name}</h2>
+          <h2 style={{ fontSize: 24, color: 'var(--text-1)', textShadow: '0 2px 14px rgba(0, 0, 0, 0.45)' }}>{p.name}</h2>
           <div className="profile-meta" style={{ marginTop: 8 }}>
             <Badge>{account.status === 'online' ? 'Connected' : account.status === 'expired' ? 'Needs re-login' : 'Offline'}</Badge>
           </div>

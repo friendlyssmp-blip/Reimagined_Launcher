@@ -1,7 +1,7 @@
 {
-  "version": "1.0.59",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.59.exe",
-  "sha256": "9a0e41963cc4e6287f77999af6d888c306cec7faae4216a6479e3acde33695f1",
-  "size": 83910618,
-  "notes": "v1.0.59 - no more forced re-login after updates (Microsoft session refresh race fixed)"
+  "version": "1.0.60",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.60.exe",
+  "sha256": "e24393136f80cfa7fa2f60f8cde0e35e4c345b145ad5ee5388fb7479025057ed",
+  "size": 83911801,
+  "notes": "v1.0.60 - full UI polish pass (premium surfaces, theme picker, empty states, console) + entire UI in English"
 }

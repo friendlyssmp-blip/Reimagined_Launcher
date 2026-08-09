@@ -62,7 +62,7 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
         </div>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div className="hero-tagline">Ready to play</div>
-          <h2 style={{ fontSize: 24, color: '#fff', textShadow: '2px 2px 0 #3a3a3a, 4px 4px 0 rgba(0,0,0,0.5)' }}>
+          <h2 style={{ fontSize: 24, color: 'var(--text-1)', textShadow: '0 2px 14px rgba(0, 0, 0, 0.45)' }}>
             {activeProfile ? activeProfile.name : 'No instance selected'}
           </h2>
           <div className="profile-meta" style={{ marginTop: 8 }}>

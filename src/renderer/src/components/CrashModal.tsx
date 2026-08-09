@@ -69,12 +69,12 @@ export function CrashModal() {
       <div
         className="banner"
         style={{
-          borderColor: 'var(--danger, #f87171)',
+          borderColor: 'var(--danger)',
           background: 'rgba(248, 113, 113, 0.08)',
           color: 'var(--text-1)'
         }}
       >
-        <b style={{ color: 'var(--danger, #f87171)' }}>{report.profileName}</b> crashed.
+        <b style={{ color: 'var(--danger)' }}>{report.profileName}</b> crashed.
         <span style={{ color: 'var(--text-3)' }}>
           {' '}· {report.file} — generated {new Date(report.at).toLocaleTimeString()}
         </span>
@@ -84,7 +84,7 @@ export function CrashModal() {
       {report.confidence && (
         <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--text-3)' }}>
           Analysis confidence:{' '}
-          <b style={{ color: report.confidence === 'high' ? 'var(--green, #34d399)' : report.confidence === 'medium' ? 'var(--yellow, #fbbf24)' : 'var(--text-2)' }}>
+          <b style={{ color: report.confidence === 'high' ? 'var(--success)' : report.confidence === 'medium' ? 'var(--warn)' : 'var(--text-2)' }}>
             {report.confidence === 'high' ? 'high — clear exception and stack evidence' : report.confidence === 'medium' ? 'medium — exception identified, cause not pinned down' : 'low — cause uncertain'}
           </b>
           {report.confidence === 'low' && <span> — the report is generic; see the evidence below.</span>}
@@ -116,7 +116,7 @@ export function CrashModal() {
           <div className="panel-title">Root cause</div>
           <p className="mono" style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6, lineHeight: 1.5, wordBreak: 'break-word' }}>
             {report.exception ?? ''}
-            {report.causedBy ? <span style={{ color: 'var(--danger, #f87171)' }}>{'\n'}Caused by: {report.causedBy}</span> : null}
+            {report.causedBy ? <span style={{ color: 'var(--danger)' }}>{'\n'}Caused by: {report.causedBy}</span> : null}
           </p>
         </div>
       )}

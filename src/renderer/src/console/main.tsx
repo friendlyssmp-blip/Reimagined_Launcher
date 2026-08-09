@@ -130,12 +130,16 @@ function ConsoleApp() {
   return (
     <div className="cw">
       <div className="cw-titlebar">
-        <span className="cw-dot" />
+        {/* v1.0.60 — the status dot must reflect REAL state: grey while idle,
+            green + pulsing only while a game is running (it was always green). */}
+        <span className={`cw-dot${running ? ' on' : ''}`} />
         <span className="cw-title">Game Console</span>
         <span className={`cw-status${running ? ' on' : ''}`}>{running ? '● running' : 'idle'}</span>
         <div className="cw-controls">
           <button className="cw-ctl" title="Minimize" onClick={() => void api.console.minimize()}>
-            –
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 12h14" />
+            </svg>
           </button>
           <button
             className="cw-ctl cw-close"

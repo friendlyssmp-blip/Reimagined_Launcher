@@ -648,6 +648,15 @@ function PerformanceSection() {
 
   const hw = status?.hardware
   const tierLabel = status?.tier === 'potato' ? 'Potato' : status?.tier === 'high' ? 'High' : status?.tier === 'turbo' ? 'Turbo' : 'Balanced'
+  /* v1.0.60 — the preset row must SHOW which tier is selected (it previously
+     styled every button identically, so the current choice was invisible).
+     When auto-tune drives the tier, the Auto button is the active one; while
+     the status is still loading, fall back to the synchronous settings so
+     the highlight is never wrong even for a frame. */
+  const activeTier =
+    status?.tierSource === 'auto'
+      ? 'auto'
+      : status?.tier ?? (settings.perfAutoTune ? 'auto' : settings.perfTier !== 'auto' ? settings.perfTier : 'balanced')
 
   return (
     <>
@@ -736,29 +745,33 @@ function PerformanceSection() {
           </div>
           <div style={{ flex: 1 }} />
           <div className="row" style={{ gap: 6 }}>
-            {(['auto', 'potato', 'balanced', 'high', 'turbo'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => void setTier(t)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 5,
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-2)',
-                  color: 'var(--text-2)',
-                  fontSize: 11.5,
-                  cursor: 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                {t === 'auto' ? <IconSparkle style={{ width: 13, height: 13 }} /> : <PerfTierIcon tier={t} size={13} />}
-                {t === 'auto' ? 'Auto' : ''}
-              </button>
-            ))}
+            {(['auto', 'potato', 'balanced', 'high', 'turbo'] as const).map((t) => {
+              const on = activeTier === t
+              return (
+                <button
+                  key={t}
+                  onClick={() => void setTier(t)}
+                  title={on ? `Current preset: ${t === 'auto' ? 'Auto' : t}` : `Select the ${t} preset`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
+                    padding: '6px 11px',
+                    borderRadius: 8,
+                    border: `1px solid ${on ? 'var(--accent-3)' : 'var(--border)'}`,
+                    background: on ? 'var(--accent-soft, rgba(139,92,246,0.12))' : 'var(--bg-2)',
+                    color: on ? 'var(--accent-3)' : 'var(--text-2)',
+                    fontSize: 11.5,
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  {t === 'auto' ? <IconSparkle style={{ width: 13, height: 13 }} /> : <PerfTierIcon tier={t} size={13} />}
+                  {t === 'auto' ? 'Auto' : t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -851,10 +864,10 @@ function PerformanceSection() {
         {status?.sessions?.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
             {status.sessions.slice(0, 6).map((s, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--bg-2)', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 12px', fontSize: 12 }}>
                 <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>{new Date(s.at).toLocaleDateString()}</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-1)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.profileName}</span>
-                <span style={{ color: s.avgFps >= 60 ? 'var(--ok, #34d399)' : s.avgFps >= 45 ? 'var(--warning, #fbbf24)' : 'var(--danger, #f87171)', fontWeight: 700 }}>{s.avgFps} FPS</span>
+                <span style={{ color: s.avgFps >= 60 ? 'var(--success)' : s.avgFps >= 45 ? 'var(--warn)' : 'var(--danger)', fontWeight: 700 }}>{s.avgFps} FPS</span>
                 <span className="muted" style={{ flexShrink: 0 }}>low {s.lowFps}</span>
                 <span className="muted" style={{ flexShrink: 0 }}>{s.heapMB} MB</span>
               </div>
@@ -897,7 +910,7 @@ function PerformanceSection() {
                     <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>{mo.note}</div>
                   </div>
                   <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {mo.installed ? <span style={{ fontSize: 11, color: 'var(--ok, #34d399)', fontWeight: 600 }}>Installed</span> : null}
+                    {mo.installed ? <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>Installed</span> : null}
                     {!mo.compatible ? (
                       <span style={{ fontSize: 11, color: 'var(--text-3)' }}>No version for {profiles.find((p) => p.id === profileId)?.minecraftVersion}</span>
                     ) : (
@@ -952,7 +965,7 @@ function StabilitySection() {
 
   useEffect(() => { void load() }, [load])
 
-  const levelColor = support?.level === 'ok' ? 'var(--green, #34d399)' : support?.level === 'limited' ? 'var(--yellow, #fbbf24)' : 'var(--red, #f87171)'
+  const levelColor = support?.level === 'ok' ? 'var(--success)' : support?.level === 'limited' ? 'var(--warn)' : 'var(--danger)'
   const levelLabel = support?.level === 'ok' ? 'Shaders supported' : support?.level === 'limited' ? 'Shaders limited' : 'Shaders not supported'
 
   const disableForProfile = async (): Promise<void> => {
@@ -1002,7 +1015,7 @@ function StabilitySection() {
                 <div key={i} style={{ color: 'var(--text-2)' }}>• {r}</div>
               ))}
               {support.recoveryPending && (
-                <div style={{ color: 'var(--yellow, #fbbf24)', marginTop: 8, fontWeight: 600 }}>
+                <div style={{ color: 'var(--warn)', marginTop: 8, fontWeight: 600 }}>
                   The last session for this profile ended with shaders armed — the next launch starts with shaders disabled automatically.
                 </div>
               )}

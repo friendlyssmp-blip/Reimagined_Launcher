@@ -1,4 +1,42 @@
-## v1.0.59 — No more forced re-login after updates (Microsoft session fix)
+## v1.0.60 — Full UI polish pass + the entire launcher in English
+
+### A premium visual pass across every screen
+- **Home hero**: the hero title/description had zero vertical rhythm (the global
+  reset collapsed them together) — now proper spacing and typography, panel
+  depth, and the Play button is the signature moment: a soft purple halo
+  breathes around it (GPU-cheap transform/opacity, stops on hover/disabled).
+- **Consistent surface depth**: stats, profile cards, share actions and the
+  category sidebars (Mods / Modpacks) now sit on the same subtle panel surface
+  as the rest of the app instead of floating as flat text.
+- **Settings**: the theme picker was rendering as raw unstyled OS buttons —
+  now proper cards with hover and a purple glow on the selected theme. The
+  performance preset row (Auto/Potato/Balanced/High/Turbo) finally shows which
+  tier is active and each preset has its label. Session rows unified with the
+  rest of the list styling.
+- **Logs**: the search bar icon floated outside the input — now a real search
+  box with a purple focus ring; the active level filter pill was losing its
+  accent background (specificity) — fixed.
+- **Account**: the "Not signed in" state used the spinning progress ring
+  (looked like it was loading forever) — now a clean static badge.
+- **Game console**: status dot was always green even when idle (ghost state) —
+  now grey when idle, pulsing green only while the game runs; the whole window
+  switched from mono font to the UI font (only log lines stay mono), got the
+  signature purple hairline and a consistent minimize icon.
+- **Empty states** everywhere (no mods, no results, no downloads) now render as
+  a polished circular badge with a soft glow instead of a bare icon.
+- **Color discipline**: all hardcoded greens/reds/yellows replaced with the
+  real theme tokens (--success/--warn/--danger); removed the blocky
+  Minecraft-style text-shadow on Play/Account titles in favor of a soft
+  elevation shadow.
+
+### The entire UI is now in English
+- Shader hardware-fit badges were the only remaining Spanish strings ("Apto
+  para tu PC", "Limitado", "Sin verificar" + their risk hints) — all
+  translated to "Suitable for your PC" / "Limited" / "Unverified" with clean
+  English hints. Audited the whole renderer, main process and game console for
+  any other non-English user-facing text — none left.
+
+Verified: tsc node+web clean, build clean.
 
 ### You no longer have to sign in again after every update
 - **Root cause**: after an update the launcher restarts and THREE things try to

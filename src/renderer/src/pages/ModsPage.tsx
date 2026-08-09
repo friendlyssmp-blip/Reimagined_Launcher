@@ -749,7 +749,7 @@ export function ModsPage() {
   }, [tab, instTab, activeProfile])
 
   /* v1.0.56 — assess the machine once per shader-browsing session so every
-     shader card can show "Apto para tu PC / Limitado / No apto (own risk)". */
+     shader card can show "Suitable for your PC / Limited / Not suitable (own risk)". */
   useEffect(() => {
     if (contentType !== 'shader') return
     let cancelled = false
