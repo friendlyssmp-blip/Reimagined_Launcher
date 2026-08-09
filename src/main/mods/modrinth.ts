@@ -16,6 +16,48 @@ function headers(): Record<string, string> {
   return { 'User-Agent': USER_AGENT }
 }
 
+/* v1.0.52 — global request pacing for the Modrinth API. The public API
+ * throttles bursts (HTTP 429), and the launcher naturally fires many
+ * lookups at once (per-row version checks on the Installed tab, the enrich
+ * pass, browse pages). A small semaphore + a minimum gap between requests
+ * keeps normal use comfortably under the limit, so the user never sees a
+ * rate-limit error. This is a hard cap for ALL Modrinth traffic. */
+const RATE_MAX_INFLIGHT = 2
+const RATE_GAP_MS = 40
+let rateInflight = 0
+let rateWaiters: (() => void)[] = []
+let rateLastStart = 0
+
+async function acquireRateSlot(): Promise<void> {
+  if (rateInflight >= RATE_MAX_INFLIGHT) {
+    await new Promise<void>((resolve) => rateWaiters.push(resolve))
+  }
+  rateInflight++
+  const wait = Math.max(0, rateLastStart + RATE_GAP_MS - Date.now())
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+  rateLastStart = Date.now()
+}
+
+function releaseRateSlot(): void {
+  rateInflight--
+  rateWaiters.shift()?.()
+}
+
+/** Run a Modrinth request through the global pace limiter. */
+function apiGet<T>(url: string, opts: { headers?: Record<string, string>; timeoutMs?: number } = {}): Promise<T> {
+  return (async () => {
+    await acquireRateSlot()
+    try {
+      // NOTE: this must call getJson directly — a blanket getJson< → apiGet<
+      // replace once turned this into infinite recursion (the v1.0.52 deadlock
+      // that froze every Modrinth request in the smoke test).
+      return await getJson<T>(url, opts)
+    } finally {
+      releaseRateSlot()
+    }
+  })()
+}
+
 export type ProjectType = 'mod' | 'resourcepack' | 'shader' | 'datapack' | 'modpack'
 
 export interface SearchOptions {
@@ -71,7 +113,7 @@ export async function searchMods(opts: SearchOptions): Promise<{ items: Modrinth
   if (opts.offset) params.set('offset', String(opts.offset))
 
   try {
-    const res = await getJson<SearchResponse>(`${API}/search?${params.toString()}`, {
+    const res = await apiGet<SearchResponse>(`${API}/search?${params.toString()}`, {
       headers: headers(),
       timeoutMs: 15_000
     })
@@ -106,7 +148,7 @@ interface ProjectResponse {
 }
 
 export async function getProject(projectId: string): Promise<ProjectResponse> {
-  return getJson<ProjectResponse>(`${API}/project/${projectId}`, { headers: headers(), timeoutMs: 15_000 })
+  return apiGet<ProjectResponse>(`${API}/project/${projectId}`, { headers: headers(), timeoutMs: 15_000 })
 }
 
 /**
@@ -120,7 +162,7 @@ export async function getProject(projectId: string): Promise<ProjectResponse> {
 export async function lookupVersionByHash(sha1: string): Promise<{ projectId: string; version: ModrinthVersion } | null> {
   if (!/^[0-9a-f]{40}$/i.test(sha1)) return null
   try {
-    const version = await getJson<RawModrinthVersion>(
+    const version = await apiGet<RawModrinthVersion>(
       `${API}/version_file/${encodeURIComponent(sha1)}?algorithm=sha1`,
       { headers: headers(), timeoutMs: 15_000 }
     )
@@ -140,7 +182,7 @@ interface TagResponse {
 
 /** Real category list from the Modrinth tags API (mods only). */
 export async function getCategories(projectType: ProjectType = 'mod'): Promise<string[]> {
-  const tags = await getJson<TagResponse[]>(`${API}/tag/category?project_type=${projectType}`, {
+  const tags = await apiGet<TagResponse[]>(`${API}/tag/category?project_type=${projectType}`, {
     headers: headers(),
     timeoutMs: 15_000
   })
@@ -196,13 +238,13 @@ export async function latestVersionFor(
     game_versions: JSON.stringify([mcVersion]),
     loaders: JSON.stringify(loaders)
   })
-  const versions = await getJson<RawModrinthVersion[]>(`${API}/project/${projectId}/version?${params.toString()}`, {
+  const versions = await apiGet<RawModrinthVersion[]>(`${API}/project/${projectId}/version?${params.toString()}`, {
     headers: headers(),
     timeoutMs: 15_000
   })
   if (versions.length > 0) return toModrinthVersion(versions[0])
   // Fallback: any version matching the MC version regardless of loader.
-  const relaxed = await getJson<RawModrinthVersion[]>(
+  const relaxed = await apiGet<RawModrinthVersion[]>(
     `${API}/project/${projectId}/version?game_versions=${encodeURIComponent(JSON.stringify([mcVersion]))}`,
     { headers: headers(), timeoutMs: 15_000 }
   )
@@ -228,7 +270,7 @@ interface FullProjectResponse {
 
 /** Full project info for the shared detail page (body, gallery, stats). */
 export async function getProjectFull(projectId: string, projectType: ProjectType = 'mod'): Promise<ProjectDetail> {
-  const project = await getJson<FullProjectResponse>(`${API}/project/${projectId}`, {
+  const project = await apiGet<FullProjectResponse>(`${API}/project/${projectId}`, {
     headers: headers(),
     timeoutMs: 15_000
   })
@@ -236,7 +278,7 @@ export async function getProjectFull(projectId: string, projectType: ProjectType
   // Author names come from the project's members endpoint.
   let author = 'Unknown'
   try {
-    const members = await getJson<{ user?: { username?: string } }[]>(`${API}/project/${projectId}/members`, {
+    const members = await apiGet<{ user?: { username?: string } }[]>(`${API}/project/${projectId}/members`, {
       headers: headers(),
       timeoutMs: 10_000
     })
@@ -272,7 +314,7 @@ export async function getProjectFull(projectId: string, projectType: ProjectType
 
 /** Every version of a project, newest first, with compatibility info. */
 export async function listVersions(projectId: string, _projectType: ProjectType = 'mod'): Promise<ProjectVersionInfo[]> {
-  const versions = await getJson<
+  const versions = await apiGet<
     {
       id: string
       version_number: string

@@ -6,6 +6,7 @@ import { api, friendlyError } from '../lib/api'
 import { normalizeTitle } from '../lib/text'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { InstallConfirmModal, type InstallTarget } from '../components/InstallConfirmModal'
+import { UpdateAllModal } from '../components/UpdateAllModal'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
@@ -111,6 +112,8 @@ export function ModsPage() {
   const [versionsBusy, setVersionsBusy] = useState(false)
   const [sort, setSort] = useState<SortKey>('name')
   const [updatingAll, setUpdatingAll] = useState(false)
+  /* v1.0.52 — Update All preview list (Bug 2). */
+  const [updateAllOpen, setUpdateAllOpen] = useState(false)
   // Install confirmation with real dependencies (plain click = dialog,
   // Shift-click = install immediately with dependencies).
   const [installConfirm, setInstallConfirm] = useState<InstallTarget | null>(null)
@@ -467,14 +470,6 @@ export function ModsPage() {
     } finally {
       setUpdatingAll(false)
     }
-  }
-
-  /** Update list detail shown inside the Update All confirmation. */
-  const updateAllDetail = (): string => {
-    const updatable = installed.filter((m) => m.updateAvailable).slice(0, 8)
-    if (updatable.length === 0) return ''
-    return updatable.map((m) => `• ${m.title}: ${m.versionNumber} → ${m.updateAvailable!.versionNumber}`).join('\n') +
-      (installed.filter((m) => m.updateAvailable).length > 8 ? '\n…and more' : '')
   }
 
   /** Part 4 — load other compatible versions of an installed item on demand. */
@@ -1161,20 +1156,13 @@ export function ModsPage() {
                 variant="primary"
                 disabled={updatingAll || !installed.some((m) => m.updateAvailable)}
                 onClick={(e) => {
-                  // Always ask first — show the exact update list — unless
-                  // Shift is held, which skips the confirmation (Part 4).
+                  // v1.0.52 — show the Update All preview list first (Bug 2);
+                  // holding Shift skips it and updates everything immediately.
                   if (e.shiftKey) {
                     void runUpdateAll()
                     return
                   }
-                  setModals({
-                    confirm: {
-                      title: 'Update all available?',
-                      message: `${installed.filter((m) => m.updateAvailable).length} update(s) are available. Updates are manual — nothing installs until you confirm (hold Shift next time to update all immediately).\n\n${updateAllDetail()}`, 
-                      confirmLabel: 'Update All',
-                      onConfirm: () => void runUpdateAll()
-                    }
-                  })
+                  setUpdateAllOpen(true)
                 }}
                 title="Update every installed item that has a newer version (hold Shift to update all immediately)"
               >
@@ -1185,6 +1173,20 @@ export function ModsPage() {
               {currentManual.length > 0 && `${currentManual.length} manual file(s) detected`}
             </span>
           </div>
+
+          {/* v1.0.52 — Update All preview list (Bug 2): icon, name and a green
+              pill for every new version, one confirm to run the updater. */}
+          {updateAllOpen && (
+            <UpdateAllModal
+              items={installed.filter((m) => m.updateAvailable)}
+              busy={updatingAll}
+              onClose={() => setUpdateAllOpen(false)}
+              onConfirm={() => {
+                setUpdateAllOpen(false)
+                void runUpdateAll()
+              }}
+            />
+          )}
 
           {/* v1.0.24 — the same live search bar also filters what's installed
               (items, manual files and worlds). Escape clears it. */}

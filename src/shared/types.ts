@@ -238,6 +238,8 @@ export interface ShareItem {
   projectType?: 'mod' | 'resourcepack' | 'shader' | 'datapack' | 'modpack'
   versionId?: string
   versionNumber?: string
+  /** Optional artwork for the import preview (http(s) or data: only). */
+  iconUrl?: string
   disabled?: boolean
 }
 
@@ -480,7 +482,7 @@ export interface HardwareProfile {
   cpu: { model: string; cores: number; threads: number; speedGHz: number; cache: string }
   gpu: { name: string; vendor: string; vramGB: number; integrated: boolean; driverVersion?: string }[]
   memory: { totalGB: number; speedMHz: number | null }
-  storage: { type: string; totalGB: number }
+  storage: { type: string; totalGB: number; freeGB?: number; usedGB?: number; drive?: string }
   os: string
   display: { resolution: string; refreshHz: number | null }
   java: { major: number; version: string } | null

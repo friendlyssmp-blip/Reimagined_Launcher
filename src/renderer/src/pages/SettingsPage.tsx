@@ -804,7 +804,11 @@ function PerformanceSection() {
             ['CPU', hw ? hw.cpu.model + ' · ' + hw.cpu.threads + ' threads · ' + hw.cpu.speedGHz + ' GHz · ' + hw.cpu.cache : 'Detecting…'],
             ['GPU', hw && hw.gpu.length ? hw.gpu.map((g) => g.name + (g.integrated ? ' (iGPU)' : ' · ' + g.vramGB + ' GB')).join(' + ') : 'Detecting…'],
             ['Memory', hw ? hw.memory.totalGB + ' GB' + (hw.memory.speedMHz ? ' · ' + hw.memory.speedMHz + ' MHz' : '') : 'Detecting…'],
-            ['Storage', hw ? hw.storage.type + ' · ' + hw.storage.totalGB + ' GB' : 'Detecting…'],
+            ['Storage', hw
+              ? (hw.storage.freeGB
+                  ? `${hw.storage.freeGB} GB free · ${hw.storage.usedGB ?? 0} GB used` + (hw.storage.drive ? ` (${hw.storage.drive})` : '')
+                  : hw.storage.type + ' · ' + hw.storage.totalGB + ' GB')
+              : 'Detecting…'],
             ['Display', hw ? hw.display.resolution + (hw.display.refreshHz ? ' · ' + hw.display.refreshHz + ' Hz' : '') : 'Detecting…'],
             ['Java', hw ? (hw.java ? 'Java ' + hw.java.major : 'auto-download on first launch') : 'Detecting…'],
             ['System', hw ? hw.os + (hw.laptop ? ' · laptop' : ' · desktop') : 'Detecting…']

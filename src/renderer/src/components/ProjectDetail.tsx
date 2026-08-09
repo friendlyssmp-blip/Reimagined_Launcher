@@ -41,33 +41,150 @@ const CONTENT_LABEL: Record<ContentType, string> = {
   modpack: 'Modpack'
 }
 
-/** Minimal, safe markdown renderer (escapes everything first). */
+/** Minimal, safe markdown renderer — v1.0.52 (Bug 7).
+ * Everything is HTML-escaped BEFORE parsing, so crafted input can never
+ * inject markup. Supports images, fenced + inline code, headings, rules,
+ * blockquotes, ordered/unordered lists (one nesting level), tables,
+ * bold/italic/strikethrough and links. Malformed syntax degrades to plain
+ * text — a broken construct never breaks the whole page. */
 function renderMarkdown(md: string): string {
-  let html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _l, code) => '<pre>' + code.trim() + '</pre>')
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-  html = html.replace(/^### (.*)$/gm, '<h4>$1</h4>')
-  html = html.replace(/^## (.*)$/gm, '<h3>$1</h3>')
-  html = html.replace(/^# (.*)$/gm, '<h2>$1</h2>')
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-  html = html.replace(/(^|[^*])\*([^*]+)\*/g, '$1<i>$2</i>')
-  // Links — validate + HTML-escape the href so a crafted URL can never
-  // break out of the attribute (the body is injected via innerHTML).
-  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, text, url) => {
-    let href = ''
-    try {
-      href = new URL(String(url)).href
-    } catch {
-      return String(text)
-    }
-    const safe = href.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E')
-    return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' + text + '</a>'
+  const escapeHtml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  // Pull fenced code blocks aside first so nothing inside them is parsed.
+  const fences: string[] = []
+  const step1 = md.replace(/```(\w*)[^\n]*\n?([\s\S]*?)```/g, (_m, _l, code) => {
+    fences.push(code.replace(/\n$/, ''))
+    return `\u0000FENCE${fences.length - 1}\u0000`
   })
-  html = html.replace(/^\s*[-*] (.*)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>[\s\S]*?<\/li>)\n?(?!<li>)/g, '<ul>$1</ul>')
-  html = html.split('\n').map((l) => l.trim()).filter(Boolean)
-    .map((l) => (l.startsWith('<') ? l : '<p>' + l + '</p>')).join('\n')
-  return html
+
+  const inline = (raw: string): string => {
+    let h = escapeHtml(raw)
+    // Images — rendered inline, never raw markdown syntax.
+    h = h.replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, (_m, alt, url) => {
+      let href = ''
+      try { href = new URL(String(url)).href } catch { return alt ? `[${alt}]` : '' }
+      const safe = href.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E')
+      return `<img src="${safe}" alt="${String(alt ?? '').replace(/"/g, '&quot;').slice(0, 120)}" loading="lazy" />`
+    })
+    // Links — validate + HTML-escape the href so a crafted URL can never
+    // break out of the attribute (the body is injected via innerHTML).
+    h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, text, url) => {
+      let href = ''
+      try { href = new URL(String(url)).href } catch { return String(text) }
+      const safe = href.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E')
+      return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' + text + '</a>'
+    })
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
+    h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    h = h.replace(/__([^_]+)__/g, '<b>$1</b>')
+    h = h.replace(/(^|[^*])\*([^*]+)\*/g, '$1<i>$2</i>')
+    h = h.replace(/~~([^~]+)~~/g, '<s>$1</s>')
+    return h
+  }
+
+  const out: string[] = []
+  const lines = step1.split('\n')
+  let i = 0
+  let para: string[] = []
+  const flushPara = (): void => {
+    if (para.length) { out.push('<p>' + para.join(' ') + '</p>'); para = [] }
+  }
+  const listKind = (l: string): 'ul' | 'ol' | null => {
+    if (/^\s*[-*+]\s+/.test(l)) return 'ul'
+    if (/^\s*\d+[.)]\s+/.test(l)) return 'ol'
+    return null
+  }
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    const fenceMatch = line.match(/^\u0000FENCE(\d+)\u0000$/)
+    if (fenceMatch) {
+      flushPara()
+      out.push('<pre><code>' + escapeHtml(fences[Number(fenceMatch[1])] ?? '') + '</code></pre>')
+      i++
+      continue
+    }
+
+    if (!trimmed) { flushPara(); i++; continue }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/)
+    if (heading) {
+      flushPara()
+      const level = Math.min(6, heading[1].length + 1)
+      out.push(`<h${level}>` + inline(heading[2]) + `</h${level}>`)
+      i++
+      continue
+    }
+
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(trimmed)) {
+      flushPara()
+      out.push('<hr />')
+      i++
+      continue
+    }
+
+    if (/^>\s?/.test(trimmed)) {
+      flushPara()
+      const quote: string[] = []
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        quote.push(inline(lines[i].replace(/^>\s?/, '')))
+        i++
+      }
+      out.push('<blockquote>' + quote.join(' ') + '</blockquote>')
+      continue
+    }
+
+    // Pipe tables: header row + separator row + data rows.
+    if (/^\|.*\|$/.test(trimmed) && i + 1 < lines.length && /^\|[\s:|-]+\|$/.test(lines[i + 1].trim())) {
+      flushPara()
+      const header = trimmed.split('|').slice(1, -1).map((c) => c.trim())
+      i += 2
+      const rows: string[][] = []
+      while (i < lines.length && /^\|.*\|$/.test(lines[i].trim())) {
+        rows.push(lines[i].split('|').slice(1, -1).map((c) => inline(c.trim())))
+        i++
+      }
+      out.push(
+        '<div class="md-table-wrap"><table><thead><tr>' +
+        header.map((c) => `<th>${inline(c)}</th>`).join('') +
+        '</tr></thead><tbody>' +
+        rows.map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('') +
+        '</tbody></table></div>'
+      )
+      continue
+    }
+
+    const kind = listKind(trimmed)
+    if (kind) {
+      flushPara()
+      const tag = kind === 'ul' ? 'ul' : 'ol'
+      out.push(`<${tag}>`)
+      while (i < lines.length && listKind(lines[i].trim())) {
+        const content = lines[i].trim().replace(/^\s*[-*+]\s+/, '').replace(/^\s*\d+[.)]\s+/, '')
+        const nested: string[] = []
+        while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1]) && listKind(lines[i + 1].trim())) {
+          nested.push('<li>' + inline(lines[i + 1].trim().replace(/^\s*[-*+]\s+/, '').replace(/^\s*\d+[.)]\s+/, '')) + '</li>')
+          i++
+        }
+        out.push(
+          nested.length > 0
+            ? `<li>${inline(content)}<${tag === 'ul' ? 'ul' : 'ol'}>${nested.join('')}</${tag === 'ul' ? 'ul' : 'ol'}></li>`
+            : '<li>' + inline(content) + '</li>'
+        )
+        i++
+      }
+      out.push(`</${tag}>`)
+      continue
+    }
+
+    para.push(inline(trimmed))
+    i++
+  }
+  flushPara()
+
+  return out.join('\n')
 }
 
 /**
@@ -163,6 +280,9 @@ export function ProjectDetail({
   const [showAllVersions, setShowAllVersions] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const overflowRef = useRef<HTMLDivElement | null>(null)
+  /* v1.0.52 — open the menu leftward (default) unless the button sits near the
+     left edge, where the menu would overflow the viewport on that side. */
+  const [overflowAlign, setOverflowAlign] = useState<'right' | 'left'>('right')
   // Lazily-fetched CurseForge release notes, keyed by version id.
   const [changelogs, setChangelogs] = useState<Record<string, string>>({})
   const [changelogLoading, setChangelogLoading] = useState(false)
@@ -600,12 +720,24 @@ export function ProjectDetail({
                 {busy === 'update' ? <><Spinner /> Updating…</> : 'Update Available'}
               </Button>
             )}
-            <div style={{ position: 'relative' }} ref={overflowRef}>
-              <button className="nav-btn" onClick={() => setOverflowOpen((v) => !v)} title="More actions">
+            <div className="overflow-menu" ref={overflowRef}>
+              <button
+                className="nav-btn"
+                onClick={() => {
+                  const rect = overflowRef.current?.getBoundingClientRect()
+                  setOverflowAlign(rect && rect.left < 220 ? 'left' : 'right')
+                  setOverflowOpen((v) => !v)
+                }}
+                title="More actions"
+              >
                 <IconDots style={{ width: 15, height: 15 }} />
               </button>
               {overflowOpen && (
-                <div className="ctx-menu" onMouseDown={(e) => e.stopPropagation()}>
+                <div
+                  className="ctx-menu"
+                  style={overflowAlign === 'left' ? { left: 0, right: 'auto', transformOrigin: 'top left' } : undefined}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <button onClick={() => { setOverflowOpen(false); window.open(detail.url, '_blank') }}>
                     <IconExternal style={{ width: 13, height: 13 }} /> Open project page
                   </button>

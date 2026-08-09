@@ -124,7 +124,11 @@ export async function runDownloadBatch(
     const nowMs = Date.now()
     if (nowMs - lastRecorded >= 250) {
       lastRecorded = nowMs
+      // v1.0.52 — progress updates carry the stable entry id TOO, so a
+      // late throttled emit can never orphan a ghost 'downloading' entry
+      // while the real one is already 'done' (the stuck-100% regression).
       recordDownload({
+        id: entryId,
         label: opts.label,
         kind: opts.kind,
         status: 'downloading',

@@ -38,10 +38,15 @@ async function parseResponse(res: Response, context: string): Promise<unknown> {
   let json: unknown
   try { json = JSON.parse(text) } catch { json = undefined }
   if (!res.ok) {
-    // Attach HTTP status for callers that need to distinguish error types
-    const err = new Error(`${context} failed with HTTP ${res.status}${text ? `: ${text.slice(0, 300)}` : ''}`)
+    // Attach HTTP status for callers that need to distinguish error types.
+    // The raw response body (often an HTML error page) is NEVER put in the
+    // message — it must never reach the user's UI (v1.0.52: no more raw 429
+    // HTML dumps in the app). It stays available on `.bodyText` for logs.
+    const err = new Error(`${context} failed with HTTP ${res.status}.`)
     ;(err as any).status = res.status
     ;(err as any).body = json
+    ;(err as any).bodyText = text.slice(0, 600)
+    ;(err as any).retryAfter = res.headers.get('retry-after') ?? undefined
     throw err
   }
   return json
@@ -54,7 +59,10 @@ async function parseResponse(res: Response, context: string): Promise<unknown> {
  */
 export async function getJson<T>(url: string, opts: JsonRequestOptions = {}): Promise<T> {
   let lastErr: unknown
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // v1.0.52 — four attempts with exponential backoff; a 429/5xx pauses and
+  // retries (honouring a Retry-After header when the server sends one) so
+  // rate-limit bursts resolve themselves instead of erroring the UI.
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const res = await withTimeout(fetch(url, { headers: opts.headers }), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS)
       return (await parseResponse(res, `GET ${url}`)) as T
@@ -63,7 +71,12 @@ export async function getJson<T>(url: string, opts: JsonRequestOptions = {}): Pr
       const status = (err as { status?: number })?.status
       const retriable = status === 429 || (status !== undefined && status >= 500 && status < 600)
       if (!retriable) throw err
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
+      const retryAfter = (err as { retryAfter?: string })?.retryAfter
+      let waitMs = 500 * Math.pow(2, attempt)
+      if (retryAfter && /^\d+$/.test(retryAfter.trim())) {
+        waitMs = Math.max(waitMs, Number(retryAfter.trim()) * 1000)
+      }
+      if (attempt < 3) await new Promise((r) => setTimeout(r, waitMs))
     }
   }
   throw lastErr

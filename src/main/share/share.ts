@@ -118,6 +118,7 @@ export async function prepareSnapshot(profileId: string): Promise<ShareSnapshot>
     projectType: m.projectType,
     versionId: m.versionId,
     versionNumber: m.versionNumber,
+    iconUrl: m.iconUrl,
     disabled: m.disabled
   }))
 
@@ -145,6 +146,7 @@ function sanitizeSnapshot(snap: ShareSnapshot): ShareSnapshot {
   const clean = (s: unknown): string =>
     String(s ?? '').replace(/[\\/\r\n\x00-\x1f]/g, ' ').trim().slice(0, 240)
   const PROJECT_TYPES = ['mod', 'resourcepack', 'datapack', 'shader', 'modpack']
+  const ICON_RE = /^(https?:|data:)/i
   const items: ShareItem[] = (snap.items ?? []).map((it) => ({
     id: clean(it.id) || `p-${Math.random().toString(36).slice(2, 8)}`,
     title: clean(it.title) || 'Shared item',
@@ -152,6 +154,7 @@ function sanitizeSnapshot(snap: ShareSnapshot): ShareSnapshot {
     projectType: (PROJECT_TYPES.includes(it.projectType ?? 'mod') ? it.projectType ?? 'mod' : 'mod') as ShareItem['projectType'],
     versionId: clean(it.versionId),
     versionNumber: clean(it.versionNumber),
+    iconUrl: it.iconUrl && ICON_RE.test(String(it.iconUrl)) && String(it.iconUrl).length <= 600 ? String(it.iconUrl) : undefined,
     disabled: Boolean(it.disabled)
   }))
   const res = snap.resolution
@@ -434,7 +437,7 @@ export interface ImportResult {
  * item from its original source, with step-by-step progress. Items that can
  * no longer be resolved are skipped and reported — never a hard failure.
  */
-export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportResult> {
+export async function importSnapshot(snapshot: ShareSnapshot, exclude: string[] = []): Promise<ImportResult> {
   // v1.0.19: sanitize whatever came in (code or zip) before using it.
   snapshot = sanitizeSnapshot(snapshot)
   const profile = await profileManager.create({
@@ -464,7 +467,9 @@ export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportRes
       mkdirp(pathMod.join(paths.games, profile.gameDir, d))
     }
 
-    const items = snapshot.items ?? []
+    // v1.0.52 — the user can drop items from the import preview; excluded ids
+    // are filtered out before anything is downloaded or installed.
+    const items = (snapshot.items ?? []).filter((it) => !exclude.includes(it.id))
     const skipped: string[] = []
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
@@ -539,13 +544,13 @@ export async function importSnapshot(snapshot: ShareSnapshot): Promise<ImportRes
 }
 
 /** Import by online code. */
-export async function importCode(code: string): Promise<ImportResult> {
+export async function importCode(code: string, exclude: string[] = []): Promise<ImportResult> {
   const snapshot = await resolveCode(code)
-  return importSnapshot(snapshot)
+  return importSnapshot(snapshot, exclude)
 }
 
 /** Import from an exported .zip file (Reimagined or CurseForge). */
-export async function importZip(zipPath: string): Promise<ImportResult> {
+export async function importZip(zipPath: string, exclude: string[] = []): Promise<ImportResult> {
   if (!exists(zipPath)) {
     throw new LauncherError('FILE_MISSING', 'The selected file no longer exists.')
   }
@@ -555,13 +560,13 @@ export async function importZip(zipPath: string): Promise<ImportResult> {
     throw new LauncherError('INVALID_FILE', 'This .zip is too large to be a valid profile export.')
   }
   const buf = await fsp.readFile(zipPath)
-  return importZipBuffer(buf)
+  return importZipBuffer(buf, exclude)
 }
 
 /** Import from an in-memory .zip buffer (Reimagined or CurseForge). */
-export async function importZipBuffer(buf: Buffer): Promise<ImportResult> {
+export async function importZipBuffer(buf: Buffer, exclude: string[] = []): Promise<ImportResult> {
   const snapshot = await readZipBuffer(buf)
-  const result = await importSnapshot(snapshot)
+  const result = await importSnapshot(snapshot, exclude)
 
   // CurseForge packs ship config / resource packs / scripts inside the
   // archive's `overrides/` folder — apply them into the fresh instance.

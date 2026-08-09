@@ -1,3 +1,58 @@
+## v1.0.52 — cinematic startup + 8 reliability/UI fixes
+
+### 1) Premium startup animation (rebuilt from scratch)
+- The old 2.6s fade-in splash is gone. The new ~4.3s cinematic sequence is a
+  five-stage intro: dark atmosphere with faint purple particles and a breathing
+  radial glow → an energy line draws a luminous ring around the centre → the
+  Reimagined logo is physically CONSTRUCTED (clip-path wipe + light sweep +
+  converging glow, no plain fade) → REIMAGINED typography locks in letter by
+  letter → a signature moment (one final ring sweep, a soft purple light pass
+  and a tiny outward particle burst) → the scene dissolves into the launcher.
+- Pure CSS transforms/opacity + one SVG — GPU-cheap, skippable by click or any
+  key, never blocks initialization, and the whole sequence stays under 5s.
+
+### 2) No more raw HTTP 429 HTML dumps (root cause, fixes the recurring
+    "Could not load this project" / "Could not load versions" errors)
+- `http.ts` errors no longer embed the raw response body (often an HTML error
+  page) in the message — it stays on `.bodyText` for logs only. `getJson`
+  retries 4× with exponential backoff and honours a `Retry-After` header.
+- Modrinth traffic is now globally paced (2 concurrent + a 40ms gap) so normal
+  use stops triggering rate limits in the first place.
+- `friendlyError` scrubs any raw HTML/XML that slips through and maps 429 to a
+  clean "rate-limiting requests right now — try again" message.
+
+### 3) Downloads can no longer get stuck at 100% (fixed for real)
+- Progress emits in the downloader now carry the stable entry id, and terminal
+  states are STICKY in the tracker: a late progress event can never resurrect a
+  finished download as a ghost 'downloading' entry at 100% while the real one
+  sits in History. The 30s late-duplicate guard only fires for >=99% progress.
+- When nothing is downloading, the in-progress area says so instead of
+  looking broken.
+
+### 4) "Update All" is now a real preview list
+- Clicking Update All opens a lightweight list — one row per mod with its icon,
+  name and "current → new" where the new version sits on a green pill — plus a
+  single confirm. Holding Shift still updates everything immediately.
+
+### 5) Modpack .zip import preview: icons + remove-per-mod
+- The import preview shows the same clean list style (icon, name, version).
+  Each item has a Remove action (confirmation unless you hold Shift) so you can
+  drop content before importing; removed items are excluded from the install.
+
+### 6) The "..." overflow menu never cuts off at the screen edge
+- The menu is now properly anchored below the button (dark, purple hover) and
+  flips direction when it would run past the viewport edge.
+
+### 7) Descriptions and changelogs render as real markdown
+- Images render inline, ordered/unordered lists, blockquotes, tables, rules,
+  fenced/inline code, bold/italic/strikethrough and links all work; malformed
+  syntax degrades gracefully instead of dumping raw markdown.
+
+### 8) Settings → Storage shows real disk space
+- The storage row now reports the live free/used space of the drive that holds
+  launcher data (queried from the filesystem), e.g. "59 GB free · 197 GB used",
+  instead of the media-type label.
+
 ## v1.0.51 — versions you can see + cross-provider dedupe + searchable pickers
 
 ### 1) The "undefined" version bug (root cause found)

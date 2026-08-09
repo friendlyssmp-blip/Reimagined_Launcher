@@ -156,6 +156,25 @@ export function recordDownload(entry: Omit<DownloadEntry, 'id' | 'at' | 'updated
       ? downloadHistory.find((d) => d.label === entry.label && d.kind === entry.kind)
       : downloadHistory.find((d) => d.status === 'downloading' && d.label === entry.label && d.kind === entry.kind)
   }
+  // v1.0.52 — terminal states are STICKY: a late progress emit (status
+  // 'downloading') must never resurrect a finished entry as a ghost stuck
+  // at 100% in the active list while the real one sits in History.
+  if (existing && (existing.status === 'done' || existing.status === 'failed') && entry.status === 'downloading') {
+    return existing.id
+  }
+  // No live match and no id: guard against a non-terminal emit that races in
+  // AFTER the terminal update already landed (a 'downloading' twin at 100%
+  // that would never leave the active area). Only near-terminal progress
+  // (>=99%) is treated as a late emit — a fresh re-download from a caller
+  // that doesn't track ids (modpacks.ts) still records normally.
+  if (!existing && entry.status === 'downloading' && entry.percent >= 99) {
+    const recentlyDone = downloadHistory.find(
+      (d) => d.label === entry.label && d.kind === entry.kind && (d.status === 'done' || d.status === 'failed')
+    )
+    if (recentlyDone && Date.now() - new Date(recentlyDone.updatedAt || recentlyDone.at).getTime() < 30_000) {
+      return recentlyDone.id
+    }
+  }
   if (existing) {
     existing.status = entry.status
     existing.percent = entry.percent

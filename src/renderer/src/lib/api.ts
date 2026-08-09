@@ -261,15 +261,15 @@ export const api = {
     create: (profileId: string) =>
       unwrap<{ code: string; expiresAt: string; snapshot: ShareSnapshot }>(window.reimagined.share.create(profileId)),
     resolve: (code: string) => unwrap<ShareSnapshot>(window.reimagined.share.resolve(code)),
-    importCode: (code: string) =>
-      unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importCode(code)),
+    importCode: (code: string, exclude?: string[]) =>
+      unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importCode(code, exclude)),
     exportZip: (profileId: string) =>
       unwrap<{ canceled: true } | { canceled: false; path: string; name: string }>(
         window.reimagined.share.exportZip(profileId)
       ),
     readZip: (zipPath: string) => unwrap<ShareSnapshot>(window.reimagined.share.readZip(zipPath)),
-    importZip: (zipPath: string) =>
-      unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importZip(zipPath)),
+    importZip: (zipPath: string, exclude?: string[]) =>
+      unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importZip(zipPath, exclude)),
     cancelImport: () => unwrap<void>(window.reimagined.share.cancelImport()),
     pendingCode: () => unwrap<string | null>(window.reimagined.share.pendingCode()),
     pickZip: () => unwrap<string | null>(window.reimagined.share.pickZip())
@@ -290,10 +290,30 @@ export interface ConsoleState {
   windowOpenedAt?: number
 }
 
+/**
+ * v1.0.52 — final guard: a raw HTTP response body (especially the HTML error
+ * pages some APIs return on 429/5xx) must NEVER reach the user. Every message
+ * is scrubbed here, on top of the clean errors the main process now produces.
+ */
+function scrubMessage(m: string): string {
+  if (!m) return 'Something went wrong — try again.'
+  // Raw HTML/XML error pages (doctype/html/body/head tags) → generic message.
+  if (/<\s*(!doctype|html|body|head|script)/i.test(m) || (m.includes('<!') && m.length > 140)) {
+    return 'The server returned an unexpected response. Try again in a moment.'
+  }
+  // Rate limiting → a helpful hint instead of a raw dump. Any bare 429
+  // counts — the clean http.ts message is "…failed with HTTP 429." which
+  // carries no other keyword, so this must not require one.
+  if (/HTTP 429|Too Many Requests/i.test(m)) {
+    return 'The service is rate-limiting requests right now. Try again in a moment.'
+  }
+  return m.length > 300 ? `${m.slice(0, 300)}…` : m
+}
+
 /** Convenience: turn any error into a friendly message. */
 export function friendlyError(err: unknown): string {
   if (err instanceof ApiError) {
-    return err.hint ? `${err.message} ${err.hint}` : err.message
+    return scrubMessage(err.hint ? `${err.message} ${err.hint}` : err.message)
   }
-  return err instanceof Error ? err.message : String(err)
+  return scrubMessage(err instanceof Error ? err.message : String(err))
 }

@@ -1,8 +1,8 @@
 {
-  "version": "1.0.51",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.51.exe",
-  "sha256": "00b2bea153756dea85a11709ea163ca2f90c89fb0fa0511af0d610a7c90d95f4",
-  "size": 83896784,
-  "publishedAt": "2026-08-09T01:28:54Z",
+  "version": "1.0.52",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.52.exe",
+  "sha256": "29848a13df203b7c68c009de89333897cc9b867c7e47421f200259cfebb06ec7",
+  "size": 83902188,
+  "publishedAt": "2026-08-09T03:42:15Z",
   "notes": "Versions you can actually see (undefined version bug fixed at the source: raw Modrinth payloads are normalized), CurseForge no longer times out (60s + retry for the sleeping Render proxy) and Modrinth rate-limits are handled (retry + paced enrich), cross-provider already-installed detection between Modrinth and CurseForge (incl. dependencies), sanitized HTML descriptions/changelogs, content type now travels into CurseForge with per-type categories, default A-Z name sort, searchable version pickers, styled overflow menu, and no more false \"Update Available\"."
 }

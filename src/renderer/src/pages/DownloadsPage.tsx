@@ -263,6 +263,17 @@ export function DownloadsPage() {
               <div className="dl-grid">{inProgress.map(renderCard)}</div>
             </div>
           )}
+          {/* v1.0.52 — never an awkward empty "in progress" area: when nothing
+              is downloading but history exists, say so in the app's tone. */}
+          {inProgress.length === 0 && (done.length > 0 || failed.length > 0) && (
+            <div className="dl-group">
+              <div className="dl-group-title">In progress</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-3)', fontSize: 12.5, padding: '2px 2px 6px' }}>
+                <IconDownload style={{ width: 14, height: 14 }} />
+                <span>Nothing downloading right now — new installs appear here the moment they start.</span>
+              </div>
+            </div>
+          )}
           {failed.length > 0 && (
             <div className="dl-group">
               <div className="dl-group-title err">Failed ({failed.length})</div>

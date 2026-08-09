@@ -647,12 +647,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.sharePrepare, (profileId) => shareService.prepareSnapshot(profileId))
   on(IPC.shareCreate, (profileId) => shareService.createCode(profileId))
   on(IPC.shareResolve, (code) => shareService.resolveCode(code))
-  on(IPC.shareImport, (code) => shareService.importCode(code))
+  on(IPC.shareImport, (code: string, exclude?: string[]) => shareService.importCode(code, exclude ?? []))
   on(IPC.shareCancel, () => shareService.cancelImport())
   on(IPC.sharePendingCode, () => shareService.takePendingDeepLink())
   on(IPC.shareExportZip, (profileId) => shareService.exportZipWithDialog(profileId))
   on(IPC.shareReadZip, (zipPath) => shareService.readZip(zipPath))
-  on(IPC.shareImportZip, (zipPath) => shareService.importZip(zipPath))
+  on(IPC.shareImportZip, (zipPath: string, exclude?: string[]) => shareService.importZip(zipPath, exclude ?? []))
   on(IPC.sharePickZip, async () => {
     const res = await dialog.showOpenDialog(win, {
       title: 'Select a Reimagined profile export (.zip)',

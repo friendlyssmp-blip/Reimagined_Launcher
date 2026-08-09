@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, Button, Field, TextInput, Badge, Spinner } from './ui'
 import { api, friendlyError, ApiError } from '../lib/api'
-import { IconArchive, IconGlobe, IconChevronLeft, IconX } from './icons'
-import type { ShareSnapshot } from '@shared/types'
+import { IconArchive, IconGlobe, IconChevronLeft, IconX, IconTrash } from './icons'
+import { ModIcon } from './ModIcon'
+import type { ShareItem, ShareSnapshot } from '@shared/types'
 
 type Stage = 'choose' | 'zip' | 'code' | 'preview'
 
@@ -48,6 +49,8 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
   const [code, setCode] = useState(initialCode ?? '')
   const [zipPath, setZipPath] = useState<string | null>(null)
   const [preview, setPreview] = useState<ShareSnapshot | null>(null)
+  /* v1.0.52 — items the user removed from this import (Bug 3). */
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
@@ -66,6 +69,7 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
       .resolve(initialCode)
       .then((snap) => {
         setPreview(snap)
+        setExcluded(new Set())
         setStage('preview')
       })
       .catch((err) => setError(friendlyError(err)))
@@ -112,6 +116,7 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
         const snap = await api.share.readZip(p)
         setZipPath(p)
         setPreview(snap)
+        setExcluded(new Set())
         setStage('preview')
       } catch (err) {
         setError(friendlyError(err))
@@ -131,6 +136,7 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
     try {
       const snap = await api.share.resolve(c)
       setPreview(snap)
+      setExcluded(new Set())
       setStage('preview')
     } catch (err) {
       setError(friendlyError(err))
@@ -148,11 +154,44 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
     }
   }
 
+  /* Remove an item from this import — confirmation unless Shift is held;
+     clicking an already-removed row restores it. (Bug 3) */
+  const toggleExclude = (item: ShareItem, e: React.MouseEvent) => {
+    if (excluded.has(item.id)) {
+      setExcluded((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+      return
+    }
+    const remove = () =>
+      setExcluded((prev) => {
+        const next = new Set(prev)
+        next.add(item.id)
+        return next
+      })
+    if (e.shiftKey) {
+      remove()
+      return
+    }
+    setModals({
+      confirm: {
+        title: 'Remove from import',
+        message: `“${item.title}” will not be included when this profile is imported. (Hold Shift next time to skip this confirmation.)`,
+        confirmLabel: 'Remove',
+        onConfirm: remove
+      }
+    })
+  }
+
   const doImport = async () => {
     setImportBusy(true)
     setProgress({ phase: 'Starting import…', percent: 0 })
     try {
-      const res = zipPath ? await api.share.importZip(zipPath) : await api.share.importCode(code.trim())
+      const res = zipPath
+        ? await api.share.importZip(zipPath, [...excluded])
+        : await api.share.importCode(code.trim(), [...excluded])
       await refreshProfiles()
       close()
       notify(
@@ -262,24 +301,60 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
 
               <div>
                 <div className="share-card-title" style={{ marginBottom: 8 }}>
-                  Content ({preview.items.length})
+                  Content ({preview.items.length - excluded.size})
+                  {excluded.size > 0 && (
+                    <span style={{ color: 'var(--text-3)', fontWeight: 400 }}> · {excluded.size} removed</span>
+                  )}
                 </div>
                 {preview.items.length === 0 ? (
                   <p style={{ color: 'var(--text-3)', fontSize: 13 }}>No content in this share.</p>
                 ) : (
-                  <ul className="share-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                    {preview.items.map((item, i) => (
-                      <li key={i}>
-                        {item.title}{' '}
-                        <span style={{ color: 'var(--text-3)' }}>
-                          · {item.source}{item.versionNumber ? ` ${item.versionNumber}` : ''}
-                        </span>
-                        {item.disabled && (
-                          <span style={{ marginLeft: 6 }}><Badge variant="warn">disabled</Badge></span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="share-list" style={{ maxHeight: 230, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, padding: 0, margin: 0 }}>
+                    {preview.items.map((item, i) => {
+                      const isExcluded = excluded.has(item.id)
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '7px 9px',
+                            borderRadius: 10,
+                            background: 'var(--bg-3)',
+                            border: '1px solid var(--border)',
+                            opacity: isExcluded ? 0.45 : 1,
+                            transition: 'opacity .18s var(--ease)'
+                          }}
+                        >
+                          <div className="mod-icon" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }}>
+                            <ModIcon src={item.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.title}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>
+                              {item.source}{item.versionNumber ? ` · ${item.versionNumber}` : ''}
+                              {item.projectType ? ` · ${TYPE_LABELS[item.projectType] ?? item.projectType}` : ''}
+                              {item.disabled ? ' · disabled' : ''}
+                              {isExcluded ? ' · removed' : ''}
+                            </div>
+                          </div>
+                          <button
+                            className="icon-danger-btn"
+                            onClick={(e) => toggleExclude(item, e)}
+                            title={isExcluded
+                              ? 'Restore this item'
+                              : 'Remove from this import (hold Shift to skip confirmation)'}
+                            aria-label={isExcluded ? `Restore ${item.title}` : `Remove ${item.title} from import`}
+                          >
+                            <IconTrash style={{ width: 13, height: 13 }} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
                 {grouped.size > 1 && (
                   <p style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 6 }}>

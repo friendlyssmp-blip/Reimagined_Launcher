@@ -146,12 +146,12 @@ const api = {
     prepare: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.sharePrepare, profileId),
     create: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareCreate, profileId),
     resolve: (code: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareResolve, code),
-    importCode: (code: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareImport, code),
+    importCode: (code: string, exclude?: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.shareImport, code, exclude),
     cancelImport: (): Promise<unknown> => ipcRenderer.invoke(IPC.shareCancel),
     pendingCode: (): Promise<unknown> => ipcRenderer.invoke(IPC.sharePendingCode),
     exportZip: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareExportZip, profileId),
     readZip: (zipPath: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareReadZip, zipPath),
-    importZip: (zipPath: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareImportZip, zipPath),
+    importZip: (zipPath: string, exclude?: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.shareImportZip, zipPath, exclude),
     pickZip: (): Promise<unknown> => ipcRenderer.invoke(IPC.sharePickZip)
   },
 

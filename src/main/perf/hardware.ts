@@ -185,8 +185,9 @@ export async function detectHardware(force = false): Promise<HardwareProfile | n
       ramSpeed = num(ramList[0].Speed) || null
     }
 
-    // Storage
-    let storage: { type: string; totalGB: number } = { type: 'Unknown', totalGB: 0 }
+    // Storage — label from WMI plus REAL free/used space from the filesystem
+    // for the drive that actually holds launcher data (v1.0.52, Bug 8).
+    let storage: { type: string; totalGB: number; freeGB?: number; usedGB?: number; drive?: string } = { type: 'Unknown', totalGB: 0 }
     for (const d of diskList) {
       const st = storageLabel(d.MediaType, num(d.Size))
       // Prefer a real SSD/HDD label over Unspecified.
@@ -196,6 +197,16 @@ export async function detectHardware(force = false): Promise<HardwareProfile | n
     }
     if (storage.totalGB === 0 && diskList[0]) {
       storage = storageLabel(diskList[0].MediaType, num(diskList[0].Size))
+    }
+    try {
+      const driveRoot = path.parse(paths.data).root || (process.platform === 'win32' ? 'C:\\' : '/')
+      const st = fs.statfsSync(driveRoot)
+      const total = st.blocks * st.bsize
+      storage.freeGB = Math.round((st.bavail * st.bsize) / 1e9)
+      storage.usedGB = Math.round((total - st.bfree * st.bsize) / 1e9)
+      storage.drive = driveRoot
+    } catch {
+      /* non-fatal — the Settings row falls back to the label + total */
     }
 
     // Java (best detected runtime)
