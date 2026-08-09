@@ -1,3 +1,25 @@
+## v1.0.55 — Update All persistence fix (single source of truth)
+
+### Update All no longer re-flags updated mods as outdated
+- Root cause: the update re-check (`checkUpdates`) compared against a
+  DIFFERENT source than the install/update path. Installs resolved the
+  newest file with `curseforge.latestFile` / `modrinth.latestVersionFor`
+  (filtered by MC version + loader), but the re-check used an unfiltered
+  `listVersions` pass whose compatibility check accepted loader-less or
+  other-loader files — so it could find a different, newer-dated file
+  that Update would never install and flag freshly-updated mods as
+  outdated again, forever (observed with YetAnotherConfigLib being
+  "updated" repeatedly to the same jar: 09:59 / 10:01 / 11:09).
+- Fix: `checkUpdates` now resolves the newest file with the EXACT same
+  resolvers the install/update path uses (single source of truth). If
+  that resolver returns the version already installed, the mod is up to
+  date — no date heuristics that can disagree with what Update installs.
+- The check is also bounded to 6 concurrent provider lookups instead of
+  firing one per mod (100+ simultaneous calls caused HTTP 429
+  rate-limits that left stale update badges behind).
+- Applies uniformly to mods, resource packs, data packs, shaders and
+  hash-matched manual items.
+
 ## v1.0.54 — hover audio pool, crisp transitions, gallery zoom + bug sweep
 
 ### 1) Hover audio pool (every interaction is heard)

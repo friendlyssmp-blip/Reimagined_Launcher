@@ -827,42 +827,71 @@ class ModManager {
   async checkUpdates(profileId: string): Promise<ProfileMod[]> {
     const profile = await this.requireProfile(profileId)
     let changed = false
-    const updatedMods = await Promise.all(
-      profile.mods.map(async (mod) => {
-        if (mod.source !== 'modrinth' && mod.source !== 'curseforge') return mod
+    // v1.0.55 — bounded concurrency: profiles with 100+ mods would otherwise
+    // fire 100+ simultaneous provider calls and get rate-limited (HTTP 429),
+    // which made the whole check fail and left stale update badges behind.
+    // v1.0.55 — bounded concurrency: profiles with 100+ mods would otherwise
+    // fire 100+ simultaneous provider calls and get rate-limited (HTTP 429),
+    // which made the whole check fail and left stale update badges behind.
+    // Pre-allocated + index-assigned so the resulting array keeps profile.mods
+    // order no matter which worker finishes first.
+    const updatedMods: ProfileMod[] = new Array(profile.mods.length)
+    let idx = 0
+    const checkOne = async (): Promise<void> => {
+      while (idx < profile.mods.length) {
+        const i = idx++
+        const mod = profile.mods[i]
+        if (mod.source !== 'modrinth' && mod.source !== 'curseforge') {
+          updatedMods[i] = mod
+          continue
+        }
         try {
-          const versions =
-            mod.source === 'curseforge'
-              ? await curseforge.listVersions(mod.id, mod.projectType ?? 'mod')
-              : await modrinth.listVersions(mod.id, mod.projectType ?? 'mod')
-          const latest = versions.find((v) =>
-            this.versionCompatible(v, profile.minecraftVersion, profile.loader.type, mod.projectType ?? 'mod')
-          )
-          const installedV = versions.find((v) => v.id === mod.versionId)
-          const installedDate = installedV?.datePublished ? new Date(installedV.datePublished).getTime() : null
-          const latestDate = latest?.datePublished ? new Date(latest.datePublished).getTime() : null
-          // Only a real newer release triggers an update. If the installed
-          // version is missing from the listing (removed upstream) we stay
-          // conservative and show nothing rather than a false positive.
-          const needsUpdate = Boolean(
-            latest &&
-              latest.id !== mod.versionId &&
-              installedDate !== null &&
-              latestDate !== null &&
-              latestDate > installedDate
-          )
-          const next = needsUpdate && latest
-            ? { ...mod, updateAvailable: { versionId: latest.id, versionNumber: latest.versionNumber } }
+          // v1.0.55 — SINGLE SOURCE OF TRUTH: resolve the newest file with the
+          // EXACT same resolver the install/update path uses
+          // (curseforge.latestFile / modrinth.latestVersionFor) instead of a
+          // looser listVersions+versionCompatible pass. The old listing pulled
+          // files from every loader (and accepted loader-less entries), so it
+          // could flag a newer file that Update would never install — e.g.
+          // another loader's/pre-release build with a later date — and
+          // re-flag freshly-updated mods as outdated forever (the “Update All
+          // never persists” loop, seen with YetAnotherConfigLib). If the same
+          // resolver says the installed version IS the newest, there is
+          // nothing to update. No date heuristics needed: consistency with
+          // what Update would actually install is the correct criterion.
+          let latestId: string | null = null
+          let latestVersion: string | null = null
+          const projectType = mod.projectType ?? 'mod'
+          if (mod.source === 'curseforge') {
+            const file = await curseforge.latestFile(mod.id, profile.minecraftVersion, profile.loader.type)
+            if (file) {
+              latestId = String(file.fileId)
+              latestVersion = file.version || null
+            }
+          } else {
+            // versionCompatible is a final sanity gate: latestVersionFor's
+            // relaxed fallback (no loader match found) could hand back a
+            // cross-loader file (e.g. Forge for a Fabric profile) — never flag
+            // an update to something this profile can't actually run.
+            const v = await modrinth.latestVersionFor(mod.id, profile.minecraftVersion, profile.loader.type, projectType)
+            if (v && this.versionCompatible(v, profile.minecraftVersion, profile.loader.type, projectType)) {
+              latestId = v.id
+              latestVersion = v.versionNumber
+            }
+          }
+          const needsUpdate = Boolean(latestId && latestId !== mod.versionId)
+          const next = needsUpdate
+            ? { ...mod, updateAvailable: { versionId: latestId!, versionNumber: latestVersion || 'latest' } }
             : mod.updateAvailable
               ? { ...mod, updateAvailable: null }
               : mod
           if (next !== mod) changed = true
-          return next
+          updatedMods[i] = next
         } catch {
-          return mod
+          updatedMods[i] = mod
         }
-      })
-    )
+      }
+    }
+    await Promise.all(Array.from({ length: 6 }, () => checkOne()))
 
     if (changed) {
       await profileManager.update(profileId, { mods: updatedMods })

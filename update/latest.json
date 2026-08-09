@@ -1,8 +1,8 @@
 {
-  "version": "1.0.54",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.54.exe",
-  "sha256": "5a3a78a7028f97a25fcff69d8a8a8478cffe2280369fe61e12dadf61bf7a97d8",
-  "size": 83906026,
-  "publishedAt": "2026-08-09T14:14:43Z",
-  "notes": "Hover audio pool (every hover is heard, priorities protect clicks/important cues, no more machine-gun or dead hovers), crisp GPU transitions (no more text-scale blur), startup sound fixed (played twice) + redundant splash wordmark removed, gallery screenshots now full-res with scroll-wheel zoom in the lightbox, update dialog no longer flashes the stale 3-option prompt before closing (with a manual-relaunch fallback), redundant global search hidden on Mods/Modpacks, styled checkboxes, Update All shows the real count."
+  "version": "1.0.55",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.55.exe",
+  "sha256": "9a1b47649964775d7226cadb98256685529827dea74c10d65362c62575c48691",
+  "size": 83906166,
+  "publishedAt": "2026-08-09T15:43:23Z",
+  "notes": "Update All persistence fix: the update re-check now uses the exact same resolvers as the install path (curseforge.latestFile / modrinth.latestVersionFor) so freshly-updated mods are no longer re-flagged as outdated forever (single source of truth), plus bounded concurrency (6 lookups at a time) to avoid HTTP 429 rate-limits that left stale badges behind."
 }
