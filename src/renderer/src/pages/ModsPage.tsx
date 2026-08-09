@@ -9,7 +9,8 @@ import { InstallConfirmModal, type InstallTarget } from '../components/InstallCo
 import { UpdateAllModal } from '../components/UpdateAllModal'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
-import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo } from '@shared/types'
+import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo, ShaderSupport } from '@shared/types'
+import { shaderFitFor } from '../lib/shaderFit'
 
 type SourceTab = 'installed' | 'modrinth' | 'curseforge'
 type SortKey = 'relevance' | 'downloads' | 'newest' | 'updated' | 'name'
@@ -83,6 +84,9 @@ export function ModsPage() {
   const { activeProfile, notify, runGuarded, setModals } = useApp()
   const [tab, setTab] = useState<SourceTab>('installed')
   const [contentType, setContentType] = useState<ContentType>('mod')
+  /* v1.0.56 — per-shader hardware-fit badge: the real Shader Guard assessment
+     for THIS machine, fetched once when browsing shader packs. */
+  const [shaderSupport, setShaderSupport] = useState<ShaderSupport | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ProviderResult[]>([])
   const [installed, setInstalled] = useState<ProfileMod[]>(activeProfile?.mods ?? [])
@@ -714,6 +718,22 @@ export function ModsPage() {
     }
   }, [tab, instTab, activeProfile])
 
+  /* v1.0.56 — assess the machine once per shader-browsing session so every
+     shader card can show "Apto para tu PC / Limitado / No apto (own risk)". */
+  useEffect(() => {
+    if (contentType !== 'shader') return
+    let cancelled = false
+    api.shaders
+      .support(activeProfile?.id)
+      .then((s) => {
+        if (!cancelled) setShaderSupport(s)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [contentType, activeProfile?.id])
+
   const renderRow = (r: ProviderResult) => (
     <div key={r.projectId} className="mod-row card" onClick={() => openDetail(r)} role="button" tabIndex={0}>
       <div className="mod-icon">
@@ -726,6 +746,10 @@ export function ModsPage() {
           </span>
           <Badge variant="accent">{r.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}</Badge>
           {isInstalled(r) && <Badge variant="success">Installed</Badge>}
+          {contentType === 'shader' && shaderSupport && (() => {
+            const fit = shaderFitFor(shaderSupport, r.categories)
+            return <Badge variant={fit.level === 'ok' ? 'success' : fit.level === 'limited' ? 'warn' : 'danger'} title={fit.hint}>{fit.label}</Badge>
+          })()}
         </div>
         <div className="mod-desc">{r.description}</div>
         <div className="mod-tags">

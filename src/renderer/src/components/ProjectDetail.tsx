@@ -22,7 +22,8 @@ import {
   IconCheck,
   IconTrash
 } from './icons'
-import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo } from '@shared/types'
+import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo, ShaderSupport } from '@shared/types'
+import { shaderFitFor, shaderFitClass } from '../lib/shaderFit'
 
 type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader' | 'modpack'
 type DetailTab = 'overview' | 'changelog' | 'gallery' | 'versions' | 'includes'
@@ -304,6 +305,8 @@ export function ProjectDetail({
   const [includes, setIncludes] = useState<PackFile[] | null>(null)
   const [includesLoading, setIncludesLoading] = useState(false)
   const [includesError, setIncludesError] = useState<string | null>(null)
+  /* v1.0.56 — per-shader hardware-fit badge on the detail page. */
+  const [shaderSupport, setShaderSupport] = useState<ShaderSupport | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -318,6 +321,21 @@ export function ProjectDetail({
   }, [provider, projectId, projectType])
 
   useEffect(() => { void load() }, [load])
+
+  /* v1.0.56 — assess THIS machine for shaders (VRAM/driver via Shader Guard). */
+  useEffect(() => {
+    if (projectType !== 'shader') return
+    let cancelled = false
+    api.shaders
+      .support(activeProfile?.id)
+      .then((s) => {
+        if (!cancelled) setShaderSupport(s)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [projectType, activeProfile?.id])
 
   // Fresh page state for every project (incl. closing any open lightbox so
   // back/forward navigation never shows a stale screenshot from the last one).
@@ -697,6 +715,14 @@ export function ProjectDetail({
             <span className="badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-3)', fontWeight: 600 }}>
               {CONTENT_LABEL[projectType]}
             </span>
+            {projectType === 'shader' && shaderSupport && (() => {
+              const fit = shaderFitFor(shaderSupport, detail.categories)
+              return (
+                <span className={'badge ' + shaderFitClass(fit.level)} title={fit.hint} style={{ fontWeight: 600 }}>
+                  {fit.label}
+                </span>
+              )
+            })()}
             <span className="badge"><IconDownload style={{ width: 11, height: 11 }} /> {fmtCount(detail.downloads)}</span>
             <span className="badge"><IconClock style={{ width: 11, height: 11 }} /> {fmtDate(detail.updatedAt)}</span>
             {latest?.size ? <span className="badge">{fmtBytes(latest.size)}</span> : null}
@@ -707,6 +733,21 @@ export function ProjectDetail({
             {loaderPills.map((l) => <span key={l} className="badge" style={{ textTransform: 'capitalize' }}>{l}</span>)}
             {(detail.categories ?? []).slice(0, 3).map((c) => <span key={c} className="badge">{c}</span>)}
           </div>
+          {projectType === 'shader' && shaderSupport && (() => {
+            const fit = shaderFitFor(shaderSupport, detail.categories)
+            return (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 11.5,
+                  lineHeight: 1.4,
+                  color: fit.level === 'ok' ? 'var(--success)' : fit.level === 'limited' ? 'var(--warn)' : 'var(--danger)'
+                }}
+              >
+                {fit.hint}
+              </div>
+            )
+          })()}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

@@ -1,3 +1,32 @@
+## v1.0.56 — TNT/inventory frame-rate fixes + per-shader hardware-fit badges
+
+### FPS Boost mod 1.0.16 — the two dips from the FPS test V2
+- **Explosion Debris Cap (TNT 5×5)**: a big TNT chain turns hundreds of
+  destroyed blocks into falling-block entities — each one ticked (gravity +
+  collision) AND rendered as its own block model, the exact spike behind the
+  6 FPS dips. The cap (48 by default, 32 on the potato preset) stops the
+  overflow from animating: the blocks are still destroyed by the blast
+  (gameplay identical), only the flying debris of the extra bulk is skipped.
+  Singleplayer-only (the remote server controls multiplayer spawns).
+  New "Explosion Debris Cap" cycle button in the in-game menu (K).
+- **Flat GUI Background (inventory)**: skips the full-screen Gaussian blur
+  that translucent screens (inventory, pause) run over the world behind
+  them — the single most expensive frame on integrated GPUs (29 FPS opening
+  the inventory on an HD 620). The background stays dark/flat instead of
+  blurred. New "Flat GUI Background" toggle in the in-game menu (K).
+- Both are on by default and live-toggleable; entity post-effects (portals,
+  spyglass) are untouched.
+
+### Per-shader hardware-fit badge
+- While browsing shader packs, every card AND the detail page now show a
+  badge telling you whether THIS machine can realistically run that pack:
+  green "Apto para tu PC", amber "Limitado", or red "No apto para tu PC".
+  You can always install it — the red badge is your "instalar bajo tu
+  propio riesgo" warning up front, with the reason visible on the detail
+  page. Based on the real Shader Guard assessment (VRAM / driver);
+  lightweight packs (Lite/Potato/Performance) get a one-step mercy on
+  low-VRAM machines.
+
 ## v1.0.55 — Update All persistence fix (single source of truth)
 
 ### Update All no longer re-flags updated mods as outdated

@@ -1,8 +1,8 @@
 {
-  "version": "1.0.55",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.55.exe",
-  "sha256": "9a1b47649964775d7226cadb98256685529827dea74c10d65362c62575c48691",
-  "size": 83906166,
-  "publishedAt": "2026-08-09T15:43:23Z",
-  "notes": "Update All persistence fix: the update re-check now uses the exact same resolvers as the install path (curseforge.latestFile / modrinth.latestVersionFor) so freshly-updated mods are no longer re-flagged as outdated forever (single source of truth), plus bounded concurrency (6 lookups at a time) to avoid HTTP 429 rate-limits that left stale badges behind."
+  "version": "1.0.56",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.56.exe",
+  "sha256": "9bca8870ba5bec12de0adeef4bb3bbe9dd97f5b2f659dd78b0eada69a2737b9b",
+  "size": 83910591,
+  "publishedAt": "2026-08-09T16:23:48Z",
+  "notes": "FPS Boost mod 1.0.16 fixes the two dips from the FPS test V2: Explosion Debris Cap stops huge TNT chains (5x5) from spawning hundreds of falling-block entities (each ticked + rendered) — the 6 FPS dip — while blocks are still destroyed; Flat GUI Background skips the full-screen Gaussian blur behind translucent screens (inventory) — the 29 FPS dip — with both as live toggles in the in-game menu (K). Shader browsing now shows a per-pack hardware-fit badge (Apto para tu PC / Limitado / No apto — install at your own risk) based on the real Shader Guard assessment."
 }

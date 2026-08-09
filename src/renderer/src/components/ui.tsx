@@ -162,8 +162,12 @@ export function Slider({ value, min, max, step = 1, onChange, label }: { value: 
   )
 }
 
-export function Badge({ variant, children }: { variant?: string; children: ReactNode }) {
-  return <span className={`badge ${variant && variant !== 'default' ? `badge-${variant}` : ''}`}>{children}</span>
+export function Badge({ variant, title, children }: { variant?: string; title?: string; children: ReactNode }) {
+  return (
+    <span title={title} className={`badge ${variant && variant !== 'default' ? `badge-${variant}` : ''}`}>
+      {children}
+    </span>
+  )
 }
 
 /**
