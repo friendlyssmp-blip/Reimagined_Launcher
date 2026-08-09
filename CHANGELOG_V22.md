@@ -1,3 +1,22 @@
+## v1.0.59 — No more forced re-login after updates (Microsoft session fix)
+
+### You no longer have to sign in again after every update
+- **Root cause**: after an update the launcher restarts and THREE things try to
+  refresh the Microsoft session at once (startup, the account status check, and
+  Play). Microsoft rotates the refresh token on every refresh, so the concurrent
+  requests raced: one won and the others got rejected (invalid_grant), which
+  marked the session as "expired" and left the game unable to authenticate —
+  forcing a logout + re-login almost every update.
+- **Fix**: token refresh is now single-flight — every caller shares ONE refresh,
+  so no two requests ever use the same refresh token. Transient hiccups (network
+  blips, rate limits) are retried with a short timeout and never mark the session
+  as dead; only a genuine Microsoft rejection does. A dead session is reported
+  once (with a 2-minute cooldown), not spammed by the account re-check loop.
+- **Cleaner launches**: if a session genuinely can't be refreshed anymore, the
+  launcher now stops BEFORE starting Minecraft with a clear message ("Your
+  Microsoft session has expired — sign in again") instead of letting the game
+  fail mid-boot with a cryptic "cannot authenticate".
+
 ## v1.0.58 — Mods that delete themselves are fixed + install dialog centers on screen + CurseForge infinite scroll
 
 ### Mods were disappearing on their own (root cause fixed)

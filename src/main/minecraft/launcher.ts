@@ -152,6 +152,18 @@ class Launcher {
     mark('auth')
     const acc = refreshed ?? account
     if (!acc.profile) throw Errors.launchFailed('Your Microsoft account has no Minecraft profile.')
+    // v1.0.59 — never launch with a dead token: the game's own auth failure
+    // is cryptic ("cannot authenticate"), so fail fast in the launcher with a
+    // clear, actionable message. The silent refresh above handles the common
+    // case (update-restart races); this only triggers when the session
+    // genuinely cannot be refreshed anymore.
+    if (acc.tokens.expiresAt <= Date.now() - 60_000) {
+      throw new LauncherError(
+        'AUTH_EXPIRED',
+        'Your Microsoft session has expired.',
+        'Sign in again in the launcher (Account panel) and retry the launch.'
+      )
+    }
 
     const session: GameSession = {
       profile,

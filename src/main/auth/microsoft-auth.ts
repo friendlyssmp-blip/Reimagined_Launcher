@@ -54,6 +54,24 @@ class MicrosoftAuth {
   private cancelFlag = false
   private polling = false
   private currentDeviceCode: string | null = null
+  /**
+   * v1.0.59 — single-flight token refresh. Every caller (startup, account
+   * status check, Play) shares ONE in-flight refresh. Microsoft rotates the
+   * refresh token on every refresh, so two concurrent requests using the
+   * same token race: the first one wins and the rest get HTTP 400
+   * invalid_grant — which made the launcher look like it "lost" its session
+   * after every update restart (startup refresh + status check + Play all
+   * fired at once).
+   */
+  private refreshInFlight: Promise<Account | null> | null = null
+  /**
+   * v1.0.59 — last time the refresh was genuinely rejected by Microsoft.
+   * Cooldown guard: the renderer re-checks the account (which re-invokes
+   * refreshIfNeeded) after every 'expired' event, so without this a dead
+   * session would hammer AAD with a failing refresh and a fresh "Session
+   * expired" toast on every cycle while the launcher stays open.
+   */
+  private lastRejectedAt = 0
 
   isConfigured(): boolean {
     return !!settingsManager.get().microsoftClientId || Boolean(BUILT_IN_CLIENT_ID)
@@ -277,47 +295,124 @@ class MicrosoftAuth {
     }
   }
 
-  /** Refresh the Minecraft bearer token when it is close to expiry. */
+  /**
+   * Refresh the Minecraft bearer token when it is close to expiry.
+   *
+   * v1.0.59 — single-flight: concurrent callers share one refresh promise,
+   * eliminating the refresh-token rotation race that made the launcher look
+   * logged-out after every update restart. Transient network hiccups are
+   * retried with backoff and never mark the session as expired; only a
+   * genuine OAuth rejection (invalid_grant) does.
+   */
   async refreshIfNeeded(): Promise<Account | null> {
+    if (this.refreshInFlight) return this.refreshInFlight
+    this.refreshInFlight = this.doRefresh()
+    try {
+      return await this.refreshInFlight
+    } finally {
+      this.refreshInFlight = null
+    }
+  }
+
+  private async doRefresh(): Promise<Account | null> {
     const account = accountStore.get()
     if (!account) return null
+    // Cooldown after a genuine rejection (see lastRejectedAt) — a dead
+    // session must not re-hit AAD on every account re-check.
+    if (Date.now() - this.lastRejectedAt < 2 * 60_000) return account
     const stillValid = account.tokens.expiresAt - Date.now() > 5 * 60_000
     if (stillValid) return account
 
     const clientId = settingsManager.get().microsoftClientId || BUILT_IN_CLIENT_ID
     if (!clientId) return account
 
-    try {
-      logger.info('Refreshing Microsoft session token')
-      const res = await postForm<TokenResponse>(`${AAD}/token`, {
-        grant_type: 'refresh_token',
-        client_id: clientId,
-        refresh_token: account.tokens.refreshToken,
-        scope: SCOPE
-      })
-      if (!res.access_token || !res.refresh_token) {
-        logger.warn('Token refresh rejected — user must sign in again')
-        eventBus.emit('auth:state', { phase: 'expired' })
-        return account
+    // A fresh-token recovery shared by every "the server said no" path: a
+    // rotation race may already have stored new tokens while we were in
+    // flight, so re-read the store before declaring the session expired.
+    const useStoredIfFresh = (): Account | null => {
+      const current = accountStore.get()
+      if (current && current.tokens.expiresAt - Date.now() > 5 * 60_000) {
+        logger.info('Refresh raced with another rotation — using the tokens already stored')
+        return current
       }
-      const updated: Account = {
-        ...account,
-        tokens: {
-          accessToken: res.access_token,
-          refreshToken: res.refresh_token,
-          expiresAt: Date.now() + (res.expires_in ?? 86400) * 1000
-        },
-        lastRefreshedAt: iso()
-      }
-      await accountStore.set(updated)
-      eventBus.emit('auth:state', { phase: 'refreshed', account: updated })
-      logger.info('Microsoft session refreshed successfully')
-      return updated
-    } catch (err) {
-      logger.exception('Token refresh failed', err)
-      eventBus.emit('auth:state', { phase: 'expired' })
-      return account
+      return null
     }
+
+    // Bounded retry for genuine transient server conditions (429/5xx) with a
+    // short per-request timeout — a momentary hiccup right after an update
+    // restart must never force a re-login, but a dead network must not block
+    // Play for minutes either. OAuth rejections (HTTP 400 with an error
+    // body) are NOT retried.
+    let lastErr: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        logger.info('Refreshing Microsoft session token')
+        const res = await postForm<TokenResponse>(
+          `${AAD}/token`,
+          {
+            grant_type: 'refresh_token',
+            client_id: clientId,
+            refresh_token: account.tokens.refreshToken,
+            scope: SCOPE
+          },
+          { timeoutMs: 8_000 }
+        )
+        if (!res.access_token || !res.refresh_token) {
+          // The server answered but refused the refresh — the session really
+          // is dead and the user must sign in again.
+          const stored = useStoredIfFresh()
+          if (stored) return stored
+          logger.warn('Token refresh rejected — user must sign in again')
+          this.lastRejectedAt = Date.now()
+          eventBus.emit('auth:state', { phase: 'expired' })
+          return account
+        }
+        const updated: Account = {
+          ...account,
+          tokens: {
+            accessToken: res.access_token,
+            refreshToken: res.refresh_token,
+            expiresAt: Date.now() + (res.expires_in ?? 86400) * 1000
+          },
+          lastRefreshedAt: iso()
+        }
+        await accountStore.set(updated)
+        eventBus.emit('auth:state', { phase: 'refreshed', account: updated })
+        logger.info('Microsoft session refreshed successfully')
+        return updated
+      } catch (err) {
+        lastErr = err
+        const e = err as { status?: number; body?: { error?: string } }
+        const oauthError = e.body?.error
+        const oauthRejected = e.status === 400 && typeof oauthError === 'string'
+        if (oauthRejected) {
+          // A 400 with an OAuth error means the refresh token is dead
+          // (invalid_grant) — unless another refresh already rotated it and
+          // stored fresh tokens while we were in flight.
+          const stored = useStoredIfFresh()
+          if (stored) return stored
+          logger.warn(`Token refresh rejected by Microsoft (${oauthError}) — user must sign in again`)
+          this.lastRejectedAt = Date.now()
+          eventBus.emit('auth:state', { phase: 'expired' })
+          return account
+        }
+        // Retry only real server-side transient conditions (429/5xx), the
+        // same policy getJson uses — network/timeout failures stop
+        // immediately so a launch is never blocked for minutes.
+        const status = e.status
+        const retriable = status === 429 || (status !== undefined && status >= 500 && status < 600)
+        if (retriable && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 600 * Math.pow(2, attempt)))
+          continue
+        }
+        break
+      }
+    }
+    logger.exception(
+      'Token refresh failed (transient)',
+      lastErr instanceof Error ? lastErr : new Error(String(lastErr))
+    )
+    return account
   }
 
   async logout(): Promise<void> {
