@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { Modal, Button, Field, TextInput, Select, Slider, ProfileGlyph } from './ui'
+import { SearchableSelect } from './SearchableSelect'
 import { PROFILE_ICONS } from './icons'
 import { api, friendlyError } from '../lib/api'
 import type { Profile, LoaderType } from '@shared/types'
@@ -271,22 +272,20 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
           {loadingVersions ? (
             <div style={{ padding: '10px', color: 'var(--text-3)', fontSize: 13 }}>Loading versions…</div>
           ) : (
-            <Select
+            <SearchableSelect
+              options={versions}
               value={mcVersion}
-              onChange={(e) => {
+              onChange={(v) => {
                 // A loader version valid for the old MC version may not exist
                 // for the new one — drop it now so a stale value can never be
                 // saved; the effect refills the recommended one immediately.
                 setLoaderVersion('')
                 loaderVersionRef.current = ''
                 setLoaderVersionNote(null)
-                setMcVersion(e.target.value)
+                setMcVersion(v)
               }}
-            >
-              {versions.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </Select>
+              placeholder="Search Minecraft versions…"
+            />
           )}
         </Field>
 
@@ -324,18 +323,17 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
           {loaderVersionsLoading ? (
             <div style={{ padding: '10px', color: 'var(--text-3)', fontSize: 13 }}>Loading loader versions…</div>
           ) : (
-            <Select
+            <SearchableSelect
+              options={loader === 'fabric' ? loaders?.fabric ?? [] : loaders?.forge ?? []}
               value={loaderVersion}
-              onChange={(e) => {
-                setLoaderVersion(e.target.value)
+              onChange={(v) => {
+                setLoaderVersion(v)
                 setLoaderVersionNote(null)
               }}
-            >
-              <option value="">Auto (latest {loader === 'fabric' ? 'stable' : 'recommended'})</option>
-              {(loader === 'fabric' ? loaders?.fabric ?? [] : loaders?.forge ?? []).map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </Select>
+              firstOption={loader === 'fabric' ? 'Auto (latest stable)' : 'Auto (latest recommended)'}
+              firstValue=""
+              placeholder="Search loader versions…"
+            />
           )}
           {loaderVersionNote && (
             <span className="field-hint" style={{ color: 'var(--warning)', display: 'block', marginTop: 6 }}>{loaderVersionNote}</span>

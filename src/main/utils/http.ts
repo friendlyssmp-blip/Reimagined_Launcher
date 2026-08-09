@@ -47,9 +47,26 @@ async function parseResponse(res: Response, context: string): Promise<unknown> {
   return json
 }
 
+/**
+ * GET with bounded automatic retry on rate-limit (429) and transient 5xx
+ * responses — Modrinth throttles bursts (HTTP 429) and a quick retry with
+ * backoff resolves most of them without bothering the user.
+ */
 export async function getJson<T>(url: string, opts: JsonRequestOptions = {}): Promise<T> {
-  const res = await withTimeout(fetch(url, { headers: opts.headers }), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-  return (await parseResponse(res, `GET ${url}`)) as T
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await withTimeout(fetch(url, { headers: opts.headers }), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+      return (await parseResponse(res, `GET ${url}`)) as T
+    } catch (err) {
+      lastErr = err
+      const status = (err as { status?: number })?.status
+      const retriable = status === 429 || (status !== undefined && status >= 500 && status < 600)
+      if (!retriable) throw err
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
+    }
+  }
+  throw lastErr
 }
 
 export async function postForm<T>(

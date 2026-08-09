@@ -7,6 +7,7 @@ import { ModIcon } from './ModIcon'
 import { InstallConfirmModal, type InstallTarget } from './InstallConfirmModal'
 import { ProjectImage } from './ProjectImage'
 import { api, friendlyError } from '../lib/api'
+import { sanitizeHtml, isHtmlish } from '../lib/sanitizeHtml'
 import {
   IconDownload,
   IconExternal,
@@ -67,6 +68,22 @@ function renderMarkdown(md: string): string {
   html = html.split('\n').map((l) => l.trim()).filter(Boolean)
     .map((l) => (l.startsWith('<') ? l : '<p>' + l + '</p>')).join('\n')
   return html
+}
+
+/**
+ * Render a provider description/changelog safely. HTML (CurseForge) and
+ * markdown-that-is-really-HTML (some Modrinth changelogs) are sanitized;
+ * plain markdown goes through the escaped markdown renderer; plain text is
+ * escaped paragraph by paragraph.
+ */
+function renderBody(text: string, format?: string): string {
+  if (!text) return ''
+  if (format === 'html' || isHtmlish(text)) return sanitizeHtml(text)
+  if (format === 'markdown') return renderMarkdown(text)
+  return text
+    .split('\n').filter(Boolean)
+    .map((p) => '<p>' + p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>')
+    .join('')
 }
 
 function fmtCount(n: number): string {
@@ -247,7 +264,20 @@ export function ProjectDetail({
   }, [overflowOpen])
 
   const versions = detail?.versions ?? []
-  const latest = versions[0]
+  // v1.0.51 — “Update Available” must only appear when the newest COMPATIBLE
+  // version is genuinely newer than the installed one. The raw version list
+  // mixes every Minecraft version/loader, so versions[0] used to trigger
+  // false “Update Available” states for items that were already up to date.
+  const isCompat = (v: ProjectVersionInfo): boolean => {
+    if (compatibleCheck) return compatibleCheck(v)
+    const mc = activeProfile?.minecraftVersion ?? ''
+    const loader = activeProfile?.loader.type ?? ''
+    return (
+      (v.gameVersions.length === 0 || v.gameVersions.includes(mc)) &&
+      (projectType !== 'mod' || v.loaders.length === 0 || v.loaders.includes(loader) || v.loaders.includes('any'))
+    )
+  }
+  const latest = versions.find(isCompat) ?? versions[0]
   const isCurrent = Boolean(installed && latest && installed.versionId === latest.id)
 
   // CurseForge release notes are per-file — fetch them lazily in the tab.
@@ -464,10 +494,7 @@ export function ProjectDetail({
   }
 
   const changeToNewestCompatible = () => {
-    const candidates = versions.filter(
-      (v) => v.id !== installed?.versionId &&
-        (v.gameVersions.length === 0 || v.gameVersions.includes(activeProfile?.minecraftVersion ?? ''))
-    )
+    const candidates = versions.filter((v) => v.id !== installed?.versionId && isCompat(v))
     if (candidates.length === 0) {
       notify('info', 'No other versions', 'No other compatible versions were found for this profile.')
       return
@@ -578,7 +605,7 @@ export function ProjectDetail({
                 <IconDots style={{ width: 15, height: 15 }} />
               </button>
               {overflowOpen && (
-                <div className="overflow-menu" onMouseDown={(e) => e.stopPropagation()}>
+                <div className="ctx-menu" onMouseDown={(e) => e.stopPropagation()}>
                   <button onClick={() => { setOverflowOpen(false); window.open(detail.url, '_blank') }}>
                     <IconExternal style={{ width: 13, height: 13 }} /> Open project page
                   </button>
@@ -663,12 +690,7 @@ export function ProjectDetail({
             <div
               className="detail-body"
               style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.65, marginTop: 8, userSelect: 'text' }}
-              dangerouslySetInnerHTML={{
-                __html:
-                  detail.descriptionFormat === 'markdown'
-                    ? renderMarkdown(detail.description)
-                    : detail.description.split('\n').filter(Boolean).map((p) => '<p>' + p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>').join('')
-              }}
+              dangerouslySetInnerHTML={{ __html: renderBody(detail.description, detail.descriptionFormat) }}
             />
           </div>
         )}
@@ -702,7 +724,7 @@ export function ProjectDetail({
                             <div
                               dangerouslySetInnerHTML={{
                                 __html: text
-                                  ? renderMarkdown(text)
+                                  ? renderBody(text, provider === 'curseforge' ? 'html' : 'markdown')
                                   : '<em>No changelog available for this version.</em>'
                               }}
                             />

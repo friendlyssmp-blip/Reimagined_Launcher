@@ -1,8 +1,9 @@
-import { useState, useCallback, Fragment, useEffect, useRef } from 'react'
+import { useState, useCallback, Fragment, useEffect, useRef, useMemo } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { Button, TextInput, Spinner, EmptyState, Badge, Toggle, TabBar } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
+import { normalizeTitle } from '../lib/text'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { InstallConfirmModal, type InstallTarget } from '../components/InstallConfirmModal'
 import { ModIcon } from '../components/ModIcon'
@@ -108,7 +109,7 @@ export function ModsPage() {
   const [versionsOpen, setVersionsOpen] = useState<string | null>(null)
   const [versionsFor, setVersionsFor] = useState<Record<string, ProjectVersionInfo[]>>({})
   const [versionsBusy, setVersionsBusy] = useState(false)
-  const [sort, setSort] = useState<SortKey>('downloads')
+  const [sort, setSort] = useState<SortKey>('name')
   const [updatingAll, setUpdatingAll] = useState(false)
   // Install confirmation with real dependencies (plain click = dialog,
   // Shift-click = install immediately with dependencies).
@@ -174,7 +175,9 @@ export function ModsPage() {
         })
         if (!append && mySeq !== searchSeq.current) return // stale — a newer search superseded this one
         setTotalHits(r.totalHits)
-        const page = r.items.map((x) => ({ ...x, source: 'modrinth' as const }))
+        const page = r.items
+          .map((x) => ({ ...x, source: 'modrinth' as const }))
+          .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : 0))
         setResults((prev) => (append ? [...prev, ...page] : page))
         setOffset(startOffset + page.length)
         // v1.0.39 — Modrinth-first: when the FIRST page of a real query has no
@@ -226,7 +229,11 @@ export function ModsPage() {
       try {
         const cfSort = sort === 'updated' ? 'recent' : sort === 'relevance' ? 'downloads' : sort
         const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType, category ?? undefined)
-        setResults(page.map((x) => ({ ...x, source: 'curseforge' as const })))
+        setResults(
+          page
+            .map((x) => ({ ...x, source: 'curseforge' as const }))
+            .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : 0))
+        )
       } catch (err) {
         const code = (err as { code?: string }).code
         // Setup card ONLY when no proxy is configured; real failures (proxy
@@ -290,26 +297,50 @@ export function ModsPage() {
     return () => obs.disconnect()
   }, [tab, loadMore, loadingMore, results.length])
 
-  // Real category list from Modrinth's tags API (mods only, for the sidebar).
+  // Real category list from Modrinth's tags API, scoped to the browsing
+  // content type (mods, resource packs, shaders…) — never a cross-type list.
+  // Loaded once per type and kept across tab switches (no refetch/clearing
+  // when the user just hops between browse providers).
+  const catLoadedFor = useRef<ContentType | null>(null)
   useEffect(() => {
-    if (tab !== 'modrinth' || categories.length > 0 || contentType !== 'mod') return
+    if (tab !== 'modrinth' || catLoadedFor.current === contentType) return
+    let active = true
+    catLoadedFor.current = contentType
+    setCategories([])
     api.mods
-      .categories()
-      .then((c) => setCategories(c.slice(0, 60)))
-      .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .categories(contentType)
+      .then((c) => {
+        if (active) setCategories(c.slice(0, 60))
+      })
+      .catch(() => {
+        if (active) setCategories([])
+      })
+    return () => {
+      active = false
+    }
   }, [tab, contentType])
 
-  /* v1.0.50 — CurseForge categories for the same sidebar (real data from the
-   * proxy's /api/cf/categories route; older proxies degrade to an empty list
-   * and the sidebar just hides — never a fake list). */
+  /* v1.0.51 — CurseForge categories scoped to the current content type: the
+   * proxy returns the full game tree and the main process filters it by the
+   * type's class id, so Resource Packs shows pack categories, Shaders shows
+   * shader categories, etc. Older proxies degrade to an empty sidebar. */
+  const cfCatLoadedFor = useRef<ContentType | null>(null)
   useEffect(() => {
-    if (tab !== 'curseforge' || cfCategories.length > 0 || contentType !== 'mod') return
+    if (tab !== 'curseforge' || cfCatLoadedFor.current === contentType) return
+    let active = true
+    cfCatLoadedFor.current = contentType
+    setCfCategories([])
     api.mods
-      .categoriesCurseforge()
-      .then((c) => setCfCategories(c.map((x) => x.name)))
-      .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .categoriesCurseforge(contentType)
+      .then((c) => {
+        if (active) setCfCategories(c.map((x) => x.name))
+      })
+      .catch(() => {
+        if (active) setCfCategories([])
+      })
+    return () => {
+      active = false
+    }
   }, [tab, contentType])
 
   const installMod = async (r: ProviderResult) => {
@@ -586,7 +617,11 @@ export function ModsPage() {
    * "Installed" in Modrinth results and can never be double-installed. */
   const isInstalled = (r: ProviderResult | string): boolean => {
     if (typeof r === 'string') return installed.some((m) => m.id === r)
-    return installed.some((m) => m.id === r.projectId || m.slug === r.slug)
+    return (
+      installed.some((m) => m.id === r.projectId || m.slug === r.slug) ||
+      (normalizeTitle(r.title).length > 0 &&
+        installed.some((m) => normalizeTitle(m.title) === normalizeTitle(r.title)))
+    )
   }
 
   /* Worlds are live filesystem data — load them when the Worlds sub-tab opens. */
@@ -1002,6 +1037,20 @@ export function ModsPage() {
     )
   }
 
+  // v1.0.51 — cross-provider installed lookup for the detail page: a
+  // project opened from CurseForge that was actually installed from Modrinth
+  // (same normalized name) is recognized, so the detail page shows the real
+  // state (“Up to date” / “Update Available”) instead of a fresh Install.
+  const detailInstalled = useMemo(() => {
+    if (!detail) return null
+    const direct = installed.find((m) => m.id === detail.projectId || m.slug === detail.projectId)
+    if (direct) return direct
+    const t = results.find((r) => r.projectId === detail.projectId)?.title
+    if (!t) return null
+    const nt = normalizeTitle(t)
+    return nt.length > 0 ? (installed.find((m) => normalizeTitle(m.title) === nt) ?? null) : null
+  }, [detail, installed, results])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Part 5 (V2) — the detail page REPLACES the whole screen while open:
@@ -1012,7 +1061,7 @@ export function ModsPage() {
           provider={detail.provider}
           projectId={detail.projectId}
           projectType={detail.projectType}
-          installed={installed.find((m) => m.id === detail.projectId) ?? null}
+          installed={detailInstalled}
           onBack={goBack}
           onForward={goForward}
           canBack={detailIndex > 0}
@@ -1044,7 +1093,10 @@ export function ModsPage() {
           // Part 7 — entering Browse from an Installed sub-tab carries that
           // content type (e.g. Resource Packs → Modrinth opens on Resource
           // Packs), unless the user already chose a type manually in Browse.
-          if (next === 'modrinth' && !contentTypeUserSet.current && instTab !== 'worlds') {
+          // v1.0.51 — the Installed sub-tab's content type travels into BOTH
+          // browse providers (Modrinth AND CurseForge), so Installed →
+          // Resource Packs → CurseForge shows pack categories, not mods.
+          if ((next === 'modrinth' || next === 'curseforge') && !contentTypeUserSet.current && instTab !== 'worlds') {
             setContentType((typeForInst[instTab] ?? 'mod') as ContentType)
           }
           // v1.0.50 — provider categories are different facets: never let a

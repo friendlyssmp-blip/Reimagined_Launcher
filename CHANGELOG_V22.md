@@ -1,3 +1,53 @@
+## v1.0.51 — versions you can see + cross-provider dedupe + searchable pickers
+
+### 1) The "undefined" version bug (root cause found)
+- Installing/updating a mod showed "Mod updated: X → undefined" and download
+  labels like "[Bookshelf — undefined]". Root cause: the install/update paths
+  read `version.versionNumber`, but the raw Modrinth payload uses snake_case
+  (`version_number`), so the field was always undefined. The raw versions are
+  now normalized into the camelCase shape in every path (latest version,
+  SHA1 hash lookup, enrich), so installed/updated mods always carry their real
+  version number.
+
+### 2) CurseForge timeouts + Modrinth rate-limits
+- CurseForge requests now allow 60 s (the Render free tier sleeps after ~15 min
+  idle and the first request after a pause can take 30–60 s to wake the proxy;
+  25 s used to abort before it answered) with a bounded retry, and the proxy
+  itself uses a 45 s upstream timeout (redeploy backend/cf-proxy).
+- Modrinth throttles bursts (HTTP 429) — JSON requests now retry with backoff,
+  and the startup enrich of manually-installed mods is paced (4 workers +
+  stagger) so a 100-mod folder can never trip the rate limit again.
+- CurseForge files that omit downloadUrl now fall back to alternateDownloadUrl
+  (fixes "CF_NO_URL" on some shaders).
+
+### 3) Cross-provider "already installed" (Modrinth ↔ CurseForge)
+- Browsing CurseForge while a mod is installed from Modrinth (or vice versa)
+  now shows "Installed" and blocks a duplicate install — matched by real
+  id/slug first, then by normalized title (same content type). Dependencies
+  are deduped the same way, and the install dialog shows a clear "Already
+  installed with Modrinth/CurseForge" state instead of offering Install.
+
+### 4) Descriptions/changelogs render cleanly (no raw <p><strong>)
+- CurseForge changelogs (HTML) and Modrinth changelogs that embed HTML are now
+  sanitized with an allowlist renderer (scripts/event handlers/javascript:
+  URLs stripped) instead of showing literal tags.
+
+### 5) Content-type correctness + default A–Z
+- Installed → Resource Packs → CurseForge now opens CurseForge on Resource
+  Packs (the type used to stay "mods" there), with the category sidebar scoped
+  per content type (pack categories for packs, shader categories for shaders).
+- Browse results (mods, resource packs, modpacks) default to Name A–Z.
+
+### 6) UI fixes
+- Minecraft version / loader pickers are now a searchable, dark/purple
+  dropdown (shared component used by profile creation/edit and modpack
+  filtering) with arrow-key navigation.
+- The "…" overflow menu on the detail page uses the app's dark context-menu
+  styling and anchors cleanly under the button.
+- "Update Available" no longer shows when already up to date: the detail page
+  now compares against the newest version COMPATIBLE with the profile's
+  Minecraft version + loader (the raw list used to trigger false positives).
+
 ## v1.0.50 — 5 launcher fixes + Legacy Fabric support
 
 ### 1) Installed list: real icons + real updates for manual mods

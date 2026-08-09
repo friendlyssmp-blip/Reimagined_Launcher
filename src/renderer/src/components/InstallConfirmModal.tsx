@@ -19,6 +19,7 @@ import { sound } from '../lib/sound'
 import { Button, Spinner, Badge } from './ui'
 import { ModIcon } from './ModIcon'
 import { api, friendlyError } from '../lib/api'
+import { normalizeTitle } from '../lib/text'
 import { IconX, IconCheck, IconPuzzle } from './icons'
 import type { InstallDepInfo, ProfileMod, ProjectDetail, ProjectVersionInfo } from '@shared/types'
 
@@ -101,6 +102,18 @@ export function InstallConfirmModal({
   const missing = allDeps.filter((d) => !d.installed)
   const missingRequired = missing.filter((d) => d.dependencyType === 'required')
 
+  // v1.0.51 — cross-provider “already installed”: the same item installed
+  // from Modrinth is recognized when browsing CurseForge (and vice versa) by
+  // normalized title, so it can never be installed twice.
+  const alreadyInstalled =
+    activeProfile && info?.detail
+      ? (activeProfile.mods.find((m) => {
+          if (m.id === target.projectId || m.slug === target.projectId) return true
+          const nt = normalizeTitle(info.detail?.title ?? '')
+          return nt.length > 0 && normalizeTitle(m.title) === nt
+        }) ?? null)
+      : null
+
   const doInstall = async (withDeps: boolean) => {
     if (!activeProfile || !info || !info.version) return
     setBusy(withDeps ? 'deps' : 'only')
@@ -116,7 +129,7 @@ export function InstallConfirmModal({
       } else {
         // Modrinth = the pinned version; CurseForge = the pinned file id —
         // both go through installVersion with the REAL provider now.
-        const mod = await api.mods.installVersion(activeProfile.id, target.provider, target.projectId, info.version!.id, target.projectType)
+        const mod = await api.mods.installVersion(activeProfile.id, target.provider, target.projectId, info.version!.id, target.projectType, info.detail?.title)
         onInstalled(mod)
         // v1.0.35 — install-complete payoff with the success checkmark.
         sound.installComplete()
@@ -162,7 +175,14 @@ export function InstallConfirmModal({
                   )}
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14.5 }}>{info.detail?.title ?? target.projectId}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {info.detail?.title ?? target.projectId}
+                    {alreadyInstalled && (
+                      <Badge variant="success">
+                        <IconCheck style={{ width: 10, height: 10 }} /> Already installed with {alreadyInstalled.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}
+                      </Badge>
+                    )}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
                     {info.version?.versionNumber}
                     {info.version?.gameVersions[0] ? ` · MC ${info.version.gameVersions[0]}` : ''}
@@ -223,18 +243,25 @@ export function InstallConfirmModal({
         </div>
         {info && busy === null && (
           <div className="modal-foot">
-            <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--text-3)' }}>
-              {allDeps.length === 0
-                ? target.provider === 'curseforge'
-                  ? 'CurseForge does not expose dependency data — the item installs alone.'
-                  : 'No additional dependencies required.'
-                : missingRequired.length > 0
-                  ? 'Required dependencies are missing — install them for the item to work correctly.'
-                  : missing.length > 0
-                    ? 'Optional dependencies can be added with “with dependencies”.'
-                    : 'All dependencies are already installed — the item installs alone.'}
-            </div>
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            {alreadyInstalled ? (
+              <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text-2)' }}>
+                This item is already installed in this profile (
+                {alreadyInstalled.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}) — installing it again would create a duplicate.
+              </div>
+            ) : (
+              <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--text-3)' }}>
+                {allDeps.length === 0
+                  ? target.provider === 'curseforge'
+                    ? 'CurseForge does not expose dependency data — the item installs alone.'
+                    : 'No additional dependencies required.'
+                  : missingRequired.length > 0
+                    ? 'Required dependencies are missing — install them for the item to work correctly.'
+                    : missing.length > 0
+                      ? 'Optional dependencies can be added with “with dependencies”.'
+                      : 'All dependencies are already installed — the item installs alone.'}
+              </div>
+            )}
+            <Button variant="ghost" onClick={onClose}>{alreadyInstalled ? 'Close' : 'Cancel'}</Button>
             {allDeps.length === 0 ? (
               /* No dependencies at all — one clean Install action. */
               <Button variant="primary" onClick={() => void doInstall(false)}>

@@ -1,8 +1,8 @@
 {
-  "version": "1.0.50",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.50.exe",
-  "sha256": "08169042a9d60f5945036fd55e27af68bc3702589a8124bfea80ce3fde54b0b1",
-  "size": 83894564,
-  "publishedAt": "2026-08-08T23:09:58Z",
-  "notes": "5 launcher fixes + Legacy Fabric support: real icons & updates for manually-installed mods (enrich pass + embedded jar/pack icons), downloads never stuck at 100% (terminal updates land on the exact entry, Cancel only while active), fully functional CurseForge tab (real category sidebar + category/loader filters), and Legacy Fabric auto-detection for Minecraft 1.13.2 and below (loader from meta.legacyfabric.net, Legacy Fabric API auto-install fixed, ornith builds visible in Browse)."
+  "version": "1.0.51",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.51.exe",
+  "sha256": "00b2bea153756dea85a11709ea163ca2f90c89fb0fa0511af0d610a7c90d95f4",
+  "size": 83896784,
+  "publishedAt": "2026-08-09T01:28:54Z",
+  "notes": "Versions you can actually see (undefined version bug fixed at the source: raw Modrinth payloads are normalized), CurseForge no longer times out (60s + retry for the sleeping Render proxy) and Modrinth rate-limits are handled (retry + paced enrich), cross-provider already-installed detection between Modrinth and CurseForge (incl. dependencies), sanitized HTML descriptions/changelogs, content type now travels into CurseForge with per-type categories, default A-Z name sort, searchable version pickers, styled overflow menu, and no more false \"Update Available\"."
 }

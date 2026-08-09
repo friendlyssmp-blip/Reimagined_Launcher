@@ -244,6 +244,31 @@ async function extractEmbeddedIcon(
  *  wasteful). Icon extraction stays cheap and runs every time. */
 const enrichNetworkOnce = new Set<string>()
 
+/** Normalized title — the shared identity key across Modrinth ↔ CurseForge. */
+const normTitle = (t: string): string => (t ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const sleepMs = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/** True when a profile already has this item under ANY provider — matching by
+ *  real id/slug first, then by normalized title so the same mod installed
+ *  from Modrinth is recognized when browsing CurseForge (and vice versa). */
+function alreadyInstalled(
+  profile: { mods: ProfileMod[] },
+  project: { id?: string; slug?: string; title?: string } | null | undefined,
+  projectType?: string
+): ProfileMod | undefined {
+  if (!project) return undefined
+  const hit = profile.mods.find(
+    (m) => (project.id && (m.id === project.id || m.slug === project.id)) || (project.slug && m.slug === project.slug)
+  )
+  if (hit) return hit
+  const nt = normTitle(project.title ?? '')
+  if (!nt) return undefined
+  // Title matching is scoped to the same content type so a mod and a resource
+  // pack that happen to share a name never collide.
+  const type = projectType ?? 'mod'
+  return profile.mods.find((m) => (m.projectType ?? 'mod') === type && normTitle(m.title) === nt)
+}
+
 /**
  * v1.0.50 — re-run provider matching for ALREADY-TRACKED local items.
  *
@@ -303,6 +328,7 @@ async function enrichManualModsImpl(profileId: string): Promise<{ enriched: numb
       let versionNumber = m.versionNumber || 'manual'
 
       if (doNetwork && projectType === 'mod') {
+        await sleepMs(45) // gentle pacing — Modrinth throttles bursts (429)
         try {
           const { createHash } = await import('node:crypto')
           const sha1 = createHash('sha1').update(buf ?? Buffer.alloc(0)).digest('hex')
@@ -395,9 +421,13 @@ async function enrichManualModsImpl(profileId: string): Promise<{ enriched: numb
     }
   }
 
-  // Small concurrency cap — SHA1 + provider lookups are IO/network-bound.
+  // Small concurrency cap + gentle pacing — SHA1 + provider lookups are
+  // IO/network-bound, and Modrinth throttles bursts (HTTP 429). 4 workers
+  // with a short stagger between starts keeps the enrich well under the
+  // rate limit while still finishing a large folder in seconds.
   let cursor = 0
-  const workers = Array.from({ length: Math.min(6, candidates.length) }, async () => {
+  const workers = Array.from({ length: Math.min(4, candidates.length) }, async (_, i) => {
+    await sleepMs(i * 120)
     while (cursor < candidates.length) {
       const c = candidates[cursor++]
       if (c) await processOne(c)
@@ -484,9 +514,10 @@ class ModManager {
     })
   }
 
-  /** Real category list for the filter sidebar (Modrinth tags API). */
-  async categories(): Promise<string[]> {
-    return modrinth.getCategories('mod')
+  /** Real category list for the filter sidebar (Modrinth tags API), scoped
+   *  to the browsing content type (mods, resource packs, shaders…). */
+  async categories(projectType: string = 'mod'): Promise<string[]> {
+    return modrinth.getCategories(projectType as ProjectType)
   }
 
   /** CurseForge search — requires an API key configured in Settings. */
@@ -527,7 +558,7 @@ class ModManager {
     // Fabric API (stored under 'fabric-api' on older profiles) can never be
     // installed twice from a Modrinth search result.
     const project = await modrinth.getProject(projectId)
-    if (profile.mods.some((m) => m.id === projectId || m.slug === project.slug)) {
+    if (alreadyInstalled(profile, project, projectType)) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 
@@ -589,9 +620,10 @@ class ModManager {
     provider: 'modrinth' | 'curseforge',
     projectId: string,
     versionId: string,
-    projectType: ProjectType = 'mod'
+    projectType: ProjectType = 'mod',
+    itemTitle?: string
   ): Promise<ProfileMod> {
-    return runQueued(() => this.installVersionQueued(profileId, provider, projectId, versionId, projectType))
+    return runQueued(() => this.installVersionQueued(profileId, provider, projectId, versionId, projectType, itemTitle))
   }
 
   private async installVersionQueued(
@@ -599,7 +631,8 @@ class ModManager {
     provider: 'modrinth' | 'curseforge',
     projectId: string,
     versionId: string,
-    projectType: ProjectType = 'mod'
+    projectType: ProjectType = 'mod',
+    itemTitle?: string
   ): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mc = profile.minecraftVersion
@@ -618,12 +651,12 @@ class ModManager {
         /* best-effort — the id check below still applies */
       }
     }
-    if (profile.mods.some((m) => m.id === projectId || (projectSlug && m.slug === projectSlug))) {
+    if (alreadyInstalled(profile, { id: projectId, slug: projectSlug ?? undefined, title: itemTitle }, projectType)) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 
     let file: { filename: string; url: string; size: number; version: string }
-    let title = projectId
+    let title = itemTitle ?? projectId
     let slug = projectId
 
     if (provider === 'curseforge') {
@@ -716,7 +749,7 @@ class ModManager {
     const mc = profile.minecraftVersion
     const loader: LoaderType = profile.loader.type
 
-    if (profile.mods.some((m) => m.id === projectId && m.source === 'curseforge')) {
+    if (alreadyInstalled(profile, { id: String(projectId), slug: String(projectId), title: meta?.title }, projectType)) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 
@@ -1366,7 +1399,7 @@ class ModManager {
         dependencyType: dep.dependencyType,
         versionId: chosen?.id ?? null,
         versionNumber: chosen?.versionNumber ?? null,
-        installed: profile.mods.some((m) => m.id === dep.projectId || m.slug === meta.slug)
+        installed: Boolean(alreadyInstalled(profile, { id: dep.projectId, slug: meta.slug, title: meta.title }, 'mod'))
       }
       const children = await this.resolveDepTree(
         profile,

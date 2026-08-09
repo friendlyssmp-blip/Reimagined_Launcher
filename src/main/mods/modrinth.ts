@@ -120,13 +120,13 @@ export async function getProject(projectId: string): Promise<ProjectResponse> {
 export async function lookupVersionByHash(sha1: string): Promise<{ projectId: string; version: ModrinthVersion } | null> {
   if (!/^[0-9a-f]{40}$/i.test(sha1)) return null
   try {
-    const version = await getJson<ModrinthVersion & { project_id?: string }>(
+    const version = await getJson<RawModrinthVersion>(
       `${API}/version_file/${encodeURIComponent(sha1)}?algorithm=sha1`,
       { headers: headers(), timeoutMs: 15_000 }
     )
     const projectId = version.project_id
     if (!projectId) return null
-    return { projectId, version }
+    return { projectId, version: toModrinthVersion(version) }
   } catch {
     return null
   }
@@ -145,6 +145,33 @@ export async function getCategories(projectType: ProjectType = 'mod'): Promise<s
     timeoutMs: 15_000
   })
   return tags.map((t) => t.name).filter(Boolean)
+}
+
+
+/** Raw Modrinth version payload (snake_case) before normalization. */
+interface RawModrinthVersion {
+  id: string
+  version_number: string
+  game_versions: string[]
+  loaders: string[]
+  files?: { filename: string; url: string; size: number }[]
+  date_published: string
+  project_id?: string
+}
+
+/** Normalize a raw API version into the camelCase ModrinthVersion shape. The
+ *  raw payload uses snake_case (version_number), so callers can rely on
+ *  version.versionNumber instead of silently getting undefined. */
+function toModrinthVersion(v: RawModrinthVersion): ModrinthVersion {
+  return {
+    id: v.id,
+    versionNumber: v.version_number ?? '',
+    gameVersions: v.game_versions ?? [],
+    loaders: v.loaders ?? [],
+    files: (v.files ?? []).map((f) => ({ filename: f.filename, url: f.url, size: f.size ?? 0 })),
+    datePublished: v.date_published ?? '',
+    projectId: v.project_id
+  }
 }
 
 /**
@@ -169,17 +196,17 @@ export async function latestVersionFor(
     game_versions: JSON.stringify([mcVersion]),
     loaders: JSON.stringify(loaders)
   })
-  const versions = await getJson<ModrinthVersion[]>(`${API}/project/${projectId}/version?${params.toString()}`, {
+  const versions = await getJson<RawModrinthVersion[]>(`${API}/project/${projectId}/version?${params.toString()}`, {
     headers: headers(),
     timeoutMs: 15_000
   })
-  if (versions.length > 0) return versions[0]
+  if (versions.length > 0) return toModrinthVersion(versions[0])
   // Fallback: any version matching the MC version regardless of loader.
-  const relaxed = await getJson<ModrinthVersion[]>(
+  const relaxed = await getJson<RawModrinthVersion[]>(
     `${API}/project/${projectId}/version?game_versions=${encodeURIComponent(JSON.stringify([mcVersion]))}`,
     { headers: headers(), timeoutMs: 15_000 }
   )
-  return relaxed[0] ?? null
+  return relaxed[0] ? toModrinthVersion(relaxed[0]) : null
 }
 
 interface FullProjectResponse {

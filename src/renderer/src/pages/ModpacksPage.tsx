@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Button, Badge, TextInput, Spinner, EmptyState, ProfileGlyph, TabBar } from '../components/ui'
+import { SearchableSelect } from '../components/SearchableSelect'
 import { api, friendlyError } from '../lib/api'
 import { ModIcon } from '../components/ModIcon'
 import { ProjectDetail } from '../components/ProjectDetail'
@@ -73,7 +74,10 @@ export function ModpacksPage() {
             })
       if (!append && mySeq !== searchSeq.current) return // stale response
       setTotalHits(r.totalHits)
-      setResults((prev) => (append ? [...prev, ...r.items] : r.items))
+      // v1.0.51 — default ordering is A–Z by name (per the spec), sorted on
+      // the fetched page; the server default (downloads/relevance) is not used.
+      const sorted = [...r.items].sort((a, b) => a.title.localeCompare(b.title))
+      setResults((prev) => (append ? [...prev, ...sorted] : sorted))
       setOffset(startOffset + r.items.length)
     } catch (err) {
       const code = (err as { code?: string }).code
@@ -274,12 +278,15 @@ export function ModpacksPage() {
             </div>
 
             <div className="mod-toolbar">
-              <select className="select sort-select" value={mcFilter} onChange={(e) => setMcFilter(e.target.value)} title="Minecraft version">
-                <option value="any">Any Minecraft version</option>
-                {mcVersions.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={mcVersions}
+                value={mcFilter}
+                onChange={setMcFilter}
+                firstOption="Any Minecraft version"
+                firstValue="any"
+                placeholder="Search versions…"
+                className="sort-select"
+              />
               <select className="select sort-select" value={loaderFilter} onChange={(e) => setLoaderFilter(e.target.value as typeof loaderFilter)} title="Loader">
                 <option value="any">Any loader</option>
                 <option value="fabric">Fabric</option>

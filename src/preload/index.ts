@@ -78,7 +78,7 @@ const api = {
     list: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsList, profileId),
     search: (profileId: string, query: string, index?: string, opts?: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsSearch, { profileId, query, index, opts }),
-    categories: (): Promise<unknown> => ipcRenderer.invoke(IPC.modsCategories),
+    categories: (projectType?: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsCategories, projectType),
     install: (profileId: string, projectId: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsInstall, { profileId, projectId, projectType }),
     remove: (profileId: string, slug: string): Promise<unknown> =>
@@ -90,7 +90,7 @@ const api = {
     identifyManual: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsIdentifyManual, profileId),
     enrichManual: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsEnrichManual, profileId),
     ensureIcons: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsEnsureIcons, profileId),
-    categoriesCurseforge: (): Promise<unknown> => ipcRenderer.invoke(IPC.modsCategoriesCurseforge),
+    categoriesCurseforge: (projectType?: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsCategoriesCurseforge, projectType),
     removeLocalFile: (profileId: string, filename: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsRemoveLocalFile, { profileId, filename, projectType: projectType ?? 'mod' }),
     searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string, category?: string): Promise<unknown> =>
@@ -103,8 +103,8 @@ const api = {
       ipcRenderer.invoke(IPC.modsSetEnabled, { profileId, slug, enabled }),
     availableVersions: (profileId: string, slug: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsAvailableVersions, { profileId, slug }),
-    installVersion: (profileId: string, provider: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsInstallVersion, { profileId, provider, projectId, versionId, projectType }),
+    installVersion: (profileId: string, provider: string, projectId: string, versionId: string, projectType?: string, title?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsInstallVersion, { profileId, provider, projectId, versionId, projectType, title }),
     dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsDependencies, { profileId, projectId, versionId, projectType }),
     installWithDeps: (profileId: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>

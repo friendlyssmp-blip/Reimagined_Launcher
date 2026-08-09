@@ -298,7 +298,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsSearch, (payload) =>
     modManager.search(payload.profileId, payload.query ?? '', payload.index ?? undefined, payload.opts ?? undefined)
   )
-  on(IPC.modsCategories, () => modManager.categories())
+  on(IPC.modsCategories, (projectType?: string) => modManager.categories(projectType ?? 'mod'))
   on(IPC.modsInstall, (payload) =>
     modManager.install(payload.profileId, payload.projectId, payload.projectType ?? 'mod')
   )
@@ -309,9 +309,9 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsIdentifyManual, (profileId) => modManager.identifyManualMods(profileId))
   on(IPC.modsEnrichManual, (profileId: string) => modManager.enrichManualMods(profileId))
   on(IPC.modsEnsureIcons, (profileId: string) => modManager.ensureIcons(profileId))
-  on(IPC.modsCategoriesCurseforge, async () => {
+  on(IPC.modsCategoriesCurseforge, async (projectType?: string) => {
     const { curseforge } = await import('./mods/curseforge')
-    return curseforge.getCategories()
+    return curseforge.getCategories(projectType ?? 'mod')
   })
   on(IPC.modsRemoveLocalFile, (payload: { profileId: string; filename: string; projectType?: string }) =>
     modManager.removeLocalFile(payload.profileId, payload.filename, (payload.projectType ?? 'mod') as ProjectType))
@@ -351,7 +351,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       payload.provider,
       payload.projectId,
       payload.versionId,
-      payload.projectType ?? 'mod'
+      payload.projectType ?? 'mod',
+      payload.title ?? undefined
     )
   )
   // Install confirmation — real dependency data + install-with-dependencies.

@@ -35,6 +35,7 @@ interface CfFile {
   fileName: string
   fileLength: number
   downloadUrl?: string
+  alternateDownloadUrl?: string
   fileDate?: string
   gameVersions: string[]
   modLoader?: number[]
@@ -91,45 +92,64 @@ async function cfGet<T>(path: string, params: Record<string, string | number | u
     if (v !== undefined && v !== '') qs.set(k, String(v))
   })
   const target = `${proxy}/api/cf${path}${qs.toString() ? `?${qs.toString()}` : ''}`
-  const res = await fetch(target, {
-    headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
-    signal: AbortSignal.timeout(25_000)
-  })
-  if (!res.ok) {
-    if (res.status === 502 || res.status === 504) {
-      throw new LauncherError('CF_PROXY_DOWN', 'The CurseForge proxy is unreachable.', 'Check that the proxy URL in Settings → Advanced is correct and the proxy is running.')
+  // v1.0.51 — generous timeout + bounded retry: the Render free tier sleeps
+  // after ~15 min idle, so the first request after a pause can take 30–60 s
+  // to wake the proxy. 25 s used to abort before the proxy even answered.
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(target, {
+        headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(60_000)
+      })
+      if (res.ok) {
+        const body = (await res.json()) as { data?: T }
+        return body.data as T
+      }
+      if (res.status === 502 || res.status === 504) {
+        throw new LauncherError('CF_PROXY_DOWN', 'The CurseForge proxy is unreachable.', 'Check that the proxy URL in Settings → Advanced is correct and the proxy is running.')
+      }
+      if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+        lastErr = new LauncherError('CF_RETRY', `CurseForge is busy (HTTP ${res.status}).`, 'Retrying…')
+      } else {
+        throw new LauncherError('CF_ERROR', `CurseForge request failed (HTTP ${res.status}).`, 'Try again in a moment — if it persists, check the proxy logs.')
+      }
+    } catch (err) {
+      const e = err as { code?: string }
+      if (e?.code === 'CF_ERROR' || e?.code === 'CF_PROXY_DOWN') throw err
+      lastErr = err // timeout / network / retriable status
     }
-    throw new LauncherError('CF_ERROR', `CurseForge request failed (HTTP ${res.status}).`, 'Try again in a moment — if it persists, check the proxy logs.')
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
   }
-  const body = (await res.json()) as { data?: T }
-  return body.data as T
+  throw lastErr
 }
 
 interface CfCategory {
   id: number
   name: string
+  classId?: number
 }
 
-/** Cached Minecraft category tree from CurseForge (10 min TTL). */
-let categoriesCache: { at: number; list: CfCategory[] } | null = null
+/** Cached Minecraft category tree from CurseForge (10 min TTL), per class. */
+const categoriesCache = new Map<number, { at: number; list: CfCategory[] }>()
 
 class CurseForgeClient {
   /**
-   * v1.0.50 — real CurseForge category list (gameId 432 = Minecraft) for the
-   * Browse sidebar. Cached 10 minutes; the proxy must expose
-   * /api/cf/categories (added in the same release) — when the deployed proxy
-   * is older it degrades to an empty list and the sidebar hides gracefully.
+   * v1.0.51 — real CurseForge category list scoped to the browsing content
+   * type (gameId 432 = Minecraft, classId from the type's class). Resource
+   * packs show pack categories, shaders show shader categories, etc. Cached
+   * 10 minutes per class; the proxy must expose /api/cf/categories.
    */
-  async getCategories(): Promise<{ id: number; name: string }[]> {
-    if (categoriesCache && Date.now() - categoriesCache.at < 10 * 60_000) {
-      return categoriesCache.list
-    }
+  async getCategories(projectType: string = 'mod'): Promise<{ id: number; name: string }[]> {
+    const classId = CLASS_IDS[projectType] ?? MOD_CLASS_ID
+    const cached = categoriesCache.get(classId)
+    if (cached && Date.now() - cached.at < 10 * 60_000) return cached.list
     try {
       const list = await cfGet<CfCategory[]>('/categories', { gameId: GAME_ID })
       const clean = (list ?? [])
-        .filter((c) => c && typeof c.name === 'string' && c.name.trim())
-        .map((c) => ({ id: c.id, name: c.name.trim() }))
-      categoriesCache = { at: Date.now(), list: clean }
+        .filter((c) => c && typeof c.name === 'string' && c.name.trim() && c.classId === classId)
+        .map((c) => ({ id: c.id, name: c.name.trim(), classId: c.classId }))
+      categoriesCache.set(classId, { at: Date.now(), list: clean })
       return clean
     } catch {
       return []
@@ -138,9 +158,9 @@ class CurseForgeClient {
 
   /** Best-effort name → id for the category filter (falls back to a text
    *  search filter when the categories endpoint is unavailable). */
-  private async categoryIdFor(name?: string): Promise<{ id?: number; fallback?: string }> {
+  private async categoryIdFor(name?: string, projectType?: string): Promise<{ id?: number; fallback?: string }> {
     if (!name) return {}
-    const cats = await this.getCategories()
+    const cats = await this.getCategories(projectType)
     const hit = cats.find((c) => c.name.toLowerCase() === name.toLowerCase())
     if (hit) return { id: hit.id }
     return { fallback: name }
@@ -161,7 +181,7 @@ class CurseForgeClient {
       classId: CLASS_IDS[opts.projectType ?? 'mod'] ?? MOD_CLASS_ID,
       index: 0,
       sortField: opts.sort === 'newest' ? 1 : opts.sort === 'recent' ? 3 : opts.sort === 'name' ? 5 : 2,
-      sortOrder: 'desc',
+      sortOrder: opts.sort === 'name' ? 'asc' : 'desc',
       pageSize: opts.limit ?? 24
     }
     if (opts.query.trim()) params.searchFilter = opts.query.trim()
@@ -170,7 +190,7 @@ class CurseForgeClient {
     // semantics as Modrinth's facets): categoryId when known, else the name
     // as a text filter; modLoaderType only for mods (packs aren't loader-scoped).
     if (opts.category) {
-      const c = await this.categoryIdFor(opts.category)
+      const c = await this.categoryIdFor(opts.category, opts.projectType)
       if (c.id !== undefined) params.categoryId = c.id
       else if (c.fallback) params.searchFilter = `${params.searchFilter ? params.searchFilter + ' ' : ''}${c.fallback}`
     }
@@ -271,7 +291,7 @@ class CurseForgeClient {
     const id = Number(fileId)
     if (!Number.isFinite(id)) return null
     const pick = await cfGet<CfFile>(`/mods/${projectId}/files/${id}`, {})
-    let url = pick.downloadUrl ?? ''
+    let url = pick.downloadUrl ?? pick.alternateDownloadUrl ?? ''
     if (!url) {
       try {
         const dl = await cfGet<{ downloadUrl: string }>(`/mods/${projectId}/files/${id}/download-url`, {})
@@ -313,7 +333,7 @@ class CurseForgeClient {
 
     // Prefer the newest *release* file, fall back to any.
     const pick = files.find((f) => (f.releaseType ?? 1) === 1) ?? files[0]
-    let url = pick.downloadUrl ?? ''
+    let url = pick.downloadUrl ?? pick.alternateDownloadUrl ?? ''
     if (!url) {
       // Some responses omit downloadUrl — resolve it through the API.
       try {

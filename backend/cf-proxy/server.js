@@ -63,7 +63,9 @@ function proxy(u, m) {
       })
     })
     req.on('error', () => resolve({ status: 502, body: { error: 'Upstream unreachable' } }))
-    req.setTimeout(25000, () => { req.destroy(); resolve({ status: 504, body: { error: 'Upstream timeout' } }) })
+    // v1.0.51 — generous upstream timeout: cold-started proxies can take
+    // ~40 s to wake; 25 s used to abort on the first request after idle.
+    req.setTimeout(45000, () => { req.destroy(); resolve({ status: 504, body: { error: 'Upstream timeout' } }) })
   })
 }
 

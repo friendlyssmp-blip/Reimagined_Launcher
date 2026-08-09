@@ -135,7 +135,7 @@ export const api = {
     list: (profileId: string) => unwrap<ProfileMod[]>(window.reimagined.mods.list(profileId)),
     search: (profileId: string, query: string, index?: string, opts?: { mcVersion?: string; loader?: string; category?: string; projectType?: string; offset?: number; limit?: number }) =>
       unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.mods.search(profileId, query, index, opts)),
-    categories: () => unwrap<string[]>(window.reimagined.mods.categories()),
+    categories: (projectType?: string) => unwrap<string[]>(window.reimagined.mods.categories(projectType)),
     install: (profileId: string, projectId: string, projectType?: string) => unwrap<ProfileMod>(window.reimagined.mods.install(profileId, projectId, projectType)),
     remove: (profileId: string, slug: string) => unwrap<void>(window.reimagined.mods.remove(profileId, slug)),
     checkUpdates: (profileId: string) => unwrap<ProfileMod[]>(window.reimagined.mods.checkUpdates(profileId)),
@@ -144,7 +144,7 @@ export const api = {
     identifyManual: (profileId: string) => unwrap<{ identified: number; matched: number }>(window.reimagined.mods.identifyManual(profileId)),
     enrichManual: (profileId: string) => unwrap<{ enriched: number; matched: number }>(window.reimagined.mods.enrichManual(profileId)),
     ensureIcons: (profileId: string) => unwrap<void>(window.reimagined.mods.ensureIcons(profileId)),
-    categoriesCurseforge: () => unwrap<{ id: number; name: string }[]>(window.reimagined.mods.categoriesCurseforge()),
+    categoriesCurseforge: (projectType?: string) => unwrap<{ id: number; name: string }[]>(window.reimagined.mods.categoriesCurseforge(projectType)),
     removeLocalFile: (profileId: string, filename: string, projectType?: string) =>
       unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename, projectType ?? 'mod')),
     searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string) =>
@@ -157,8 +157,8 @@ export const api = {
       unwrap<ProfileMod>(window.reimagined.mods.setEnabled(profileId, slug, enabled)),
     availableVersions: (profileId: string, slug: string) =>
       unwrap<ProjectVersionInfo[]>(window.reimagined.mods.availableVersions(profileId, slug)),
-    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string) =>
-      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType)),
+    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string, title?: string) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType, title)),
     dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string) =>
       unwrap<InstallDepInfo[]>(window.reimagined.mods.dependencies(profileId, projectId, versionId, projectType)),
     installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string) =>
