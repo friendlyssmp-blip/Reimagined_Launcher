@@ -321,7 +321,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       payload.query ?? '',
       payload.sort ?? undefined,
       payload.projectType ?? 'mod',
-      payload.category ?? undefined
+      payload.category ?? undefined,
+      { offset: payload.offset ?? 0, limit: payload.limit ?? 24 }
     )
   )
   on(IPC.modsInstallCurseforge, (payload) =>

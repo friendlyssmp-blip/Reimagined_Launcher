@@ -526,19 +526,24 @@ class ModManager {
     query: string,
     sort?: 'downloads' | 'newest' | 'recent' | 'name',
     projectType?: ProjectType,
-    category?: string
+    category?: string,
+    opts?: { offset?: number; limit?: number }
   ): Promise<ModrinthSearchResult[]> {
     const profile = await this.requireProfile(profileId)
     // v1.0.50 — mods get the profile's real loader filter on CurseForge too
     // (fabric → 4, forge → 1). Packs aren't loader-scoped.
     const loader = projectType === 'mod' && profile.loader.type !== 'vanilla' ? profile.loader.type : undefined
+    // v1.0.58 — pass the real offset/limit through so the UI can paginate
+    // (previously CurseForge was hard-locked to page 0 — no infinite scroll).
     return curseforge.searchMods({
       query,
       mcVersion: profile.minecraftVersion,
       sort,
       projectType: projectType ?? 'mod',
       category,
-      loader
+      loader,
+      offset: opts?.offset ?? 0,
+      limit: opts?.limit ?? 24
     })
   }
 
@@ -905,21 +910,97 @@ class ModManager {
     return runQueued(() => this.updateQueued(profileId, slug))
   }
 
+  /**
+   * v1.0.58 — update is now a SAFE SWAP. The old flow removed the installed
+   * file (and its profile entry) BEFORE the new file was downloaded, so any
+   * failure mid-download (HTTP 429, network drop, proxy down) permanently
+   * deleted the mod — “mods deleting themselves”. Now the newest file is
+   * resolved with the SAME resolver checkUpdates uses, downloaded to a temp
+   * name first, and only after a successful download is the old file removed
+   * and the new one moved into place. A failed update never touches the
+   * installed mod.
+   */
   private async updateQueued(profileId: string, slug: string): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mod = profile.mods.find((m) => m.slug === slug)
     if (!mod) throw new LauncherError('MOD_MISSING', 'Mod not found in this profile.')
     const projectType = mod.projectType ?? 'mod'
-    await this.remove(profileId, slug)
-    const fresh =
-      mod.source === 'curseforge'
-        ? await this.installCurseforge(
-            profileId,
-            mod.id,
-            { title: mod.title, iconUrl: mod.iconUrl ?? undefined, downloads: mod.downloads },
-            projectType
-          )
-        : await this.install(profileId, mod.id, projectType)
+    const mc = profile.minecraftVersion
+    const loader: LoaderType = profile.loader.type
+
+    // Resolve the newest compatible file — exactly what checkUpdates flagged.
+    let file: { filename: string; url: string; size: number; version: string }
+    let newVersionId = ''
+    let newVersionNumber = ''
+    if (mod.source === 'curseforge') {
+      const cf = await curseforge.latestFile(mod.id, mc, loader)
+      if (!cf) {
+        throw new LauncherError('MOD_VERSION_MISSING', 'No newer compatible version found on CurseForge.')
+      }
+      file = { filename: safeBaseName(cf.filename), url: cf.url, size: cf.size, version: cf.version || 'latest' }
+      newVersionId = String(cf.fileId)
+      newVersionNumber = cf.version || 'latest'
+    } else if (mod.source === 'modrinth') {
+      const v = await modrinth.latestVersionFor(mod.id, mc, loader, projectType)
+      if (!v || !v.files.length || !this.versionCompatible(v, mc, loader, projectType)) {
+        throw new LauncherError('MOD_VERSION_MISSING', 'No newer compatible version found on Modrinth.')
+      }
+      const f = v.files[0]
+      file = { filename: safeBaseName(f.filename), url: f.url, size: f.size, version: v.versionNumber }
+      newVersionId = v.id
+      newVersionNumber = v.versionNumber
+    } else {
+      throw new LauncherError('MOD_LOCAL', 'This item was added manually and has no remote updates.')
+    }
+
+    const destDir = this.modsDir(profile, projectType)
+    const { mkdirp } = await import('../utils/fs')
+    mkdirp(destDir)
+
+    // Download to a TEMP name first — the installed mod stays untouched until
+    // the new file is fully and successfully on disk.
+    const tmp = path.join(destDir, `.update-${Date.now()}-${file.filename}`)
+    try {
+      logger.info(`Updating ${mod.title} → ${file.filename}`)
+      await runDownloadBatch([{ url: file.url, dest: tmp, expectedSize: file.size }], {
+        kind: 'mods',
+        label: `${mod.title} — ${newVersionNumber}`
+      })
+    } catch (err) {
+      await remove(tmp).catch(() => {})
+      throw err
+    }
+
+    // Success — now swap: remove the old file (and any .disabled twin), move
+    // the new one into place.
+    const activeName = mod.filename.endsWith('.disabled')
+      ? mod.filename.slice(0, -'.disabled'.length)
+      : mod.filename
+    await remove(path.join(destDir, activeName)).catch(() => {})
+    await remove(path.join(destDir, `${activeName}.disabled`)).catch(() => {})
+    let finalName = file.filename
+    const dest = path.join(destDir, finalName)
+    if (exists(dest)) await remove(dest)
+    await rename(tmp, dest)
+
+    // A disabled mod stays disabled after an update.
+    if (mod.disabled && !finalName.endsWith('.disabled')) {
+      await rename(dest, path.join(destDir, `${finalName}.disabled`))
+      finalName = `${finalName}.disabled`
+    }
+
+    const fresh: ProfileMod = {
+      ...mod,
+      filename: finalName,
+      versionId: newVersionId,
+      versionNumber: newVersionNumber,
+      updateAvailable: null,
+      installedAt: iso()
+    }
+    await profileManager.update(profileId, {
+      mods: profile.mods.map((m) => (m.slug === slug ? fresh : m))
+    })
+    eventBus.emit('mods:changed', { profileId, action: 'updated', mod: fresh })
     logger.info(`Mod updated: ${mod.title} → ${fresh.versionNumber}`)
     return fresh
   }
@@ -1252,7 +1333,23 @@ class ModManager {
     // Never trust a provider-supplied filename for the destination path.
     file = { ...file, filename: safeBaseName(file.filename) }
 
-    // Remove the currently installed file (including its .disabled twin) before swapping.
+    // v1.0.58 — safe swap: download the new file to a TEMP name first; the
+    // currently installed file is removed only after the new one is fully on
+    // disk, so a failed/aborted download never deletes the mod.
+    const tmp = path.join(destDir, `.swap-${Date.now()}-${file.filename}`)
+    logger.info(`Changing version of ${mod.title} → ${file.filename}`)
+    try {
+      await runDownloadBatch([{ url: file.url, dest: tmp, expectedSize: file.size }], {
+        kind: 'mods',
+        label: `${mod.title} — ${newVersionNumber}`
+      })
+    } catch (err) {
+      await remove(tmp).catch(() => {})
+      throw err
+    }
+
+    // Success — remove the currently installed file (including its .disabled
+    // twin) and move the freshly-downloaded one into place.
     const activeName = mod.filename.endsWith('.disabled')
       ? mod.filename.slice(0, -'.disabled'.length)
       : mod.filename
@@ -1262,11 +1359,7 @@ class ModManager {
     let finalName = file.filename
     const dest = path.join(destDir, finalName)
     if (exists(dest)) await remove(dest)
-    logger.info(`Changing version of ${mod.title} → ${file.filename}`)
-    await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
-      kind: 'mods',
-      label: `${mod.title} — ${newVersionNumber}`
-    })
+    await rename(tmp, dest)
 
     // A disabled mod stays disabled after a version swap.
     if (disabled && !finalName.endsWith('.disabled')) {

@@ -147,8 +147,8 @@ export const api = {
     categoriesCurseforge: (projectType?: string) => unwrap<{ id: number; name: string }[]>(window.reimagined.mods.categoriesCurseforge(projectType)),
     removeLocalFile: (profileId: string, filename: string, projectType?: string) =>
       unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename, projectType ?? 'mod')),
-    searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string) =>
-      unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType, category)),
+    searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string, opts?: { offset?: number; limit?: number }) =>
+      unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType, category, opts)),
     installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string) =>
       unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType)),
     changeVersion: (profileId: string, slug: string, versionId: string) =>

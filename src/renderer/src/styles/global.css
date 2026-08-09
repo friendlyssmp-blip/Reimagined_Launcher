@@ -2026,7 +2026,10 @@ select.select option {
   padding: 13px 16px;
   cursor: pointer;
   transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-  animation: pageIn 0.2s var(--ease);
+  /* v1.0.58 — no per-row entrance animation: with 24+ rows per page every
+     load-more batch replayed pageIn on each new row, which reads as jank
+     while scrolling long results. The page-level entrance already covers
+     the transition feel. */
 }
 .mod-row:hover {
   border-color: var(--accent-border);

@@ -1,4 +1,5 @@
 import { useState, useCallback, Fragment, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { Button, TextInput, Spinner, EmptyState, Badge, Toggle, TabBar } from '../components/ui'
@@ -227,29 +228,51 @@ export function ModsPage() {
   const [cfSetup, setCfSetup] = useState(false)
   const [cfFallback, setCfFallback] = useState(false)
   const [cfFallbackCount, setCfFallbackCount] = useState(0)
+  // v1.0.58 — CurseForge pagination state (mirror of the Modrinth one): the
+  // proxy-backed API returns no total-hit count, so "has more" is a short-page
+  // heuristic — a full page means there is (very likely) a next page.
+  const [cfOffset, setCfOffset] = useState(0)
+  const [cfHasMore, setCfHasMore] = useState(false)
   const doCurseforgeSearch = useCallback(
-    async (q?: string, _append = false) => {
+    async (q?: string, append = false, startOffset = 0) => {
       if (!activeProfile) return
       const term = q ?? query
-      setCfSearching(true)
+      // v1.0.58 — same stale-response guard as doSearch: a slow first-page
+      // response (the proxy can take 30–60 s to wake) must never overwrite a
+      // newer search. Append loads keep the current sequence.
+      const mySeq = append ? searchSeq.current : ++searchSeq.current
+      if (append) setLoadingMore(true)
+      else setCfSearching(true)
       setCfError(null)
       try {
         const cfSort = sort === 'updated' ? 'recent' : sort === 'relevance' ? 'downloads' : sort
-        const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType, category ?? undefined)
-        setResults(
-          page
-            .map((x) => ({ ...x, source: 'curseforge' as const }))
-            .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : 0))
+        const page = await api.mods.searchCurseforge(activeProfile.id, term, cfSort, contentType, category ?? undefined, {
+          offset: startOffset,
+          limit: PAGE_SIZE
+        })
+        if (!append && mySeq !== searchSeq.current) return // stale — a newer search superseded this one
+        const mapped = page.map((x) => ({ ...x, source: 'curseforge' as const }))
+        setResults((prev) =>
+          append
+            ? [...prev, ...mapped]
+            : mapped.sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : 0))
         )
+        setCfOffset(startOffset + mapped.length)
+        setCfHasMore(mapped.length >= PAGE_SIZE)
       } catch (err) {
         const code = (err as { code?: string }).code
         // Setup card ONLY when no proxy is configured; real failures (proxy
         // down, HTTP error) get a compact retry banner instead.
         setCfSetup(code === 'CF_NO_PROXY')
         setCfError(friendlyError(err))
-        setResults([])
+        if (!append) {
+          setResults([])
+          setCfOffset(0)
+          setCfHasMore(false)
+        }
       } finally {
         setCfSearching(false)
+        setLoadingMore(false)
       }
     },
     [activeProfile, query, notify, sort, contentType, category]
@@ -282,16 +305,23 @@ export function ModsPage() {
 
   /** Append the next page when the sentinel enters the viewport. */
   const loadMore = useCallback(() => {
-    if (loadingMore || searching || !activeProfile) return
-    if (results.length >= totalHits && totalHits > 0) return
-    void doSearch(undefined, offset, true)
-  }, [doSearch, loadingMore, searching, activeProfile, results.length, totalHits, offset])
+    if (loadingMore || searching || cfSearching || !activeProfile) return
+    if (tab === 'modrinth') {
+      if (results.length >= totalHits && totalHits > 0) return
+      void doSearch(undefined, offset, true)
+    } else if (tab === 'curseforge') {
+      if (!cfHasMore) return
+      void doCurseforgeSearch(undefined, true, cfOffset)
+    }
+  }, [doSearch, doCurseforgeSearch, loadingMore, searching, cfSearching, activeProfile, results.length, totalHits, offset, tab, cfHasMore, cfOffset])
 
   /* Re-create the observer whenever the sentinel can appear (first page loaded)
    * or when a load-more cycle finishes — otherwise the observer would stay
-   * attached to a detached node and infinite scroll would stop forever. */
+   * attached to a detached node and infinite scroll would stop forever.
+   * v1.0.58 — applies to BOTH browse providers (Modrinth + CurseForge), so
+   * CurseForge gets the same infinite scroll Modrinth already had. */
   useEffect(() => {
-    if (tab !== 'modrinth') return
+    if (tab !== 'modrinth' && tab !== 'curseforge') return
     const el = sentinelRef.current
     if (!el || loadingMore) return
     const obs = new IntersectionObserver(
@@ -302,7 +332,7 @@ export function ModsPage() {
     )
     obs.observe(el)
     return () => obs.disconnect()
-  }, [tab, loadMore, loadingMore, results.length])
+  }, [tab, loadMore, loadingMore, results.length, cfHasMore])
 
   // Real category list from Modrinth's tags API, scoped to the browsing
   // content type (mods, resource packs, shaders…) — never a cross-type list.
@@ -991,7 +1021,11 @@ export function ModsPage() {
                 <Spinner />
               </div>
             )}
-            {!loadingMore && totalHits > 0 && visible.length < totalHits && <div ref={sentinelRef} style={{ height: 2 }} />}
+            {!loadingMore &&
+              ((tab === 'modrinth' && totalHits > 0 && visible.length < totalHits) ||
+                (tab === 'curseforge' && cfHasMore)) && (
+                <div ref={sentinelRef} style={{ height: 2 }} />
+              )}
           </div>
         )}
 
@@ -1200,17 +1234,22 @@ export function ModsPage() {
 
           {/* v1.0.52 — Update All preview list (Bug 2): icon, name and a green
               pill for every new version, one confirm to run the updater. */}
-          {updateAllOpen && (
-            <UpdateAllModal
-              items={installed.filter((m) => m.updateAvailable)}
-              busy={updatingAll}
-              onClose={() => setUpdateAllOpen(false)}
-              onConfirm={() => {
-                setUpdateAllOpen(false)
-                void runUpdateAll()
-              }}
-            />
-          )}
+          {/* v1.0.58 — portaled to <body>: the page wrapper animates with a
+              transform (page-enter), which would otherwise break the modal's
+              position:fixed and make it appear at the top of the scroll. */}
+          {updateAllOpen &&
+            createPortal(
+              <UpdateAllModal
+                items={installed.filter((m) => m.updateAvailable)}
+                busy={updatingAll}
+                onClose={() => setUpdateAllOpen(false)}
+                onConfirm={() => {
+                  setUpdateAllOpen(false)
+                  void runUpdateAll()
+                }}
+              />,
+              document.body
+            )}
 
           {/* v1.0.24 — the same live search bar also filters what's installed
               (items, manual files and worlds). Escape clears it. */}
@@ -1394,20 +1433,25 @@ export function ModsPage() {
       )}
 
       {/* Install confirmation with real dependency data */}
-      {installConfirm && (
-        <InstallConfirmModal
-          target={installConfirm}
-          onClose={() => setInstallConfirm(null)}
-          onInstalled={(mod) => {
-            if (mod && activeProfile) {
-              setInstalled((prev) =>
-                prev.some((m) => m.id === mod.id) ? prev.map((m) => (m.id === mod.id ? mod : m)) : [...prev, mod]
-              )
-              void api.mods.list(activeProfile.id).then(setInstalled).catch(() => {})
-            }
-          }}
-        />
-      )}
+      {/* v1.0.58 — portaled to <body>: same page-enter transform issue — the
+          install confirmation must center on the VIEWPORT, wherever the user
+          scrolled, not at the top of the page content. */}
+      {installConfirm &&
+        createPortal(
+          <InstallConfirmModal
+            target={installConfirm}
+            onClose={() => setInstallConfirm(null)}
+            onInstalled={(mod) => {
+              if (mod && activeProfile) {
+                setInstalled((prev) =>
+                  prev.some((m) => m.id === mod.id) ? prev.map((m) => (m.id === mod.id ? mod : m)) : [...prev, mod]
+                )
+                void api.mods.list(activeProfile.id).then(setInstalled).catch(() => {})
+              }
+            }}
+          />,
+          document.body
+        )}
     </div>
   )
 }

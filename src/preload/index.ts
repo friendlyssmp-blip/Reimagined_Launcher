@@ -93,8 +93,8 @@ const api = {
     categoriesCurseforge: (projectType?: string): Promise<unknown> => ipcRenderer.invoke(IPC.modsCategoriesCurseforge, projectType),
     removeLocalFile: (profileId: string, filename: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsRemoveLocalFile, { profileId, filename, projectType: projectType ?? 'mod' }),
-    searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string, category?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsSearchCurseforge, { profileId, query, sort, projectType, category }),
+    searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string, category?: string, opts?: { offset?: number; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsSearchCurseforge, { profileId, query, sort, projectType, category, offset: opts?.offset ?? 0, limit: opts?.limit ?? 24 }),
     installCurseforge: (profileId: string, projectId: string, meta?: unknown, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsInstallCurseforge, { profileId, projectId, projectType, ...(meta as Record<string, unknown> | undefined) }),
     changeVersion: (profileId: string, slug: string, versionId: string): Promise<unknown> =>

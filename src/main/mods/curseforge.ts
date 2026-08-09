@@ -171,6 +171,7 @@ class CurseForgeClient {
     query: string
     mcVersion?: string
     limit?: number
+    offset?: number
     sort?: 'downloads' | 'newest' | 'recent' | 'name'
     projectType?: string
     category?: string
@@ -179,7 +180,11 @@ class CurseForgeClient {
     const params: Record<string, string | number> = {
       gameId: GAME_ID,
       classId: CLASS_IDS[opts.projectType ?? 'mod'] ?? MOD_CLASS_ID,
-      index: 0,
+      // v1.0.58 — real pagination: the API's "index" is the offset into the
+      // result set (0-based), exactly like Modrinth's offset. Previously this
+      // was hardcoded to 0, so CurseForge could never load past the first
+      // page — no infinite scroll.
+      index: opts.offset ?? 0,
       sortField: opts.sort === 'newest' ? 1 : opts.sort === 'recent' ? 3 : opts.sort === 'name' ? 5 : 2,
       sortOrder: opts.sort === 'name' ? 'asc' : 'desc',
       pageSize: opts.limit ?? 24

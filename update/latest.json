@@ -1,8 +1,6 @@
 {
-  "version": "1.0.57",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.57.exe",
-  "sha256": "e863c922c6041b73003dc0f4575e63315355c4166089ffbcd947acf65ac90870",
-  "size": 83910811,
-  "publishedAt": "2026-08-09T18:30:31Z",
-  "notes": "Modrinth icons render at full resolution again: the image proxy now upgrades the 96x96 _96.webp thumbnails Modrinth returns as icon_url to each project full-res icon.png (512x512) wherever icons appear \u2014 Installed rows, browse results, detail header, install/update dialogs \u2014 with a graceful fallback for projects that have no full-res icon."
+  "version": "1.0.58",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.58.exe",
+  "size": 83909692,
+  "sha256": "fc21f2152df0fb1c1b485b675b4ebacd6d462543366c82211e7a8751276f7257"
 }

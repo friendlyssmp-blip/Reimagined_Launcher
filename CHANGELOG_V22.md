@@ -1,3 +1,44 @@
+## v1.0.58 — Mods that delete themselves are fixed + install dialog centers on screen + CurseForge infinite scroll
+
+### Mods were disappearing on their own (root cause fixed)
+- **Root cause**: updating a mod removed the installed file FIRST and downloaded
+  the new one after. If that download failed (Modrinth/CurseForge rate limit,
+  network drop, proxy waking up), the mod was permanently gone — "mods delete
+  themselves" with nothing touched.
+- **Fix**: updates (per-item, Update All, Change Version) now download the new
+  file to a temporary name and only swap it into place AFTER the download
+  succeeds. A failed update leaves the installed mod completely untouched.
+  Applies to every content type (mods, resource packs, data packs, shaders).
+
+### Install confirmation now appears in the middle of your screen
+- **Root cause**: the page wrapper animates with a transform (page-enter),
+  which breaks position:fixed — the install dialog rendered anchored to the
+  top of the page content, forcing you to scroll back up to accept it.
+- **Fix**: the Install confirmation and the Update All preview are now portaled
+  to the document body, so they center on the viewport no matter how far down
+  you scrolled. The "..." overflow menu in the detail page keeps its own
+  screen-edge-aware positioning.
+
+### CurseForge finally has infinite scroll (like Modrinth)
+- **Root cause**: CurseForge's search hardcoded `index: 0`, and the browser tab
+  never wired up pagination — you could only ever see the first page.
+- **Fix**: real offset/limit pagination flows end-to-end (proxy → main → IPC →
+  renderer), with the same scroll-to-load-more sentinel Modrinth already had,
+  a stale-response guard so slow proxy answers never clobber a newer search,
+  and proper reset on error.
+
+### Downloads cover art shows again
+- **Root cause**: download cards used a direct <img> to remote CDNs, which the
+  renderer CSP blocks — covers intermittently didn't load.
+- **Fix**: artwork now renders through the same reliable image proxy as
+  everywhere else (with a clean fallback), so covers always appear.
+
+### Launcher feels lighter / less janky while browsing
+- Removed the per-row entrance animation that replayed on every load-more
+  batch (24+ rows animating at once = visible jank while scrolling results).
+- Icon images now decode asynchronously and lazy-load offscreen, keeping the
+  main thread free while scrolling long lists.
+
 ## v1.0.57 — Modrinth icons render at full resolution again
 
 ### Installed / browse / detail icons (Modrinth)

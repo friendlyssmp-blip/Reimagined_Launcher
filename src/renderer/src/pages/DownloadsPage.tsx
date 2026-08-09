@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { Button, EmptyState, Spinner, AnimatedNumber } from '../components/ui'
+import { ModIcon } from '../components/ModIcon'
 import { api, friendlyError } from '../lib/api'
 import { humanDuration, fmtBytes } from '../lib/format'
 import { IconDownload, IconRefresh } from '../components/icons'
@@ -133,16 +134,13 @@ export function DownloadsPage() {
     return (
       <div key={d.id} className={'dl-card' + (isActive ? ' dl-card-active' : d.status === 'failed' ? ' dl-card-err' : ' dl-card-done')}>
         <div className="dl-card-art">
+          {/* v1.0.58 — render artwork through ModIcon (the main-process image
+              proxy): direct <img> to remote CDNs is blocked by the renderer
+              CSP and failed intermittently, which is why download covers
+              sometimes didn't show. ModIcon loads via the proxy with a clean
+              fallback. */}
           {d.iconUrl ? (
-            <img
-              src={d.iconUrl}
-              alt=""
-              draggable={false}
-              loading="lazy"
-              onError={(e) => {
-                ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-              }}
-            />
+            <ModIcon src={d.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <IconDownload style={{ width: 20, height: 20 }} />
           )}

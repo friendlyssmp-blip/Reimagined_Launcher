@@ -15,13 +15,16 @@ export function ModIcon({ src, style, draggable = false }: { src?: string | null
   // v1.0.50 — embedded icons (extracted from the mod/pack file itself) are
   // already data: URLs — the main-process image proxy is for remote CDNs
   // only, so render these directly.
+  // v1.0.58 — decoding="async" keeps large covers from blocking the main
+  // thread (jank while scrolling long lists); loading="lazy" defers offscreen
+  // decodes entirely.
   if (src && src.startsWith('data:')) {
-    return <img src={src} alt="" style={style} draggable={draggable} />
+    return <img src={src} alt="" style={style} draggable={draggable} decoding="async" />
   }
   const state = useProjectImage(src)
 
   if (state.status === 'ready') {
-    return <img src={state.dataUrl} alt="" style={style} draggable={draggable} />
+    return <img src={state.dataUrl} alt="" style={style} draggable={draggable} decoding="async" loading="lazy" />
   }
 
   // Loading / unavailable — the app logo (Logo/Logo.png) replaces a broken glyph.
