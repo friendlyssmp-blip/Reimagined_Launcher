@@ -353,7 +353,16 @@ class Launcher {
       jvm.push('-XX:+UseG1GC', '-XX:-OmitStackTraceInFastThrow', '-Djava.net.preferIPv4Stack=true')
     }
 
-    jvm.push(`-Xmx${profile.memory}M`, '-Xms256M', `-Djava.library.path=${nativesDir}`)
+    // v1.0.61 — pre-tune the initial heap. Starting at -Xms256M forces the
+    // JVM to grow the heap DURING gameplay (each growth step can pause the
+    // game thread) — the exact micro-stutter seen in chunk-heavy moments
+    // (ocean/world loading, survival). Starting at ~50% of Xmx (1-4G) keeps
+    // G1 running stable young-gen collections instead of resizing mid-game.
+    const xmx = profile.memory || 4096
+    // Clamped against xmx so a low-memory profile (e.g. 512M) never produces
+    // an invalid -Xms > -Xmx pair, which the JVM rejects at launch.
+    const xms = Math.min(xmx, Math.max(1024, Math.floor(xmx / 2)))
+    jvm.push(`-Xmx${xmx}M`, `-Xms${xms}M`, `-Djava.library.path=${nativesDir}`)
     jvm.push('-Dminecraft.launcher.brand=reimagined', `-Dminecraft.launcher.version=${appVersion}`)
 
     // Reimagined Performance Engine: tier-tuned JVM flags (G1GC tuning +

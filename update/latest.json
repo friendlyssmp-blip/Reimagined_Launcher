@@ -1,7 +1,7 @@
 {
-  "version": "1.0.60",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.60.exe",
-  "sha256": "e24393136f80cfa7fa2f60f8cde0e35e4c345b145ad5ee5388fb7479025057ed",
-  "size": 83911801,
-  "notes": "v1.0.60 - full UI polish pass (premium surfaces, theme picker, empty states, console) + entire UI in English"
+  "version": "1.0.61",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.61.exe",
+  "sha256": "8d2c43c74ffb60bafc13df4884c8d78c551292c058e1819d7208450bcb6d291f",
+  "size": 83912190,
+  "notes": "v1.0.61 - FPS recovery: GC heap-resize stutter killed (pre-tuned Xms) + sustained particle-burst tier (FPS Boost 1.0.17)"
 }

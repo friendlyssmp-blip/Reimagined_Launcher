@@ -35,8 +35,13 @@ const FPS_BOOST_ID = 'reimagined-fps-boost'
 // stutters are identified from real data. v1.0.9 adds the async server-chunk
 // decode pipeline; v1.0.8 adds Extended View. ensureFpsBoost upgrades existing
 // profiles to the new bundle automatically.
-const FPS_BOOST_VERSION = '1.0.16'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.16.jar'
+// v1.0.17 — sustained particle-burst tier: fast block breaking / creeper
+// blasts / combat hold a steady 200-400 particle adds per 750 ms — under
+// the old 400 burst threshold, so they rendered full density. Beyond 240
+// the particle governor now keeps 3/8 until the scene settles (protects the
+// render thread on iGPUs); TNT chains > 400 still hold 2/8.
+const FPS_BOOST_VERSION = '1.0.17'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.17.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

@@ -1,3 +1,36 @@
+## v1.0.61 — FPS recovery: chunk-loading GC stutter killed + smoother combat/explosion particles
+
+### Why this exists — the V2→V3 FPS dips
+- Between the V2 and V3 benchmark sessions, six scenarios moved down (ocean
+  chunks, breaking blocks, survival, creeper, camera across a new world,
+  walking). Two of them had a REAL, addressable root cause; the rest of the
+  difference was session variance (different world density, seed, thermals).
+  This release fixes the two real ones.
+
+### Chunk-heavy scenes no longer stutter (GC heap-resize fix)
+- The launcher started Minecraft with `-Xms256M` — the JVM had to GROW the heap
+  during gameplay, and every growth step can pause the game thread. That is the
+  exact micro-stutter behind the dips in ocean chunks, world loading, survival
+  and panning the camera through new terrain.
+- The initial heap is now pre-tuned to ~50% of the profile's Xmx (min 1G,
+  clamped to never exceed Xmx so low-memory profiles stay valid). G1 runs
+  stable young-gen collections instead of resizing mid-game — noticeably
+  smoother chunk generation and world loading.
+
+### Sustained particle bursts are now governed (FPS Boost 1.0.17)
+- The particle governor only reacted to TNT-chain bursts (>400 adds per 750 ms,
+  keep 2/8). Fast block breaking, creeper blasts and combat produce a steady
+  200-400 adds per 750 ms — under the old threshold, so they rendered at full
+  density and stole frames on integrated GPUs.
+- New tier: beyond 240 adds/750 ms the engine keeps 3/8 of particles until the
+  scene settles. TNT chains keep the existing 2/8, and normal scenes are
+  unchanged. No gameplay or visual-feel changes outside heavy particle scenes.
+- Bundled Reimagined FPS Boost updated 1.0.16 → 1.0.17; existing profiles
+  upgrade automatically on next launch (stale jars are swept).
+
+Verified: tsc node+web clean, launcher build clean, mod built with Gradle
+(JAVA 25, Minecraft 26.2).
+
 ## v1.0.60 — Full UI polish pass + the entire launcher in English
 
 ### A premium visual pass across every screen
