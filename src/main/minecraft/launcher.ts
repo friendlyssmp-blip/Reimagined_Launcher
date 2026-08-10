@@ -922,25 +922,53 @@ class Launcher {
       config.asyncChunkDecode = s.asyncChunkDecode ?? true
       const dir = path.join(gameDir, 'config')
       fs.mkdirSync(dir, { recursive: true })
-      // v1.0.13 frame-rate safety: by default the engine applies a safe FPS
-      // cap everywhere (options.txt + the in-game watchdog via the JVM flag +
-      // the mod config). When the user opted into "unlimited FPS" (warned in
-      // Settings), ALL of those mechanisms must be off — including the mod
-      // config, or the watchdog would silently re-cap the game anyway.
-      if (settingsManager.get().unlimitedFps) {
-        fs.writeFileSync(
-          path.join(dir, 'reimagined-fps-boost.json'),
-          JSON.stringify({ ...config, unlimitedFps: true, maxFps: 0 }, null, 2)
-        )
+      const cfgPath = path.join(dir, 'reimagined-fps-boost.json')
+      // v1.0.69 — merge, never clobber. Seeding the tier defaults over the
+      // whole file on EVERY launch silently reset any toggle the user changed
+      // in-game (K menu: reduceParticles, simplifyClouds, AFK, flat GUI, …) on
+      // the next start. The existing file now wins for every key it defines
+      // (the user's overrides); tier values only fill keys the file doesn't
+      // have yet. Frame-rate safety fields stay ALWAYS the launcher's call.
+      let existing: Record<string, unknown> = {}
+      try {
+        if (fs.existsSync(cfgPath)) {
+          const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
+          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            existing = parsed as Record<string, unknown>
+          }
+        }
+      } catch {
+        /* malformed or unreadable — fall back to tier defaults */
+      }
+      const merged: Record<string, unknown> = { ...config, ...existing }
+      merged.asyncChunkDecode = s.asyncChunkDecode ?? true
+      // v1.0.13 frame-rate safety: the launcher decides the cap every launch
+      // (never left to a stale file). When the user opted into "unlimited FPS"
+      // (warned in Settings) ALL mechanisms are off — including the mod config,
+      // or the watchdog would silently re-cap the game anyway.
+      merged.unlimitedFps = Boolean(s.unlimitedFps)
+      // v1.0.69 — maxFps is EXCLUDED from the user-wins merge on purpose: no
+      // user-facing control writes it (only the unlimitedFps toggle), and an
+      // old config file from the v1.0.13-v1.0.44 era may persist a forced
+      // 60/120 cap that v1.0.41 removed — keeping it would silently re-cap the
+      // game via the in-game watchdog. The tier value (260 = Unlimited) always
+      // wins here, exactly as before the merge.
+      merged.maxFps = merged.unlimitedFps
+        ? 0
+        : typeof config.maxFps === 'number'
+          ? config.maxFps
+          : 260
+      if (merged.unlimitedFps) {
+        fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2))
         // v1.0.42 — even in unlimited mode, neutralize any stale cap persisted
         // in options.txt by an older launcher (maxFps:60 etc.) so the game
         // actually runs uncapped.
         rpe.applyFrameCap(gameDir, 260)
         logger.info('RPE: unlimited FPS enabled by the user — no frame cap applied (thermal/power risk warned in Settings).')
       } else {
-        fs.writeFileSync(path.join(dir, 'reimagined-fps-boost.json'), JSON.stringify(config, null, 2))
-        rpe.applyFrameCap(gameDir, Number(config.maxFps) || 120)
-        logger.info(`RPE: seeded FPS Boost config for tier "${tier}" (render cap ${String(config.smartRdCap)}, fps cap ${String(config.maxFps)})`)
+        fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2))
+        rpe.applyFrameCap(gameDir, Number(merged.maxFps) || 120)
+        logger.info(`RPE: seeded FPS Boost config for tier "${tier}" (render cap ${String(merged.smartRdCap)}, fps cap ${String(merged.maxFps)})`)
       }
       // v1.0.43 — VSync: a 60 Hz panel with VSync on caps FPS at 60 no matter
       // the frame cap. When the user enables "force VSync off" the launcher

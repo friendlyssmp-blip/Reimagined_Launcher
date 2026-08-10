@@ -1,3 +1,38 @@
+## v1.0.69 — your in-game FPS Boost toggles finally persist + AFK can't break Smart RD + texture-cache eviction no longer O(n²) + FPS Boost 1.0.24
+
+### The launcher no longer resets your K-menu toggles on every launch (launcher)
+- `seedFpsBoostConfig` overwrote `config/reimagined-fps-boost.json` with the tier
+  defaults on EVERY launch — so any toggle you changed in-game (K menu:
+  Reduce Particles, Simplify Clouds, AFK, Flat GUI, …) was silently reset back
+  to the tier default on the next start.
+- It now MERGES: the existing config file wins for every key it defines (your
+  overrides survive), and tier values only fill in keys the file doesn't have.
+- Frame-rate safety stays the launcher's call: `maxFps` is excluded from the
+  user-wins merge on purpose (no user control writes it, and an old config from
+  the v1.0.13-v1.0.44 era could persist a forced 60/120 cap — keeping it would
+  re-trigger the exact v1.0.41 FPS regression through the in-game watchdog).
+
+### AFK can no longer break Smart Render Distance (FPS Boost 1.0.24)
+- The AFK frame cap (~10 FPS) collapsed Smart RD's frame-time average to ~10,
+  so Smart RD ratcheted the render distance all the way down to 2 during AFK
+  (and wrote options.txt every 2s), and after input returned the stale-low
+  average kept dropping the freshly-restored render distance for seconds —
+  visible fog right after coming back.
+- Smart RD now stands fully down while AFK is active (AFK owns the render
+  distance), and when AFK disengages the controller resets (fpsEma/lastEval/
+  rdDropped) so it never fights the restored settings.
+
+### Texture-cache eviction no longer scans the whole cache per write (FPS Boost 1.0.24)
+- Every disk write ran a FULL directory listing to check the budget — O(n²)
+  during big pack reloads writing thousands of cache files, backing up the
+  writer thread and thrashing the disk. Eviction is now throttled to at most
+  one scan per 2s (best-effort budget enforcement, first write of a session
+  still reconciles).
+- FPS Boost 1.0.23 → 1.0.24; existing profiles auto-upgrade (stale jar sweep).
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean.
+
 ## v1.0.68 — GC by core count (measured data) + chunk-storm detector finally fires on RTP teleports + FPS Boost 1.0.23
 
 ### The garbage collector is now chosen from REAL measured data (launcher)

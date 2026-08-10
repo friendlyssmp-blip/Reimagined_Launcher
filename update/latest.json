@@ -1,7 +1,7 @@
 {
-  "version": "1.0.68",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.68.exe",
-  "sha256": "d0e1421d560cc9a263e89f8d5ad05ce12fae097f70d288dbe3eea2d5f455d45d",
-  "size": 83918458,
-  "notes": "v1.0.68 - GC chosen from real measured data + chunk-storm detector finally fires on RTP teleports + FPS Boost 1.0.23: analysis of 379 real PROF windows found the JVM GC was the #1 gameplay stutter source (G1 burned up to 2.8s of a 10s window with 100-137ms pauses on the 4-thread iGPU laptop) - potato/turbo tiers and balanced-on-low-core machines now launch with ParallelGC (no concurrent marking phase stealing cores from game + integrated server, GC threads capped 2-3); strong machines keep G1 unchanged, balanced G1 gets 1MB regions + earlier mixed-GC start. The chunk stabilizer never detected RTP/teleport storms (it required 5 CONSECUTIVE slow frames, but a single 1.7s meshing hitch is one slow frame followed by fast catch-up frames - zero S correlation in 379 windows): replaced with an exponentially decaying pressure gauge (intermittent slow frames tolerated, >=400ms hitches nudged hard, threshold at 50ms so sustained 29-32fps shader sessions are not a storm). Both JVM flag sets smoke-tested on Java 25."
+  "version": "1.0.69",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.69.exe",
+  "sha256": "4c51d2c7601cb8e0962288af65f9034babc798e82b758abe19e23535e2b913d2",
+  "size": 83918892,
+  "notes": "v1.0.69 - your in-game FPS Boost toggles finally persist + AFK can no longer break Smart RD + texture-cache eviction no longer O(n^2) + FPS Boost 1.0.24: the launcher seeded config/reimagined-fps-boost.json with the tier defaults on EVERY launch, silently resetting any K-menu toggle (Reduce Particles, Simplify Clouds, AFK, Flat GUI) on the next start - it now merges (your existing file wins for keys it defines, tier fills gaps; maxFps stays launcher-owned so a stale 60/120 cap from old launchers can never re-trigger the v1.0.41 FPS regression). Smart RD fought AFK: the AFK frame cap collapsed the frame-time average so Smart RD ratcheted render distance to 2 during AFK and kept dropping the restored RD for seconds after input returned (visible fog) - Smart RD now stands down while AFK is active and resets on disengage. The texture-cache eviction ran a full directory listing on EVERY disk write (O(n^2) on big pack reloads) - now throttled to one scan per 2s."
 }
