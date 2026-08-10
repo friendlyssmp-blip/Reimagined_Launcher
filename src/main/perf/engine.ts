@@ -17,6 +17,7 @@
  */
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 import { paths } from '../paths'
 import { logger } from '../logs/logger'
 import { settingsManager } from '../settings/settings-manager'
@@ -127,10 +128,16 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     enabled: true,
     reduceParticles: true,
     simplifyClouds: true,
-    // Off by default since 1.0.1: the entity-animation state cache was removed
-    // from the bundled mod (it could cause visual artifacts such as the
-    // enchantment glint disappearing). Kept in the schema for compat.
-    limitEntityAnimations: false,
+    // v1.0.64 — the bundled mod's entity-animation extraction cache is the
+    // modern rewrite (per-tick cleared, near-distance exempt, crowd-aware);
+    // the old v1.0.1 glint artifact no longer applies. On by default so the
+    // density-aware crowd budget actually works (a real CPU win for packed
+    // mob/item farms). Toggleable in-game.
+    limitEntityAnimations: true,
+    // v1.0.19/1.0.64 — particle occlusion culling (Cull-Particles style):
+    // particles inside solid-render blocks are dropped before ticking +
+    // rendering. The big TNT/explosion win; density-gated (>=120 in a group).
+    occludeParticles: true,
     smartRenderDistance: true,
     reduceVisualEffects: false,
     showFps: false,
@@ -163,18 +170,14 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: 260 }
   }
   if (tier === 'high') {
-    return { ...base, reduceParticles: false, simplifyClouds: false, limitEntityAnimations: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: 260 }
+    return { ...base, reduceParticles: false, simplifyClouds: false, smartRdCap: 16, entityAnimDistance: 64, lodDistance: 96, maxFps: 260 }
   }
   // Turbo — maximum FPS, clearly a trade-off preset (never the default).
-  // Note: limitEntityAnimations stays OFF — the v1.0.1 bundled mod removed the
-  // entity-animation state cache because it caused the enchantment glint
-  // artifact; Turbo must not re-enable that broken path. It trades geometry,
-  // particles and LOD instead. Turbo still keeps a safe frame cap — "unlimited"
-  // is a separate, explicitly-warned opt-in (`unlimitedFps`), never a default.
+  // Turbo keeps a safe frame cap — "unlimited" is a separate, explicitly-
+  // warned opt-in (`unlimitedFps`), never a default.
   return {
     ...base,
     reduceVisualEffects: true,
-    limitEntityAnimations: false,
     smartRdCap: slowStorage ? 6 : 8,
     entityAnimDistance: 24,
     lodDistance: 32,            // far terrain simplified much sooner
@@ -198,9 +201,20 @@ export function jvmFlagsFor(tier: PerfTier): string[] {
   const newSize = tier === 'potato' || tier === 'turbo' ? 25 : 30
   const maxNewSize = tier === 'potato' || tier === 'turbo' ? 50 : 60
   const presetId = tier === 'potato' ? 0 : tier === 'balanced' ? 1 : tier === 'high' ? 2 : 3
+  // v1.0.64 — GC thread caps for weak CPUs: on a 4-thread machine G1 defaults
+  // to ~4 parallel GC threads, so a collection pause pre-empts the game AND
+  // the integrated server at the same time — the micro-hitches seen in
+  // chunk-heavy moments (ocean/world load, TNT chains). Capping GC threads
+  // leaves cores for the game; generous caps on strong machines (never more
+  // than 4/2) so a beefy PC loses nothing.
+  const cores = Math.max(1, os.cpus().length)
+  const pgc = Math.min(tier === 'potato' || tier === 'turbo' ? 2 : 4, cores)
+  const cgc = Math.max(1, Math.min(tier === 'potato' || tier === 'turbo' ? 1 : 2, cores))
   return [
     '-XX:+UseG1GC',
     '-XX:MaxGCPauseMillis=' + pause,
+    '-XX:ParallelGCThreads=' + pgc,
+    '-XX:ConcGCThreads=' + cgc,
     '-XX:+UnlockExperimentalVMOptions',
     '-XX:G1NewSizePercent=' + newSize,
     '-XX:G1MaxNewSizePercent=' + maxNewSize,

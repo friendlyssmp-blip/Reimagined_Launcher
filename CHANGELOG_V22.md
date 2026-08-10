@@ -1,3 +1,51 @@
+## v1.0.64 — more CPU FPS everywhere: particle occlusion culling, entity-animation limits back on, GC thread caps for weak CPUs, FPS Boost 1.0.19
+
+### Particle Occlusion Culling — particles hidden inside blocks no longer cost anything (FPS Boost 1.0.19)
+- Cull-Particles-style sweep: every particle whose position is inside a solid
+  block is removed BEFORE it ticks and renders. You can never see a particle
+  inside a full cube, so it was pure CPU + GPU waste — the exact cost behind
+  explosion/TNT smoke billowing through terrain and block-break debris buried
+  in solid ground.
+- Density-gated: the sweep only runs when a particle group holds 120+ particles
+  (TNT chains, packed farms) — ordinary scenes pay literally nothing, and
+  block-break particles (which spawn at a solid block's face) are never culled
+  by accident.
+- The MC 26.2 per-type particle-limit counters are decremented on removal
+  (mirroring vanilla's own death path via the engine accessor), so the new
+  particle-limit system can never drift out of sync. Any hiccup falls back to
+  vanilla through the SafetyGate.
+- New in-game toggle "Particle Occlusion" (K menu), on by default.
+
+### Entity-animation limits are back on — big win for packed farms (launcher)
+- The launcher was seeding `limitEntityAnimations: false` on every launch — a
+  stale override from the OLD v1.0.1 cache (which had a glint artifact). The
+  bundled mod's cache is the modern rewrite (per-tick cleared, near-distance
+  exempt, crowd-aware), and this flag being off also silently disabled the
+  whole entity-crowd density system.
+- It now ships ON: distant entities (beyond ~48 blocks) reuse their extracted
+  render state within a tick instead of re-extracting every frame — real CPU
+  savings when hundreds of entities are around (the 500-entity farm test).
+  Entities near you are never throttled; toggleable in-game ("Limit Entity
+  Animations").
+
+### GC thread caps — fewer hitches on weak CPUs (launcher)
+- On a 4-thread CPU, G1 defaults to ~4 parallel GC threads, so a collection
+  pause pre-empted the game AND the integrated server at once — the micro-
+  hitches seen in chunk-heavy moments (ocean/world load, TNT chains).
+- The JVM args now cap GC threads per hardware tier (2 parallel + 1 concurrent
+  on potato/turbo, 4 + 2 on balanced/high, always min real cores) so the game
+  keeps cores during collections. Generous caps on strong machines — nothing
+  is lost there.
+
+### FPS Boost 1.0.18 → 1.0.19
+- New ParticleGroupMixin + ParticleAccessor + ParticleEngineAccessor (all API
+  names verified against the 26.2 deobf jar before writing: ArrayDeque queue,
+  protected updateCount, cached no-arg isSolidRender()).
+- Existing profiles auto-upgrade (stale jar sweep) — nothing to reinstall.
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean.
+
 ## v1.0.63 — shaders that crashed on your PC are flagged, update checks stop hammering the API, FPS Boost 1.0.18
 
 ### Shaders that already crashed are now marked "Crashed on this PC"

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.63",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.63.exe",
-  "sha256": "161443ae3efc9e6f80c033da162915c65978ec9777a73b0eeb602258fe4c8437",
-  "size": 83914836,
-  "notes": "v1.0.63 - shaders that crashed on your PC now flagged (Crashed on this PC badge, pack captured at crash time) + update checks stop bursting the API on Installed sub-tab switches + FPS Boost 1.0.18 (AFK/storm pool state machine, format-scoped texture cache, full-buffer snapshot, config screen reachable on narrow windows)"
+  "version": "1.0.64",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.64.exe",
+  "sha256": "c233fa788c85a327fd92cd3b57408bda19bdcd177962010f35e93d697248aea3",
+  "size": 83918035,
+  "notes": "v1.0.64 - more CPU FPS everywhere: particle occlusion culling (Cull-Particles style, hidden in-block particles are removed before they tick+render; density-gated; particle-limit counters kept in sync) + entity-animation limits back on (modern per-tick cache, enables the crowd-density system) + GC thread caps for weak CPUs (G1 no longer steals all cores during collections) + FPS Boost 1.0.19"
 }
