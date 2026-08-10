@@ -1,7 +1,7 @@
 {
-  "version": "1.0.64",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.64.exe",
-  "sha256": "c233fa788c85a327fd92cd3b57408bda19bdcd177962010f35e93d697248aea3",
-  "size": 83918035,
-  "notes": "v1.0.64 - more CPU FPS everywhere: particle occlusion culling (Cull-Particles style, hidden in-block particles are removed before they tick+render; density-gated; particle-limit counters kept in sync) + entity-animation limits back on (modern per-tick cache, enables the crowd-density system) + GC thread caps for weak CPUs (G1 no longer steals all cores during collections) + FPS Boost 1.0.19"
+  "version": "1.0.65",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.65.exe",
+  "sha256": "110d95a5df8b155047aff421fa3d57d2ad299f7af6a859700010f8f7ad6ae46f",
+  "size": 83918098,
+  "notes": "v1.0.65 - the Performance profiler finally parses the game real frame-time data: the PROF regex skipped p95/p99 and never matched the real line, so 1%/0.1% lows, max frame ms, tick ms and GC ms were silently never recorded; now parsed as robust key=value tokens + FPS Boost 1.0.20 (low FPS is the real minimum again, was the peak)"
 }

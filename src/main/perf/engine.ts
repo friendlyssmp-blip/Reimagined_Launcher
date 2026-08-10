@@ -350,14 +350,35 @@ export async function recordSessionFromLog(profileId: string, profileName: strin
     // (1%/0.1% lows, max frame ms, tick ms, GC ms) that identify stutter
     // instead of guessing at it.
     const re = /PERF avg=([\d.]+) low=([\d.]+) heapMB=([\d.]+) frames=(\d+)/g
-    const profRe = /PROF avg=([\d.]+) low=([\d.]+) p1=([\d.]+) p01=([\d.]+) maxMs=([\d.]+) tickMs=([\d.]+) gcMs=(\d+) frames=(\d+) heapMB=([\d.]+)/g
+    // v1.0.65 — the PROF line is parsed as key=value TOKENS, not a positional
+    // regex. The old regex skipped p95/p99 so it never matched the real line
+    // and the rich stutter metrics (1%/0.1% lows, max frame ms, tick ms,
+    // GC ms) were silently never recorded. A token parser is robust to the
+    // mod reordering/adding/removing fields — the exact fragility that caused
+    // the original silent failure can't recur.
+    const profRe = /\bPROF\b[^\n]*/g
     const windows: { avg: number; low: number; heap: number; frames: number; p1?: number; p01?: number; maxMs?: number; tickMs?: number; gcMs?: number }[] = []
     let m: RegExpExecArray | null
     while ((m = profRe.exec(text)) !== null) {
-      windows.push({
-        avg: Number(m[1]), low: Number(m[2]), heap: Number(m[10]), frames: Number(m[8]),
-        p1: Number(m[3]), p01: Number(m[4]), maxMs: Number(m[5]), tickMs: Number(m[6]), gcMs: Number(m[7])
-      })
+      const kv: Record<string, string> = {}
+      for (const token of m[0].split(' ')) {
+        const eq = token.indexOf('=')
+        if (eq > 0) kv[token.slice(0, eq)] = token.slice(eq + 1)
+      }
+      const avg = Number(kv['avg'])
+      if (Number.isNaN(avg)) continue
+      const w: { avg: number; low: number; heap: number; frames: number; p1?: number; p01?: number; maxMs?: number; tickMs?: number; gcMs?: number } = {
+        avg,
+        low: kv['low'] !== undefined ? Number(kv['low']) : avg,
+        heap: kv['heapMB'] !== undefined ? Number(kv['heapMB']) : 0,
+        frames: kv['frames'] !== undefined ? Number(kv['frames']) : 0
+      }
+      if (kv['p1'] !== undefined) w.p1 = Number(kv['p1'])
+      if (kv['p01'] !== undefined) w.p01 = Number(kv['p01'])
+      if (kv['maxMs'] !== undefined) w.maxMs = Number(kv['maxMs'])
+      if (kv['tickMs'] !== undefined) w.tickMs = Number(kv['tickMs'])
+      if (kv['gcMs'] !== undefined) w.gcMs = Number(kv['gcMs'])
+      windows.push(w)
     }
     if (windows.length === 0) {
       while ((m = re.exec(text)) !== null) {

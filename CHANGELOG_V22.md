@@ -1,3 +1,29 @@
+## v1.0.65 — the Performance profiler actually parses the game's real data (fixes the rich stutter metrics) + FPS Boost 1.0.20
+
+### The rich frame-time telemetry is finally read (launcher)
+- The in-game mod emits a PROF line every ~10 s with REAL frame statistics
+  (avg / low / p95 / p99 / 1% low / 0.1% low / max frame ms / tick ms /
+  GC ms / spikes / frames / heap). The launcher's parser regex skipped the
+  p95/p99 fields, so it NEVER matched the real line — the 1% and 0.1% lows,
+  the max frame time, tick time and GC time were silently never recorded
+  (basic sessions still worked through the legacy PERF line).
+- The regex now matches the real format and maps every field to its correct
+  position (verified against a simulated line). From this release on, the
+  Performance tab's session history carries the real stutter metrics — the
+  data the RPE self-learning needs to actually act on hitches, not just
+  averages.
+
+### "Low FPS" is the real minimum again (FPS Boost 1.0.20)
+- The PROF line computed its "low" from the FASTEST frame in the window
+  (sorted[0]) — it reported the session's PEAK fps as the low, silently
+  flattering the worst-case number. Now it reads the SLOWEST frame
+  (sorted[last]): the low is the genuine minimum, matching what the legacy
+  PERF line already reported.
+- Existing profiles auto-upgrade (stale jar sweep) — nothing to reinstall.
+
+Verified: gradle build (mod, JDK 25), tsc node+web clean, launcher build
+clean, regex validated against the exact emitted line format.
+
 ## v1.0.64 — more CPU FPS everywhere: particle occlusion culling, entity-animation limits back on, GC thread caps for weak CPUs, FPS Boost 1.0.19
 
 ### Particle Occlusion Culling — particles hidden inside blocks no longer cost anything (FPS Boost 1.0.19)
