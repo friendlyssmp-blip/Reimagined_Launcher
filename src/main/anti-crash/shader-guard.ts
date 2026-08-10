@@ -142,6 +142,32 @@ export function profileUsesShaders(profile: Profile): boolean {
 }
 
 /**
+ * The shader pack that was ACTIVE when the session ran (folder name from
+ * iris.properties; falls back to a lone entry in shaderpacks/). v1.0.63 —
+ * used to attribute a crash to a specific pack so the browse badges can flag
+ * packs that already crashed on this machine.
+ */
+export function activeShaderPack(profile: Profile): string | null {
+  try {
+    const irisCfg = path.join(instanceDir(profile), 'config', 'iris.properties')
+    const content = fs.readFileSync(irisCfg, 'utf-8')
+    const m = content.match(/^shaderpack=(.+)$/m)
+    const pack = m?.[1]?.trim()
+    if (pack) return pack
+  } catch {
+    /* no iris config yet */
+  }
+  try {
+    const dir = path.join(instanceDir(profile), 'shaderpacks')
+    const entries = fs.readdirSync(dir).filter((f) => !f.endsWith('.txt') && !f.startsWith('.'))
+    if (entries.length === 1) return entries[0]
+  } catch {
+    /* no shaderpacks dir */
+  }
+  return null
+}
+
+/**
  * Assess whether THIS machine can realistically run shaders. Real hardware
  * data only — vendor, VRAM and driver version from the detected profile.
  *

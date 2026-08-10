@@ -1,3 +1,52 @@
+## v1.0.63 — shaders that crashed on your PC are flagged, update checks stop hammering the API, FPS Boost 1.0.18
+
+### Shaders that already crashed are now marked "Crashed on this PC"
+- When a shader crash is recorded (v1.0.62), the ACTIVE pack is now captured
+  too — read from iris.properties (shaderpack=), with a fallback to the lone
+  pack in the shaderpacks/ folder.
+- The hardware-fit badge on shader cards (Mods browse) and the shader detail
+  page gains a level that wins over every GPU guess: if that exact pack
+  crashed on this machine before, the badge shows a red "Crashed on this PC"
+  with an honest hint — you can still install it, at your own risk, and the
+  v1.0.62 auto-recovery protects the next launch if it crashes again.
+- Matching is fuzzy but safe: pack names are normalized and compared in both
+  directions with a 4+ character guard, so a folder named "lite" can never
+  flag "BSL Lite" by mistake (no false-positive red badges).
+
+### Update checks stop bursting the API (launcher)
+- The Installed panel re-ran the full update check on EVERY sub-tab switch
+  (Mods → Resource Packs → Data Packs → Shaders): one provider lookup per
+  installed item per switch, so a 100-mod profile fired ~100-200 requests
+  every time — a burst that could trip Modrinth's rate limit (the 429 family)
+  and made the panel feel slow.
+- The check now runs once when the panel opens or the profile changes;
+  sub-tab switches re-render the stored badges, which stay fresh because the
+  check persists its results before returning.
+
+### FPS Boost 1.0.17 → 1.0.18 (four real bugs fixed)
+- AFK Mode and the chunk-storm stabilizer both adjusted the same chunk-build
+  pool maximum and overwrote each other (AFK→1, storm→baseMax−2), oscillating
+  every tick when both were active. They are now ONE state machine — AFK wins
+  the floor, storm pressure only applies when not AFK.
+- The texture decode cache now scopes its key by decode format: the same bytes
+  read as RGBA and as RGB are different outputs, and restoring the wrong one
+  would corrupt textures. A format mismatch is a clean miss, never a wrong
+  image.
+- Cache stores snapshot the FULL pixel buffer position-independently (the old
+  read from the buffer's current position could truncate entries), and
+  validation now uses each format's real bytes-per-pixel, so RGB and
+  luminance textures cache correctly too.
+- The in-game settings screen's four cycle buttons (RD cap, AFK threshold,
+  crowd budget, debris cap) used a hardcoded two-column grid — on narrow
+  windows two of them rendered off-screen and were unreachable. They now
+  follow the same column layout as the toggles.
+- Hardening: the on-disk cache key separator is '_' (the old ':' is invalid in
+  filenames on Linux/macOS), and the chunk-build pool honors a governor state
+  already set before the pool was created.
+- Existing profiles auto-upgrade (stale jar sweep) — nothing to reinstall.
+
+Verified: gradle build (mod, JDK 25), tsc node+web clean, launcher build clean.
+
 ## v1.0.62 — Direct shader crashes (GPU hang) now trigger auto-recovery
 
 ### The gap

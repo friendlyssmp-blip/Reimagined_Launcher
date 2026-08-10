@@ -22,7 +22,7 @@ import {
   IconCheck,
   IconTrash
 } from './icons'
-import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo, ShaderSupport } from '@shared/types'
+import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo, ShaderCrashRecord, ShaderSupport } from '@shared/types'
 import { shaderFitFor, shaderFitClass } from '../lib/shaderFit'
 
 type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader' | 'modpack'
@@ -306,7 +306,7 @@ export function ProjectDetail({
   const [includesLoading, setIncludesLoading] = useState(false)
   const [includesError, setIncludesError] = useState<string | null>(null)
   /* v1.0.56 — per-shader hardware-fit badge on the detail page. */
-  const [shaderSupport, setShaderSupport] = useState<ShaderSupport | null>(null)
+  const [shaderSupport, setShaderSupport] = useState<(ShaderSupport & { recentCrashes?: ShaderCrashRecord[] }) | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -716,7 +716,8 @@ export function ProjectDetail({
               {CONTENT_LABEL[projectType]}
             </span>
             {projectType === 'shader' && shaderSupport && (() => {
-              const fit = shaderFitFor(shaderSupport, detail.categories)
+              const crashPacks = (shaderSupport.recentCrashes ?? []).map((c) => c.shaderPack).filter((x): x is string => !!x)
+              const fit = shaderFitFor(shaderSupport, detail.categories, crashPacks, detail.title)
               return (
                 <span className={'badge ' + shaderFitClass(fit.level)} title={fit.hint} style={{ fontWeight: 600 }}>
                   {fit.label}
@@ -734,7 +735,8 @@ export function ProjectDetail({
             {(detail.categories ?? []).slice(0, 3).map((c) => <span key={c} className="badge">{c}</span>)}
           </div>
           {projectType === 'shader' && shaderSupport && (() => {
-            const fit = shaderFitFor(shaderSupport, detail.categories)
+            const crashPacks = (shaderSupport.recentCrashes ?? []).map((c) => c.shaderPack).filter((x): x is string => !!x)
+            const fit = shaderFitFor(shaderSupport, detail.categories, crashPacks, detail.title)
             return (
               <div
                 style={{

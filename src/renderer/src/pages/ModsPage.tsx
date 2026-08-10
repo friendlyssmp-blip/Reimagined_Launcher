@@ -10,7 +10,7 @@ import { InstallConfirmModal, type InstallTarget } from '../components/InstallCo
 import { UpdateAllModal } from '../components/UpdateAllModal'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
-import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo, ShaderSupport } from '@shared/types'
+import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo, ShaderCrashRecord, ShaderSupport } from '@shared/types'
 import { shaderFitFor } from '../lib/shaderFit'
 
 type SourceTab = 'installed' | 'modrinth' | 'curseforge'
@@ -87,7 +87,7 @@ export function ModsPage() {
   const [contentType, setContentType] = useState<ContentType>('mod')
   /* v1.0.56 — per-shader hardware-fit badge: the real Shader Guard assessment
      for THIS machine, fetched once when browsing shader packs. */
-  const [shaderSupport, setShaderSupport] = useState<ShaderSupport | null>(null)
+  const [shaderSupport, setShaderSupport] = useState<(ShaderSupport & { recentCrashes?: ShaderCrashRecord[] }) | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ProviderResult[]>([])
   const [installed, setInstalled] = useState<ProfileMod[]>(activeProfile?.mods ?? [])
@@ -736,17 +736,32 @@ export function ModsPage() {
         .localFiles(activeProfile.id, type)
         .then((files) => setManualFiles((prev) => ({ ...prev, [type]: files })))
         .catch(() => setManualFiles((prev) => ({ ...prev, [type]: [] })))
-      api.mods
-        .checkUpdates(activeProfile.id)
-        .then((fresh) => {
-          if (!cancelled) setInstalled(fresh)
-        })
-        .catch(() => {})
     })()
     return () => {
       cancelled = true
     }
   }, [tab, instTab, activeProfile])
+
+  /* v1.0.63 — the update check is the expensive part of the pipeline above
+   * (one provider lookup per installed item) and only needs to re-run when
+   * the Installed panel opens or the profile changes — NOT on every Installed
+   * sub-tab switch (Mods → Resource Packs → Data Packs → Shaders). Switching
+   * sub-tabs re-renders the SAME stored badges; re-firing a full 100-item
+   * provider sweep per switch was a pointless network burst that could trip
+   * Modrinth's rate limit (the 429 family) and made the panel feel slow. */
+  useEffect(() => {
+    if (tab !== 'installed' || !activeProfile) return
+    let cancelled = false
+    api.mods
+      .checkUpdates(activeProfile.id)
+      .then((fresh) => {
+        if (!cancelled) setInstalled(fresh)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [tab, activeProfile])
 
   /* v1.0.56 — assess the machine once per shader-browsing session so every
      shader card can show "Suitable for your PC / Limited / Not suitable (own risk)". */
@@ -777,7 +792,9 @@ export function ModsPage() {
           <Badge variant="accent">{r.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}</Badge>
           {isInstalled(r) && <Badge variant="success">Installed</Badge>}
           {contentType === 'shader' && shaderSupport && (() => {
-            const fit = shaderFitFor(shaderSupport, r.categories)
+            // v1.0.63 — flag packs that already crashed on this machine.
+            const crashPacks = (shaderSupport.recentCrashes ?? []).map((c) => c.shaderPack).filter((x): x is string => !!x)
+            const fit = shaderFitFor(shaderSupport, r.categories, crashPacks, r.title ?? r.slug)
             return <Badge variant={fit.level === 'ok' ? 'success' : fit.level === 'limited' ? 'warn' : 'danger'} title={fit.hint}>{fit.label}</Badge>
           })()}
         </div>

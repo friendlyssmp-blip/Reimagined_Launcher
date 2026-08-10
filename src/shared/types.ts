@@ -568,6 +568,8 @@ export interface ShaderCrashRecord {
   profileId: string
   profileName: string
   cause: string
+  /** The shader pack that was ACTIVE at crash time (folder name) — v1.0.63. */
+  shaderPack?: string
   at: string
 }
 

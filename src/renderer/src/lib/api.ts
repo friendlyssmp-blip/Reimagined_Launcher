@@ -231,7 +231,7 @@ export const api = {
   /** Shader Guard — real GPU/driver assessment + manual disable (anti-crash). */
   shaders: {
     support: (profileId?: string) =>
-      unwrap<ShaderSupport & { recentCrashes?: { profileId: string; profileName: string; cause: string; at: string }[] }>(
+      unwrap<ShaderSupport & { recentCrashes?: { profileId: string; profileName: string; cause: string; at: string; shaderPack?: string }[] }>(
         window.reimagined.shaders.support(profileId)
       ),
     disable: (profileId: string) => unwrap<boolean>(window.reimagined.shaders.disable(profileId))

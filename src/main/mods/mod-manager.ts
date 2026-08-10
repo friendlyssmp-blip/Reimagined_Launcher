@@ -835,9 +835,6 @@ class ModManager {
     // v1.0.55 — bounded concurrency: profiles with 100+ mods would otherwise
     // fire 100+ simultaneous provider calls and get rate-limited (HTTP 429),
     // which made the whole check fail and left stale update badges behind.
-    // v1.0.55 — bounded concurrency: profiles with 100+ mods would otherwise
-    // fire 100+ simultaneous provider calls and get rate-limited (HTTP 429),
-    // which made the whole check fail and left stale update badges behind.
     // Pre-allocated + index-assigned so the resulting array keeps profile.mods
     // order no matter which worker finishes first.
     const updatedMods: ProfileMod[] = new Array(profile.mods.length)

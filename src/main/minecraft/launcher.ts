@@ -578,11 +578,14 @@ class Launcher {
           // Shader Guard: a crash on a shader-armed session is recorded so the
           // next launch auto-disables shaders (no endless crash loop).
           if (profileUsesShaders(profile)) {
-            const { recordShaderCrash } = await import('../anti-crash/shader-guard')
+            const { recordShaderCrash, activeShaderPack } = await import('../anti-crash/shader-guard')
             await recordShaderCrash({
               profileId: profile.id,
               profileName: profile.name,
               cause: report.cause,
+              // v1.0.63 — attribute the crash to the ACTIVE pack so the
+              // shader browse badges can flag packs that crashed here.
+              shaderPack: activeShaderPack(profile) ?? undefined,
               at: new Date().toISOString()
             })
             logger.warn(`Shader Guard: session for "${profile.name}" crashed with shaders enabled (${report.cause.slice(0, 120)}) — auto-recovery armed for next launch.`)
