@@ -6,3 +6,4 @@ e24393136f80cfa7fa2f60f8cde0e35e4c345b145ad5ee5388fb7479025057ed *dist/Reimagine
 c233fa788c85a327fd92cd3b57408bda19bdcd177962010f35e93d697248aea3 *dist/Reimagined-Setup-1.0.64.exe
 110d95a5df8b155047aff421fa3d57d2ad299f7af6a859700010f8f7ad6ae46f *dist/Reimagined-Setup-1.0.65.exe
 932c80e76ee3a6e6ee18d28b6637f620af24b61e545dfbae278007c3a68bd02a *dist/Reimagined-Setup-1.0.66.exe
+9c27f380229ccb4d8d16fafbde8581a8f64ff4f0e90ad8fea3c8b9e7e514a8ef *dist/Reimagined-Setup-1.0.67.exe

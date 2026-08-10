@@ -1,3 +1,39 @@
+## v1.0.67 — chunk-pipeline audit: spike correlation now tells the truth + reload windows can't overlap-cancel + FPS Boost 1.0.22
+
+### Spike correlation actually identifies the stutter source now (FPS Boost 1.0.22)
+- The PROF line reports which periodic system coincided with each spike frame
+  (spkTasks=C/A/P/S). It was meaningless: the stabilizer bit was never set
+  anywhere, and AFK + the chunk pipeline were marked UNCONDITIONALLY every
+  tick (their per-tick polling is cheap and always runs) — so every spike
+  showed 'A' and 'P' and 'S' never appeared. You could not tell what caused
+  a hitch.
+- Now each bit is set only when that system is ACTUALLY doing work: AFK only
+  while AFK throttling is active, the pipeline only when it really applied
+  chunks (it is suspended during resource reloads), and the stabilizer while
+  a chunk storm is throttling. The correlation data is finally honest.
+
+### Overlapping reloads can no longer end the window early (FPS Boost 1.0.22)
+- LoadingBoost used a boolean "reloading" flag: if a shader pack reload
+  started while a resource pack reload was mid-flight, the first one to
+  finish cleared the flag while the second was still loading — background
+  systems resumed mid-load and the window could show "Not Responding".
+- The window is now a depth counter: it only closes when the LAST reload
+  finishes. Start (client thread) and end (future-completion thread) are
+  synchronized, and the measured reload durations stay correct for
+  overlapping loads.
+
+### Hardening
+- `ChunkStabilizer.throttling` is now volatile (written on the render thread,
+  read on the game thread for the correlation mask).
+- Deep audit of the chunk pipeline (LevelRendererMixin pool hand-off,
+  ClientChunkCacheMixin async decode, ChunkPipeline bounded/last-wins/stale-
+  rejected apply, CompileTaskMixin stale-mesh skip, world-change flush) —
+  all coordination correct; no further changes needed there.
+- FPS Boost 1.0.21 → 1.0.22; existing profiles auto-upgrade (stale jar sweep).
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean.
+
 ## v1.0.66 — Smart Render Distance respects your settings + particle distance culling + FPS Boost 1.0.21
 
 ### Smart Render Distance no longer fights your render distance (FPS Boost 1.0.21)

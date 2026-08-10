@@ -1,7 +1,7 @@
 {
-  "version": "1.0.66",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.66.exe",
-  "sha256": "932c80e76ee3a6e6ee18d28b6637f620af24b61e545dfbae278007c3a68bd02a",
-  "size": 83918870,
-  "notes": "v1.0.66 - FPS Boost 1.0.21: Smart Render Distance now respects YOUR render distance (no more fighting manual settings - only restores what it dropped itself, dead Smart RD Cap button removed) + particle distance culling (dense scenes drop sub-pixel particles beyond 128 blocks - storm rain win on iGPUs, independent from occlusion, new in-game toggle)"
+  "version": "1.0.67",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.67.exe",
+  "sha256": "9c27f380229ccb4d8d16fafbde8581a8f64ff4f0e90ad8fea3c8b9e7e514a8ef",
+  "size": 83919037,
+  "notes": "v1.0.67 - chunk-pipeline audit + FPS Boost 1.0.22: spike correlation now tells the truth (the stabilizer bit was never set and AFK/pipeline were marked unconditionally - every spike showed A and P and S never appeared; now each bit is set only when that system is really working) + overlapping resource/shader reloads can no longer end the window early (depth counter replaces the boolean flag, so background systems stay suspended until the LAST reload finishes) + hardening (volatile throttling flag)"
 }
