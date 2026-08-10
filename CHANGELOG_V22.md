@@ -1,3 +1,37 @@
+## v1.0.70 — chunk-pipeline deep audit: async decode can't self-disable on a rare null slot + stale-mesh protection follows the build pool + FPS Boost 1.0.25
+
+### Async chunk decode can no longer silently disable itself (FPS Boost 1.0.25)
+- `applyDecodedChunk` read the target slot with `chunks.get(index)` and called
+  `isValidChunk(existing, …)` on it. On the rare case where the slot was never
+  installed (a first-time chunk, or a view-ring pre-fill miss) `existing` is
+  null → NPE → and 3 NPEs in 30s made the SafetyGate silently disable the
+  whole async decode module — the exact ghost-failure pattern this pipeline
+  must never have.
+- A null/absent slot now simply installs the decoded chunk (matching vanilla's
+  "no valid chunk → create + set" flow); the re-apply empty-sections path is
+  preserved.
+
+### Stale-mesh protection now follows the chunk-build pool (FPS Boost 1.0.25)
+- The stale-mesh skip (don't finish compiling a section whose chunk already
+  left the loaded area) was gated on `asyncChunkDecode` — but the tuned
+  chunk-build pool is used whenever the mod is active without Sodium, even
+  with async decode OFF in the K menu. Fast movement with decode off kept
+  re-compiling stale sections and backlogged the mesh queue exactly when it
+  needed to catch up. The skip now matches the pool's own gate
+  (active && !Sodium).
+
+### Micro: no per-tick allocation when nothing was decoded (FPS Boost 1.0.25)
+- `applyReady` allocated a batch list every game tick even when the ready
+  queue was empty; it now peeks first (O(1)) and allocates only when there is
+  something to apply.
+- The rest of the pipeline (last-wins dedup, bounded drop-least-relevant
+  queue, nearest-first apply budget, world-change flush, stale-apply
+  rejection, never-CallerRuns decode pool) re-verified — coordination correct.
+- FPS Boost 1.0.24 → 1.0.25; existing profiles auto-upgrade (stale jar sweep).
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean.
+
 ## v1.0.69 — your in-game FPS Boost toggles finally persist + AFK can't break Smart RD + texture-cache eviction no longer O(n²) + FPS Boost 1.0.24
 
 ### The launcher no longer resets your K-menu toggles on every launch (launcher)

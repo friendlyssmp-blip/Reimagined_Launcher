@@ -1,7 +1,7 @@
 {
-  "version": "1.0.69",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.69.exe",
-  "sha256": "4c51d2c7601cb8e0962288af65f9034babc798e82b758abe19e23535e2b913d2",
-  "size": 83918892,
-  "notes": "v1.0.69 - your in-game FPS Boost toggles finally persist + AFK can no longer break Smart RD + texture-cache eviction no longer O(n^2) + FPS Boost 1.0.24: the launcher seeded config/reimagined-fps-boost.json with the tier defaults on EVERY launch, silently resetting any K-menu toggle (Reduce Particles, Simplify Clouds, AFK, Flat GUI) on the next start - it now merges (your existing file wins for keys it defines, tier fills gaps; maxFps stays launcher-owned so a stale 60/120 cap from old launchers can never re-trigger the v1.0.41 FPS regression). Smart RD fought AFK: the AFK frame cap collapsed the frame-time average so Smart RD ratcheted render distance to 2 during AFK and kept dropping the restored RD for seconds after input returned (visible fog) - Smart RD now stands down while AFK is active and resets on disengage. The texture-cache eviction ran a full directory listing on EVERY disk write (O(n^2) on big pack reloads) - now throttled to one scan per 2s."
+  "version": "1.0.70",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.70.exe",
+  "sha256": "6ba1c0c3aefefdde1359b99e94353804ddbb8a6aa30d162f9cbf3965e285f861",
+  "size": 83918918,
+  "notes": "v1.0.70 - chunk-pipeline deep audit + FPS Boost 1.0.25: the async chunk decode apply read the target slot and called isValidChunk on it - on the rare case the slot was never installed (first-time chunk / view-ring pre-fill miss) existing was null, NPE, and 3 NPEs in 30s made the SafetyGate silently disable the whole async decode module (the ghost-failure pattern); a null/absent slot now simply installs the decoded chunk. The stale-mesh compile skip was gated on asyncChunkDecode, but the tuned chunk-build pool is used whenever the mod is active without Sodium (even with async decode OFF) - fast movement with decode off kept re-compiling stale sections and backlogged the mesh queue; the skip now matches the pool gate (active && !Sodium). applyReady no longer allocates a batch list every tick when the ready queue is empty (peek first)."
 }
