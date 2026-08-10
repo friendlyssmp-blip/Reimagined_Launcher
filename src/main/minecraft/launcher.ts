@@ -553,13 +553,22 @@ class Launcher {
     eventBus.emit('launch:status', { profileId: profile?.id ?? '', running: false, code, signal })
     eventBus.emit('launch:exit', { code, signal, duration, profileId: profile?.id })
 
-    // Crash Assistant: a non-zero exit may mean the game crashed — if a fresh
-    // crash report exists, surface it with analysis and suggestions.
-    if (profile && code !== 0) {
+    // Crash Assistant: the fresh crash-report file is the GROUND TRUTH that a
+    // crash happened — the process exit code is NOT reliable (a GPU-hang/TDR
+    // kill or certain JVM shutdown paths exit with code 0 or a signal, so the
+    // old `code !== 0` gate silently missed "Direct Crash" sessions: nothing
+    // was recorded and shader auto-recovery never armed). Detect on every exit.
+    // Tri-state: 'failed' (detection itself errored) must NOT clear the armed
+    // flag either — a shutdown that killed the game is treated as unknown, and
+    // leaving the flag armed is the safe side (worst case: one session starts
+    // with shaders off).
+    let crashCheck: 'crash' | 'no-crash' | 'failed' = 'no-crash'
+    if (profile) {
       try {
         const { detectCrashReport } = await import('../game/crash-assistant')
         const report = await detectCrashReport(profile)
         if (report) {
+          crashCheck = 'crash'
           logger.warn(`Crash detected for "${profile.name}": ${report.cause}`)
           // v1.0.13: persist the FULL crash report content (truncated) so any
           // later instability — e.g. a "render frame" failure — can be debugged
@@ -581,6 +590,7 @@ class Launcher {
         }
       } catch {
         /* Crash Assistant is strictly best-effort — never breaks the exit flow */
+        crashCheck = 'failed'
       }
     }
 
@@ -591,13 +601,21 @@ class Launcher {
     //  - A USER-INITIATED STOP (taskkill → non-zero/null code) also clears the
     //    crash flag — pressing Stop is not a shader crash and must not arm
     //    recovery for the next launch.
-    //  - A real crash (code !== 0, no intentional-stop marker) leaves the flag
-    //    armed — that is the signal the next launch uses to disable shaders.
+    //  - A real crash (a fresh crash report exists, whatever the exit code)
+    //    leaves the flag armed — that is the signal the next launch uses to
+    //    disable shaders.
     if (profile) {
       try {
         const guard = await import('../anti-crash/shader-guard')
         const intentional = guard.intentionalStopPending(profile)
-        if (code === 0 || intentional) {
+        // Only a CLEAN exit (code 0) or an intentional Stop with NO fresh
+        // crash report clears the armed shader-crash flag. A crash that
+        // happens to exit with code 0 (GPU hang / "Direct Crash") must leave
+        // the flag armed so the next launch auto-disables shaders — clearing
+        // it here was the exact gap that let a hard shader crash go
+        // unrecovered and loop forever. A 'failed' detection is treated as
+        // unknown and also keeps the flag armed (safe side).
+        if (crashCheck === 'no-crash' && (code === 0 || intentional)) {
           guard.clearShaderCrashFlag(profile)
           guard.restoreRenderDistance(profile)
           guard.clearIntentionalStop(profile)

@@ -1,10 +1,12 @@
 /**
  * Crash Assistant.
  *
- * After a game exits with a non-zero code, the launcher looks for a fresh
- * crash report in the instance's `crash-reports/` folder and turns it into a
- * clear, actionable diagnosis: a headline cause, a short snippet and concrete
- * suggestions. It is strictly read-only and never fails a launch.
+ * After a game exits, the launcher looks for a fresh crash report in the
+ * instance's `crash-reports/` folder and turns it into a clear, actionable
+ * diagnosis: a headline cause, a short snippet and concrete suggestions. The
+ * report file — not the process exit code — is the ground truth (a GPU-hang /
+ * TDR kill can exit with code 0, so the caller detects regardless of code).
+ * It is strictly read-only and never fails a launch.
  */
 import path from 'node:path'
 import fs from 'node:fs'

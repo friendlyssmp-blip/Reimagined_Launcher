@@ -1,3 +1,26 @@
+## v1.0.62 — Direct shader crashes (GPU hang) now trigger auto-recovery
+
+### The gap
+- The crash assistant only ran its check when the game exited with a NON-ZERO
+  code. A hard shader crash (GPU hang / TDR — like the Sodium/Iris "Cannot wait
+  on a fence" failure on Intel HD iGPUs) can kill the process with exit code 0,
+  so nothing was recorded: no entry in shader-crashes.json, and the armed
+  shader-crash flag was cleared on exit — the auto-recovery that disables
+  shaders on the next launch never armed, letting the crash loop forever.
+
+### The fix
+- Crash detection now runs on EVERY game exit, using the fresh crash-report
+  file as the ground truth (the exit code is not reliable for GPU-hang kills).
+  When a crash is detected it is recorded in shader-crashes.json and the
+  shader auto-recovery flag stays armed — so the next launch starts with
+  shaders disabled and a clear message ("Minecraft crashed last time while
+  shaders were enabled…"), and you can simply re-enable them in the game.
+- A clean exit or a manual Stop still clears the flag exactly as before; only
+  a confirmed crash (or an uncertain detection) keeps recovery armed — no
+  false positives, and a "Direct Crash" can never silently slip past again.
+
+Verified: tsc node clean, launcher build clean.
+
 ## v1.0.61 — FPS recovery: chunk-loading GC stutter killed + smoother combat/explosion particles
 
 ### Why this exists — the V2→V3 FPS dips

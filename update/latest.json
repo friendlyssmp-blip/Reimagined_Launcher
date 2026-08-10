@@ -1,7 +1,7 @@
 {
-  "version": "1.0.61",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.61.exe",
-  "sha256": "8d2c43c74ffb60bafc13df4884c8d78c551292c058e1819d7208450bcb6d291f",
-  "size": 83912190,
-  "notes": "v1.0.61 - FPS recovery: GC heap-resize stutter killed (pre-tuned Xms) + sustained particle-burst tier (FPS Boost 1.0.17)"
+  "version": "1.0.62",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.62.exe",
+  "sha256": "3621767514e2c80a4e31fddd6b7a8a5825db93fedccf63eaeee193ffc6bb1ef6",
+  "size": 83912283,
+  "notes": "v1.0.62 - Direct shader crashes (GPU hang) now trigger auto-recovery: crash detection runs on every exit using the fresh crash-report file as ground truth, records into shader-crashes.json and keeps the recovery flag armed so the next launch auto-disables shaders"
 }
