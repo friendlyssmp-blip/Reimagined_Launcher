@@ -40,8 +40,8 @@ const FPS_BOOST_ID = 'reimagined-fps-boost'
 // the old 400 burst threshold, so they rendered full density. Beyond 240
 // the particle governor now keeps 3/8 until the scene settles (protects the
 // render thread on iGPUs); TNT chains > 400 still hold 2/8.
-const FPS_BOOST_VERSION = '1.0.20'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.20.jar'
+const FPS_BOOST_VERSION = '1.0.21'
+const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.21.jar'
 
 /**
  * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares

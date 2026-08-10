@@ -138,6 +138,9 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     // particles inside solid-render blocks are dropped before ticking +
     // rendering. The big TNT/explosion win; density-gated (>=120 in a group).
     occludeParticles: true,
+    // v1.0.21 — same sweep also drops particles beyond 128 blocks (sub-pixel
+    // storm rain at the horizon, distant farm ambient). On by default.
+    particleDistanceCull: true,
     smartRenderDistance: true,
     reduceVisualEffects: false,
     showFps: false,

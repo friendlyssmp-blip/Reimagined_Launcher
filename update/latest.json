@@ -1,7 +1,7 @@
 {
-  "version": "1.0.65",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.65.exe",
-  "sha256": "110d95a5df8b155047aff421fa3d57d2ad299f7af6a859700010f8f7ad6ae46f",
-  "size": 83918098,
-  "notes": "v1.0.65 - the Performance profiler finally parses the game real frame-time data: the PROF regex skipped p95/p99 and never matched the real line, so 1%/0.1% lows, max frame ms, tick ms and GC ms were silently never recorded; now parsed as robust key=value tokens + FPS Boost 1.0.20 (low FPS is the real minimum again, was the peak)"
+  "version": "1.0.66",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.66.exe",
+  "sha256": "932c80e76ee3a6e6ee18d28b6637f620af24b61e545dfbae278007c3a68bd02a",
+  "size": 83918870,
+  "notes": "v1.0.66 - FPS Boost 1.0.21: Smart Render Distance now respects YOUR render distance (no more fighting manual settings - only restores what it dropped itself, dead Smart RD Cap button removed) + particle distance culling (dense scenes drop sub-pixel particles beyond 128 blocks - storm rain win on iGPUs, independent from occlusion, new in-game toggle)"
 }

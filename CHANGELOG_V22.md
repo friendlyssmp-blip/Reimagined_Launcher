@@ -1,3 +1,33 @@
+## v1.0.66 — Smart Render Distance respects your settings + particle distance culling + FPS Boost 1.0.21
+
+### Smart Render Distance no longer fights your render distance (FPS Boost 1.0.21)
+- The old logic oscillated between RD 2 and the auto cap regardless of your
+  choice: it permanently dropped a manually-raised render distance (e.g. 32 →
+  the 10-chunk cap, forever) and re-raised one you deliberately lowered.
+- Now it tracks YOUR ceiling (session start + any change you make — a raise
+  or a lower while it is mid-drop is adopted instantly) and only ever restores
+  what it dropped itself, never above your setting. It still lowers RD under
+  real load (below ~22 FPS) and returns it when the load clears — the FPS
+  protection is unchanged, the fighting is gone.
+- The now-meaningless "Smart RD Cap" cycle button was removed from the
+  in-game screen (K menu).
+
+### Particle distance culling — storm rain and far-away particles cost nothing
+- In dense scenes (120+ particles in a group), particles farther than 128
+  blocks from you are sub-pixel dust (storm rain at the horizon, distant
+  farm ambient) — they are now dropped before ticking and rendering, with
+  the same per-type particle-limit accounting as occlusion.
+- New in-game toggle "Particle Distance Cull (128+ blocks)", on by default,
+  fully independent from the occlusion toggle. Rain storms on integrated
+  GPUs are the biggest visible win.
+
+### FPS Boost 1.0.20 → 1.0.21
+- Smart RD state machine (above), distance cull, dead button removed.
+- Existing profiles auto-upgrade (stale jar sweep) — nothing to reinstall.
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean.
+
 ## v1.0.65 — the Performance profiler actually parses the game's real data (fixes the rich stutter metrics) + FPS Boost 1.0.20
 
 ### The rich frame-time telemetry is finally read (launcher)
