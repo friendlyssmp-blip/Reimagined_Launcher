@@ -1,7 +1,7 @@
 {
-  "version": "1.0.67",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.67.exe",
-  "sha256": "9c27f380229ccb4d8d16fafbde8581a8f64ff4f0e90ad8fea3c8b9e7e514a8ef",
-  "size": 83919037,
-  "notes": "v1.0.67 - chunk-pipeline audit + FPS Boost 1.0.22: spike correlation now tells the truth (the stabilizer bit was never set and AFK/pipeline were marked unconditionally - every spike showed A and P and S never appeared; now each bit is set only when that system is really working) + overlapping resource/shader reloads can no longer end the window early (depth counter replaces the boolean flag, so background systems stay suspended until the LAST reload finishes) + hardening (volatile throttling flag)"
+  "version": "1.0.68",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.68.exe",
+  "sha256": "d0e1421d560cc9a263e89f8d5ad05ce12fae097f70d288dbe3eea2d5f455d45d",
+  "size": 83918458,
+  "notes": "v1.0.68 - GC chosen from real measured data + chunk-storm detector finally fires on RTP teleports + FPS Boost 1.0.23: analysis of 379 real PROF windows found the JVM GC was the #1 gameplay stutter source (G1 burned up to 2.8s of a 10s window with 100-137ms pauses on the 4-thread iGPU laptop) - potato/turbo tiers and balanced-on-low-core machines now launch with ParallelGC (no concurrent marking phase stealing cores from game + integrated server, GC threads capped 2-3); strong machines keep G1 unchanged, balanced G1 gets 1MB regions + earlier mixed-GC start. The chunk stabilizer never detected RTP/teleport storms (it required 5 CONSECUTIVE slow frames, but a single 1.7s meshing hitch is one slow frame followed by fast catch-up frames - zero S correlation in 379 windows): replaced with an exponentially decaying pressure gauge (intermittent slow frames tolerated, >=400ms hitches nudged hard, threshold at 50ms so sustained 29-32fps shader sessions are not a storm). Both JVM flag sets smoke-tested on Java 25."
 }

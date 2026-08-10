@@ -1,3 +1,39 @@
+## v1.0.68 — GC by core count (measured data) + chunk-storm detector finally fires on RTP teleports + FPS Boost 1.0.23
+
+### The garbage collector is now chosen from REAL measured data (launcher)
+- Analysis of 379 real PROF windows from your sessions found the #1 gameplay
+  stutter source: the JVM GC. On the 4-thread iGPU laptop G1 spent up to
+  2.8s of a 10s window collecting (gcMs=2778 — 28% frozen) with visible
+  100-137ms pauses. G1's concurrent marking phase contends with the game AND
+  the integrated server on few threads.
+- `jvmFlagsFor` now picks the collector by core count: potato/turbo tiers and
+  balanced-on-≤4-core machines launch with **ParallelGC** (parallel STW,
+  no concurrent marking phase, soft pause goal via the adaptive size
+  policy, GC threads capped to 2-3 so cores stay on the game). Strong
+  machines keep G1 unchanged; balanced G1 additionally gets 1MB regions
+  (cheaper, more targeted young collections) and an earlier mixed-GC start
+  (IHOP 45) to avoid the big full GC that showed up as 100-137ms pauses.
+- High tier keeps the exact proven flag set — nothing changed for beefy PCs.
+- Both flag sets smoke-tested against the bundled Java 25 (no rejected
+  options).
+
+### ChunkStabilizer finally detects RTP/teleport chunk storms (FPS Boost 1.0.23)
+- The storm detector required CONSECUTIVE slow frames (5 in a row) and
+  NEVER fired during your 19s RTP loads: a single long meshing hitch (up to
+  1.7s) is ONE slow frame, then fast catch-up frames reset the counter —
+  zero 'S' correlation across all 379 windows.
+- Replaced with an exponentially decaying pressure gauge (0.95/frame): slow
+  frames (>50ms) add pressure, a genuine freeze (>=400ms) adds a strong
+  nudge, and intermittent fast frames are tolerated. Throttle fires around
+  7 slow frames or ~2 hitches; recovery still needs 40 calm frames.
+- Storm threshold raised to 50ms so sustained 29-32fps shader sessions
+  (GPU-bound, iGPU) don't read as a storm and throttle chunk threads for
+  zero gain — the real RTP/meshing hitches (244-1741ms) are still caught.
+- FPS Boost 1.0.22 → 1.0.23; existing profiles auto-upgrade (stale jar sweep).
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean, Java 25 flag acceptance smoke test.
+
 ## v1.0.67 — chunk-pipeline audit: spike correlation now tells the truth + reload windows can't overlap-cancel + FPS Boost 1.0.22
 
 ### Spike correlation actually identifies the stutter source now (FPS Boost 1.0.22)

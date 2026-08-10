@@ -194,12 +194,12 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
   }
 }
 
-/** Tier-tuned JVM flags (G1GC tuning + preset hand-off). Memory is added by the launcher. */
+/** Tier-tuned JVM flags (GC choice + tuning + preset hand-off). Memory is added by the launcher. */
 export function jvmFlagsFor(tier: PerfTier): string[] {
-  // v1.0.34 — periodic-stutter pass: tighten the G1 pause target further
+  // v1.0.34 — periodic-stutter pass: tighten the GC pause target further
   // (measured PROF data showed gcMs spikes coinciding with recurring
-  // 60→30→60 FPS drops). Lower pause goals make G1 run smaller, more
-  // frequent young collections instead of one visible large pause.
+  // 60→30→60 FPS drops). Lower pause goals make the collector run smaller,
+  // more frequent young collections instead of one visible large pause.
   const pause = tier === 'potato' || tier === 'turbo' ? 35 : tier === 'balanced' ? 45 : 60
   const newSize = tier === 'potato' || tier === 'turbo' ? 25 : 30
   const maxNewSize = tier === 'potato' || tier === 'turbo' ? 50 : 60
@@ -211,22 +211,54 @@ export function jvmFlagsFor(tier: PerfTier): string[] {
   // leaves cores for the game; generous caps on strong machines (never more
   // than 4/2) so a beefy PC loses nothing.
   const cores = Math.max(1, os.cpus().length)
-  const pgc = Math.min(tier === 'potato' || tier === 'turbo' ? 2 : 4, cores)
-  const cgc = Math.max(1, Math.min(tier === 'potato' || tier === 'turbo' ? 1 : 2, cores))
-  return [
-    '-XX:+UseG1GC',
-    '-XX:MaxGCPauseMillis=' + pause,
-    '-XX:ParallelGCThreads=' + pgc,
-    '-XX:ConcGCThreads=' + cgc,
-    '-XX:+UnlockExperimentalVMOptions',
-    '-XX:G1NewSizePercent=' + newSize,
-    '-XX:G1MaxNewSizePercent=' + maxNewSize,
+  const lowCore = cores <= 4
+  // v1.0.68 — GC choice by core count, driven by REAL PROF data: on a
+  // 4-thread iGPU laptop G1 spent up to 2.8s of a 10s window in GC with
+  // 100-137ms pauses. G1's concurrent marking phase contends with the game
+  // AND the integrated server on few threads; ParallelGC (parallel STW,
+  // NO concurrent phase, soft pause goal via the adaptive size policy) is
+  // measurably smoother there. Strong machines keep G1 (concurrent
+  // collection wins on big heaps with threads to spare).
+  const useParallel = tier === 'potato' || tier === 'turbo' || (tier === 'balanced' && lowCore)
+  // ParallelGC path: potato/turbo 2 GC threads, balanced-on-weak-CPU 3.
+  // G1 path (balanced-with-cores, high): 4 — never more than cores.
+  const pgc = useParallel ? Math.min(tier === 'balanced' ? 3 : 2, cores) : Math.min(4, cores)
+  const cgc = Math.max(1, Math.min(2, cores))
+  const flags: string[] = [
     '-Dreimagined.preset=' + presetId,
     '-XX:+ParallelRefProcEnabled',
     '-XX:+UseStringDeduplication',
-    // Turbo also trims GC work for the absolute-lowest-latency frames.
-    ...(tier === 'turbo' ? ['-XX:+UseCompressedOops', '-XX:+DisableExplicitGC'] : [])
   ]
+  if (useParallel) {
+    // No concurrent marking phase, no ConcGCThreads — every core stays on
+    // the game + integrated server. MaxGCPauseMillis is a soft goal for
+    // ParallelGC's adaptive size policy (UseAdaptiveSizePolicy, default on).
+    flags.push(
+      '-XX:+UseParallelGC',
+      '-XX:ParallelGCThreads=' + Math.max(1, pgc),
+      '-XX:MaxGCPauseMillis=' + pause,
+    )
+  } else {
+    flags.push(
+      '-XX:+UseG1GC',
+      '-XX:MaxGCPauseMillis=' + pause,
+      '-XX:ParallelGCThreads=' + Math.max(1, pgc),
+      '-XX:ConcGCThreads=' + Math.max(1, cgc),
+      '-XX:+UnlockExperimentalVMOptions',
+      '-XX:G1NewSizePercent=' + newSize,
+      '-XX:G1MaxNewSizePercent=' + maxNewSize,
+    )
+    // v1.0.68 — balanced-tier G1 hardening: 1MB regions make young
+    // collections cheaper and more targeted on modest heaps, and starting
+    // mixed collections earlier avoids the huge full GC that showed up as
+    // 100-137ms pauses in the PROF data. High tier keeps the proven set.
+    if (tier === 'balanced') {
+      flags.push('-XX:G1HeapRegionSize=1M', '-XX:InitiatingHeapOccupancyPercent=45')
+    }
+  }
+  // Turbo also trims GC work for the absolute-lowest-latency frames.
+  if (tier === 'turbo') flags.push('-XX:+UseCompressedOops', '-XX:+DisableExplicitGC')
+  return flags
 }
 
 /** Vanilla's real framerateLimit slider values (10..260). */
