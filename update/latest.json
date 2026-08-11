@@ -1,7 +1,7 @@
 {
-  "version": "1.0.74",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.74.exe",
-  "sha256": "34cb23f30465d7ba7cc6d2aeb973ce8ca07bfc0c7e40c90bcd3509706fa33c3a",
-  "size": 83920078,
-  "notes": "v1.0.74 - fixes dead async chunk decode (mixin rejection) + multi-second ParallelGC freezes (4GB heap cap). FPS Boost 1.0.29 bundled."
+  "version": "1.0.75",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.75.exe",
+  "sha256": "ae4a5ad0884b3c809715d73fdcd0827d6d51c65e076ad4407f5e39b96373fbf1",
+  "size": 83919976,
+  "notes": "v1.0.75 - Update All now lets you skip any mod from the batch (per-row Skip toggle in the preview)."
 }

@@ -489,18 +489,21 @@ export function ModsPage() {
   }
 
   /* Part 4 (V2) — the actual "update everything" work, shared by the
-   * confirmation flow and the Shift-click fast path. */
-  const runUpdateAll = async () => {
+   * confirmation flow and the Shift-click fast path.
+   * v1.0.75 — accepts the slugs the user skipped in the preview modal; those
+   * stay on their current version while every other outdated item updates. */
+  const runUpdateAll = async (excluded: string[] = []) => {
     if (!activeProfile) return
     setUpdatingAll(true)
     try {
-      const updatable = installed.filter((m) => m.updateAvailable)
+      const skip = new Set(excluded)
+      const updatable = installed.filter((m) => m.updateAvailable && !skip.has(m.slug))
       for (const m of updatable) {
         notify('info', 'Updating', `${m.title} → ${m.updateAvailable!.versionNumber}`)
         await api.mods.update(activeProfile.id, m.slug).catch((err) => notify('error', `Update failed: ${m.title}`, friendlyError(err)))
       }
       setInstalled(await api.mods.list(activeProfile.id))
-      notify('success', 'Updates finished', `${updatable.length} item(s) updated.`)
+      notify('success', 'Updates finished', `${updatable.length} item(s) updated${skip.size > 0 ? `, ${skip.size} skipped` : ''}.`)
     } finally {
       setUpdatingAll(false)
     }
@@ -1239,7 +1242,7 @@ export function ModsPage() {
                   }
                   setUpdateAllOpen(true)
                 }}
-                title="Update every installed item that has a newer version (hold Shift to update all immediately)"
+                title="Review which items to update — skip any you want to keep, then confirm (hold Shift to update all immediately)"
               >
                 {updatingAll ? <><Spinner /> Updating…</> : `Update All (${installed.filter((m) => m.updateAvailable).length})`}
               </Button>
@@ -1260,9 +1263,9 @@ export function ModsPage() {
                 items={installed.filter((m) => m.updateAvailable)}
                 busy={updatingAll}
                 onClose={() => setUpdateAllOpen(false)}
-                onConfirm={() => {
+                onConfirm={(excluded) => {
                   setUpdateAllOpen(false)
-                  void runUpdateAll()
+                  void runUpdateAll(excluded)
                 }}
               />,
               document.body

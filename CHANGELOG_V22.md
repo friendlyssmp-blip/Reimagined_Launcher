@@ -1,3 +1,54 @@
+## v1.0.75 — "Update All" with per-mod exclusion (skip what you don't want to update)
+
+### New: skip any mod in the Update All preview
+- The Update All preview list now has a **Skip** toggle on every row. Flip it on
+  for anything you want to leave on its current version — that row dims and gets
+  a "Skipped" badge so the choice is visible at a glance.
+- The confirm button now shows the actionable count (`Update All (N of M)` once
+  something is skipped) and is disabled if everything is skipped. A small summary
+  line reports how many are skipped vs. to-be-updated.
+- The preview no longer caps at 40 rows — every outdated item is shown, so any
+  mod can be excluded (the list stays scrollable).
+- Confirming updates all non-skipped items and skips the rest for real; the
+  success notification reports "N updated, M skipped".
+- Hold-Shift fast path is unchanged (updates everything immediately).
+
+## v1.0.74 — CRITICAL: fixes the "super laggy" session (dead async chunk decode + multi-second GC) + FPS Boost 1.0.29
+
+### Root cause 1: the async chunk decode was silently DEAD — Mixin rejected the whole mixin
+- Real session logs showed the launcher in the worst state possible: the
+  launcher's biggest client optimization (async server-chunk decode) was
+  NEVER running. `ClientChunkCacheMixin` declared `accessOk()` as a
+  `public static @Unique` method with a nested public static `Access`
+  class — Mixin's own rule forbids non-private static members in a mixin
+  and it DISCARDED THE ENTIRE MIXIN at apply time
+  ("contains non-private static method accessOk()Z").
+- Result: every network chunk decode ran back on the game thread,
+  synchronously — the exact stutter/freeze the async pipeline was built
+  to eliminate (PROF data: tickMs=694, spikes=265, "Can't keep up!
+  2589ms behind").
+- Fix: the private-member access layer moved out of the mixin into a
+  regular helper class (`perf/ClientChunkCacheAccess`) using cached
+  MethodHandles with graceful fallback; the mixin and ChunkPipeline now
+  reference it. If the handles ever fail to initialize, `accessOk()`
+  reports it and the module falls back to vanilla — never a crash.
+
+### Root cause 2: an 8 GB heap with ParallelGC froze the machine for SECONDS
+- v1.0.68 switched low-core machines to ParallelGC. On a 2-core/4-thread
+  iGPU laptop an oversized heap makes every full GC stop-the-world for
+  seconds (measured in real data: -Xmx8192M -> gcMs=3607, tickMs=5165,
+  102 ticks behind).
+- Fix: `recommendedHeapFor()` caps the heap to 4 GB for the ParallelGC
+  tiers (potato / turbo / balanced with <=4 threads) — real usage is
+  ~1-2 GB, so 4 GB keeps the worst-case pause short. Strong G1 machines
+  keep whatever the user configured.
+
+### Notes for this release
+- Both fixes are validated: gradle build (mod 1.0.29), tsc node+web 0
+  errors, launcher build, reviewer pass (2 adjustments applied).
+- First session after updating should show `[FPS Boost] Chunk-decode
+  pipeline ready` in the log — proof the async pipeline initialized.
+
 ## v1.0.73 — CRITICAL: fixes the "can't move, feels like crashing" FPS bug + FPS Boost 1.0.28
 
 ### Root cause: the explosion-debris cap was throwing on EVERY debris spawn
