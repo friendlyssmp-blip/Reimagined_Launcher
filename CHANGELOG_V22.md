@@ -1,3 +1,41 @@
+## v1.0.78 — FPS Boost MULTI-VERSION: now installable on x1.8, x1.21, x26.1 and x26.2 (FPS Boost 1.0.31)
+
+### The big one: FPS Boost is no longer 26.2-only
+- The mod source is now compiled per Minecraft branch through a new multi-target
+  build system (`FpsBoost-source/targets/*.properties` + `build-all.sh`). Each
+  branch gets its own jar whose `fabric.mod.json` declares exactly the
+  Minecraft range it supports, and the launcher picks the right jar per profile.
+- **Shipped today: x26.1 and x26.2.** Both branches build from ONE source tree —
+  the rename/moved-class differences between branches (e.g. the chunk compile
+  task, `NativeImage` pixel access) are bridged by a tiny runtime
+  compatibility layer (`NativeImagePixels`, reflection-resolved mixin targets)
+  instead of duplicated files.
+- **Future branches (x1.8 Legacy Fabric, x1.21) are documented as deep ports**
+  in `FpsBoost-source/README.md` with the exact compatibility work each needs.
+  They drop in as new `targets/<branch>.properties` entries + one bundled jar
+  each — the launcher side (version→jar map) already handles any number of
+  branches.
+
+### How the launcher installs per version
+- `fps-boost.ts` holds the **version → jar map** (`FPS_BOOST_JARS`): 26.1.x →
+  `-mc26.1.jar`, 26.2.x → `-mc26.2.jar`. Auto-install, manual Install, stale
+  cleanup and version upgrades all use the branch-appropriate filename.
+- Profiles on unsupported versions still skip the mod cleanly (launcher-side
+  JVM flags + frame cap still apply) — never a crash, never a wrong jar.
+- `ensureFpsBoost` now also swaps the jar when a profile's Minecraft version
+  changes between branches (not just when the version number bumps).
+- The in-app version gate (`Install FPS Booster` button) now covers every
+  bundled branch, including bare `26.1` / `26.2` versions.
+
+### What this means for you
+- Want to test on 26.1? Create a Fabric 26.1 profile → the launcher injects the
+  mc26.1 build automatically (same 1.0.31 engine, same FPS features).
+- **Every future FPS Boost update re-ships on ALL built branches automatically**
+  — one source change → build-all → bundle each jar → the launcher map already
+  points at them. No per-version maintenance.
+- 1.8.x and 1.21.x will land as dedicated ports in a later update (they are
+  deep ports: Legacy Fabric and a different render pipeline, not a recompile).
+
 ## v1.0.77 — FIX: "always 10 chunks, now stuck at 4" + the post-update FPS drop (FPS Boost 1.0.30)
 
 ### Root cause 1: the render distance got STUCK below your preference and the mod forgot what you actually want

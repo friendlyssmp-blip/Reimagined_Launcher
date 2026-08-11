@@ -1,7 +1,7 @@
 {
-  "version": "1.0.77",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.77.exe",
-  "sha256": "fdfe364920437ffc8c2ab2ea48c76c89f6e691f3f225a7bd3635a07c51f1fc68",
-  "size": 83920557,
-  "notes": "v1.0.77 - FIX: render distance stuck below your preference (now always restored to it) + less CPU contention with the integrated server (1 mesh thread on low-core). FPS Boost 1.0.30."
+  "version": "1.0.78",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.78.exe",
+  "sha256": "31d82d2eeb7f5c3a01fa0522f18b30e712dc211510b4c7713c12d96570a69fe6",
+  "size": 84011902,
+  "notes": "v1.0.78 - FPS Boost is now MULTI-VERSION! The launcher ships a build for x26.1 and x26.2 (same 1.0.31 engine, same FPS features) and picks the right jar per profile automatically. New multi-target build system - every future FPS Boost update re-ships on all built branches automatically. x1.8 (Legacy Fabric) and x1.21 are documented deep ports coming in a later update. FPS Boost 1.0.31."
 }

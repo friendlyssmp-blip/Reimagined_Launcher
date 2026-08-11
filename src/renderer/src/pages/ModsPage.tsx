@@ -153,10 +153,13 @@ export function ModsPage() {
         .catch(() => setManualFiles((prev) => ({ ...prev, [type]: [] })))
     }
     // FPS Boost status follows the live installed list (local slug id).
+    // v1.0.78 — version gate covers every bundled branch (26.1, 26.2 and
+    // their sub-versions, e.g. bare "26.1" or "26.2.11"); the main process
+    // remains the source of truth for install decisions.
     if (activeProfile) {
       setFpsBoost({
         installed: activeProfile.mods.some((m) => m.id === 'reimagined-fps-boost' || m.slug === 'reimagined-fps-boost'),
-        compatible: /^26\.2/.test(activeProfile.minecraftVersion),
+        compatible: /^26\.(1|2)(\.|$)/.test(activeProfile.minecraftVersion),
         version: activeProfile.mods.find((m) => m.id === 'reimagined-fps-boost' || m.slug === 'reimagined-fps-boost')?.versionNumber ?? null
       })
     }
@@ -1243,8 +1246,8 @@ export function ModsPage() {
               <IconFolder style={{ width: 14, height: 14 }} /> Open Folder
             </Button>
             {/* Reimagined FPS Boost — aligned with the section header, only for
-                versions we have a build for (26.2.x today). Removable and
-                reinstallable — never permanent. */}
+                versions we ship a build for (26.1.x, 26.2.x today). Removable
+                and reinstallable — never permanent. */}
             {instTab === 'mods' && fpsBoost.compatible && (
               <Button
                 variant={fpsBoost.installed ? 'ghost' : 'primary'}

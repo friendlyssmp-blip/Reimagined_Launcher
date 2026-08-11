@@ -12,6 +12,7 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 import { paths, appVersion } from '../paths'
 import { logger } from '../logs/logger'
 import { eventBus } from '../core/event-bus'
@@ -193,7 +194,8 @@ class Launcher {
           await ensureFabricApi(profile)
         }
         // Seed / UPGRADE the bundled Reimagined FPS Boost mod (only when a
-        // compatible Minecraft version — the mod targets 26.2.x). v1.0.34:
+        // compatible Minecraft version — the mod ships per-branch builds for
+        // 26.1.x and 26.2.x). v1.0.34:
         // this ALWAYS runs ensureFpsBoost, not only when the mod is absent —
         // it internally no-ops when already current and UPGRADES profiles
         // carrying an older bundled jar. The old gate left every existing
@@ -353,24 +355,33 @@ class Launcher {
       jvm.push('-XX:+UseG1GC', '-XX:-OmitStackTraceInFastThrow', '-Djava.net.preferIPv4Stack=true')
     }
 
-    // v1.0.61 — pre-tune the initial heap. Starting at -Xms256M forces the
-    // JVM to grow the heap DURING gameplay (each growth step can pause the
-    // game thread) — the exact micro-stutter seen in chunk-heavy moments
-    // (ocean/world loading, survival). Starting at ~50% of Xmx (1-4G) keeps
-    // G1 running stable young-gen collections instead of resizing mid-game.
-    const xmx = profile.memory || 4096
-    // Clamped against xmx so a low-memory profile (e.g. 512M) never produces
-    // an invalid -Xms > -Xmx pair, which the JVM rejects at launch.
-    const xms = Math.min(xmx, Math.max(1024, Math.floor(xmx / 2)))
-    jvm.push(`-Xmx${xmx}M`, `-Xms${xms}M`, `-Djava.library.path=${nativesDir}`)
-    jvm.push('-Dminecraft.launcher.brand=reimagined', `-Dminecraft.launcher.version=${appVersion}`)
-
     // Reimagined Performance Engine: tier-tuned JVM flags (G1GC tuning +
     // preset hand-off, ordered so UnlockExperimentalVMOptions precedes the
     // G1 size flags). The in-game client reads -Dreimagined.preset.
     const rpe = await import('../perf/engine')
     const hw = await rpe.detectHardware(false)
     const { tier } = rpe.effectiveTier(settingsManager.get(), hw)
+
+    // v1.0.61 — pre-tune the initial heap. Starting at -Xms256M forces the
+    // JVM to grow the heap DURING gameplay (each growth step can pause the
+    // game thread) — the exact micro-stutter seen in chunk-heavy moments
+    // (ocean/world loading, survival). Starting at ~50% of Xmx (1-4G) keeps
+    // G1 running stable young-gen collections instead of resizing mid-game.
+    // v1.0.74 — cap the heap on low-core ParallelGC tiers: ParallelGC full
+    // GCs are stop-the-world, and an oversized heap froze a 2C/4T iGPU
+    // laptop for seconds (measured 8GB heap -> gcMs=3607, tickMs=5165 in
+    // real PROF data). Real usage is ~1-2GB, so capping at 4GB keeps the
+    // worst-case pause short. Strong G1 machines keep the requested value.
+    const requested = profile.memory || 4096
+    // v1.0.74 — same core source as engine.jvmFlagsFor (os.cpus().length,
+    // logical threads) so the ParallelGC tier set is identical in both.
+    const logicalCores = Math.max(1, os.cpus().length)
+    const xmx = rpe.recommendedHeapFor(tier, logicalCores, requested)
+    // Clamped against xmx so a low-memory profile (e.g. 512M) never produces
+    // an invalid -Xms > -Xmx pair, which the JVM rejects at launch.
+    const xms = Math.min(xmx, Math.max(1024, Math.floor(xmx / 2)))
+    jvm.push(`-Xmx${xmx}M`, `-Xms${xms}M`, `-Djava.library.path=${nativesDir}`)
+    jvm.push('-Dminecraft.launcher.brand=reimagined', `-Dminecraft.launcher.version=${appVersion}`)
     jvm.push(...rpe.jvmFlagsFor(tier))
     // v1.0.13/v1.0.41: hand the frame cap to the in-game watchdog. v1.0.41
     // fix: the default cap was the FPS regression (290 -> ~100 FPS), so the

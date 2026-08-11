@@ -6,6 +6,13 @@
  * module copies the bundled jar into the profile's mods folder and tracks it
  * in the profile JSON — mirroring how Fabric API is auto-installed, so a
  * brand-new Fabric profile is immediately boosted without manual setup.
+ *
+ * v1.0.31: multi-version support. The mod source is compiled per Minecraft
+ * target (see FpsBoost-source/targets/*.properties and build-all.sh) and the
+ * launcher ships one jar per supported Minecraft branch, mapping the profile's
+ * Minecraft version to the correct jar. Supported today: 26.1.x, 26.2.x.
+ * 1.8.x (Legacy Fabric) and 1.21.x ports are deep ports documented in
+ * FpsBoost-source/README — they ship as soon as their build target is added.
  */
 import path from 'node:path'
 import fs from 'node:fs'
@@ -15,47 +22,32 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-// v1.0.12 fixes the critical mixin crash: ClientChunkCacheMixin.accessOk() was a
-// non-private static method without @Unique, which Mixin rejects at apply time
-// (InvalidMixinException during ClientboundLoginPacket handling -> "Network
-// Protocol Error" on world/server join). accessOk() and applyDecodedChunk are now
-// @Unique, mixins.json is required:false so a version-drift mixin failure only
-// disables that module (never crashes login), and startup diagnostics log the
-// MC/FabricLoader versions + Sodium/C2ME/Iris presence. v1.0.11 adds CaptureCompat (OBS/Game-Capture hook compatibility: no anti-hook
-// hardening, borderless-fullscreen preference enforcement, standard present path
-// audit) and LoadingBoost (resource-pack/shader reloads keep the game window's
-// message pump responsive — no Windows "Not Responding", work stays off the
-// render thread). v1.0.10 — Extended View write-path fix (chunk captured at the REAL eviction
-// point via a Storage.drop HEAD mixin, BEFORE vanilla tears the chunk down —
-// the old hook left the persistent cache nearly empty, "ED 4/120"), the
-// visibleGhostChunks sweep now iterates the real cache index instead of
-// Files.exists() per cell (was 66k+ syscalls/s — a periodic tick stall), the
-// renderer has a 4 ms/tick budget, and PerfProfiler correlates spike frames
-// with the periodic systems active that tick (spkTasks=...) so recurring
-// stutters are identified from real data. v1.0.9 adds the async server-chunk
-// decode pipeline; v1.0.8 adds Extended View. ensureFpsBoost upgrades existing
-// profiles to the new bundle automatically.
-// v1.0.17 — sustained particle-burst tier: fast block breaking / creeper
-// blasts / combat hold a steady 200-400 particle adds per 750 ms — under
-// the old 400 burst threshold, so they rendered full density. Beyond 240
-// the particle governor now keeps 3/8 until the scene settles (protects the
-// render thread on iGPUs); TNT chains > 400 still hold 2/8.
-const FPS_BOOST_VERSION = '1.0.30'
-const FPS_BOOST_FILENAME = 'Reimagined FPS Boost-1.0.30.jar'
+const FPS_BOOST_VERSION = '1.0.31'
 
 /**
- * The bundled mod targets Minecraft 26.2.x ONLY (its fabric.mod.json declares
- * `>=26.2 <26.3`). v1.0.15: never inject a 26.2-specific jar into another
- * Minecraft version — that would fail to load and could crash the game.
- * Per-version adapters for 1.8/1.21/26.1/26.3 are a future build; until then
- * the launcher simply skips the mod on incompatible versions instead of
- * breaking them.
+ * Minecraft branch → bundled jar filename. A profile pins one Minecraft
+ * version, so exactly one jar applies per profile. Keep this map in sync with
+ * the jars produced by FpsBoost-source build-all.sh.
+ */
+const FPS_BOOST_JARS: Record<string, string> = {
+  '26.1': 'Reimagined FPS Boost-1.0.31-mc26.1.jar',
+  '26.2': 'Reimagined FPS Boost-1.0.31-mc26.2.jar'
+}
+
+/** Resolve the bundled jar filename for a Minecraft version, or null. */
+function fpsBoostJarFor(mcVersion: string): string | null {
+  const major = /^(\d+\.\d+)/.exec(mcVersion)?.[1]
+  return major ? FPS_BOOST_JARS[major] ?? null : null
+}
+
+/**
+ * True when the launcher ships a FPS Boost build for this Minecraft version.
+ * v1.0.15: never inject a version-specific jar into another Minecraft version
+ * — that would fail to load and could crash the game. Unsupported versions
+ * simply skip the mod instead of breaking.
  */
 export function fpsBoostCompatible(mcVersion: string): boolean {
-  // The bundled mod targets Minecraft 26.2.x ONLY today. Per-version adapters
-  // for 1.8.x / 1.21.11.x / 26.1.x / 26.3.x are a future build — the button
-  // and auto-install simply skip versions we don't have a build for yet.
-  return /^26\.2/.test(mcVersion)
+  return fpsBoostJarFor(mcVersion) !== null
 }
 
 /** True when the FPS Boost mod is present in the profile's mods list. */
@@ -76,10 +68,11 @@ export async function installFpsBoost(profileId: string): Promise<{ installed: b
   if (profile.loader.type !== 'fabric') {
     throw new Error('Reimagined FPS Boost needs a Fabric profile.')
   }
-  if (!fpsBoostCompatible(profile.minecraftVersion)) {
-    throw new Error(`Reimagined FPS Boost is not available for Minecraft ${profile.minecraftVersion} yet (the bundled build targets 26.2.x).`)
+  const filename = fpsBoostJarFor(profile.minecraftVersion)
+  if (!filename) {
+    throw new Error(`Reimagined FPS Boost is not available for Minecraft ${profile.minecraftVersion} yet (supported: 26.1.x, 26.2.x).`)
   }
-  const source = bundledJar()
+  const source = bundledJar(filename)
   if (!fs.existsSync(source)) {
     throw new Error('The FPS Boost bundle is missing from this installation — reinstall the launcher to restore it.')
   }
@@ -88,7 +81,7 @@ export async function installFpsBoost(profileId: string): Promise<{ installed: b
   }
 
   const modsDir = path.join(paths.games, profile.gameDir, 'mods')
-  const dest = path.join(modsDir, FPS_BOOST_FILENAME)
+  const dest = path.join(modsDir, filename)
   const { mkdirp } = await import('../utils/fs')
   mkdirp(modsDir)
   fs.copyFileSync(source, dest)
@@ -97,7 +90,7 @@ export async function installFpsBoost(profileId: string): Promise<{ installed: b
     id: FPS_BOOST_ID,
     slug: FPS_BOOST_ID,
     title: 'Reimagined FPS Boost',
-    filename: FPS_BOOST_FILENAME,
+    filename,
     versionId: FPS_BOOST_VERSION,
     versionNumber: FPS_BOOST_VERSION,
     downloads: 0,
@@ -137,13 +130,13 @@ export async function removeFpsBoost(profileId: string): Promise<{ removed: bool
   return { removed: false, message: 'Not installed.' }
 }
 
-/** Path of the mod jar bundled with the launcher.
+/** Path of a bundled mod jar.
  * Dev: project `data/bundled`. Packaged: shipped inside the installer via
  * electron-builder extraResources → process.resourcesPath/bundled. */
-function bundledJar(): string {
-  const devPath = path.join(paths.data, 'bundled', 'fps-boost', FPS_BOOST_FILENAME)
+function bundledJar(filename: string): string {
+  const devPath = path.join(paths.data, 'bundled', 'fps-boost', filename)
   if (fs.existsSync(devPath)) return devPath
-  return path.join(process.resourcesPath, 'bundled', 'fps-boost', FPS_BOOST_FILENAME)
+  return path.join(process.resourcesPath, 'bundled', 'fps-boost', filename)
 }
 
 /**
@@ -158,22 +151,24 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
     logger.info(`Reimagined FPS Boost skipped for "${profile.name}" — the user removed it manually.`)
     return
   }
-  // v1.0.15 version gating: the bundled jar is 26.2-only. Other versions skip
-  // it (the vanilla engine still applies JVM flags + the frame cap launcher-
-  // side, just without the in-game mod).
-  if (!fpsBoostCompatible(profile.minecraftVersion)) {
-    logger.info(`Reimagined FPS Boost skipped for "${profile.name}" — bundled mod targets Minecraft 26.2.x (profile is ${profile.minecraftVersion}).`)
+  // v1.0.15 version gating: only inject a jar whose fabric.mod.json matches
+  // this Minecraft version (v1.0.31 supports 26.1.x and 26.2.x). Unsupported
+  // versions skip it (the vanilla engine still applies JVM flags + the frame
+  // cap launcher-side, just without the in-game mod).
+  const filename = fpsBoostJarFor(profile.minecraftVersion)
+  if (!filename) {
+    logger.info(`Reimagined FPS Boost skipped for "${profile.name}" — no bundled build for Minecraft ${profile.minecraftVersion} (supported: 26.1.x, 26.2.x).`)
     return
   }
 
-  const source = bundledJar()
+  const source = bundledJar(filename)
   if (!fs.existsSync(source)) {
     logger.warn(`FPS Boost bundle missing at ${source} — skipping auto-install.`)
     return
   }
 
   const modsDir = path.join(paths.games, profile.gameDir, 'mods')
-  const dest = path.join(modsDir, FPS_BOOST_FILENAME)
+  const dest = path.join(modsDir, filename)
 
   try {
     // v1.0.43 — sweep stale bundled jars (older versions left on disk by
@@ -185,8 +180,8 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
           const stale =
             f.startsWith('Reimagined FPS Boost-') &&
             (f.endsWith('.jar') || f.endsWith('.jar.disabled')) &&
-            f !== FPS_BOOST_FILENAME &&
-            f !== FPS_BOOST_FILENAME + '.disabled'
+            f !== filename &&
+            f !== filename + '.disabled'
           if (stale) {
             fs.rmSync(path.join(modsDir, f), { force: true })
             logger.info(`Reimagined FPS Boost: removed stale ${f}`)
@@ -201,14 +196,17 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
     const fresh = await profileManager.get(profile.id)
     const mods = fresh?.mods ?? profile.mods
     const existing = mods.find((m) => m.id === FPS_BOOST_ID)
-    // Already on the current bundled version — nothing to do.
-    if (existing && existing.versionNumber === FPS_BOOST_VERSION) return
+    // v1.0.78 — already on the current bundled version AND the branch-appropriate
+    // jar (filenames encode the Minecraft branch: -mc26.1 / -mc26.2). A version
+    // match alone is not enough: if the profile's Minecraft version changed
+    // between branches the old jar must be swapped for this branch's jar.
+    if (existing && existing.versionNumber === FPS_BOOST_VERSION && existing.filename === filename) return
 
     const { mkdirp } = await import('../utils/fs')
     mkdirp(modsDir)
     // 1.0.2 adds the frame-rate watchdog + SafetyGate auto-fallback (v1.0.13
     // release). Drop any previous bundled jar so no stale copy stays behind.
-    if (existing && existing.filename && existing.filename !== FPS_BOOST_FILENAME) {
+    if (existing && existing.filename && existing.filename !== filename) {
       try {
         fs.rmSync(path.join(modsDir, existing.filename), { force: true })
       } catch {
@@ -221,7 +219,7 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
       id: FPS_BOOST_ID,
       slug: FPS_BOOST_ID,
       title: 'Reimagined FPS Boost',
-      filename: FPS_BOOST_FILENAME,
+      filename,
       versionId: FPS_BOOST_VERSION,
       versionNumber: FPS_BOOST_VERSION,
       downloads: 0,
@@ -234,7 +232,7 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
     await profileManager.update(profile.id, {
       mods: existing ? mods.map((m) => (m.id === FPS_BOOST_ID ? mod : m)) : [...mods, mod]
     })
-    logger.info(`Reimagined FPS Boost ${FPS_BOOST_VERSION} ready for "${profile.name}"`)
+    logger.info(`Reimagined FPS Boost ${FPS_BOOST_VERSION} ready for "${profile.name}" (${profile.minecraftVersion})`)
   } catch (err) {
     logger.warn(`FPS Boost install failed for "${profile.name}": ${(err as Error).message}`)
   }
