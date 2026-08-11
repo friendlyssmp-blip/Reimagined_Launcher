@@ -1,3 +1,40 @@
+## v1.0.80 — THE REAL Fabric 1.21.x fix: the launcher was missing the intermediary mappings jar
+
+### The actual root cause (found with real evidence)
+- v1.0.79 stopped the crash from mod-version mismatches, but 1.21.11 was STILL
+  crashing on EVERY mod with a classTweaker (architectury, cloth-config,
+  fabric-biome-api-v1…). The game log showed the smoking gun: "Mappings not
+  present!" — and the install metadata confirmed it: the Fabric version JSON
+  for 1.21.11 listed 114 libraries but NOT ONE was
+  `net.fabricmc:intermediary`, and the jar did not exist on disk for any
+  version.
+- Minecraft 1.21.11 is the LAST OBFUSCATED release; 26.1 is the first
+  unobfuscated one. Modern Fabric Loader runs the game in the `official`
+  namespace and remaps every mod's intermediary classTweaker entries to it —
+  that remap REQUIRES the `net.fabricmc:intermediary:<mc>` mappings jar on the
+  classpath. The launcher's `installFabric` never added that library (the
+  official fabric-installer always does). 26.x works because it ships
+  unobfuscated and needs no intermediary at all — which is why the SAME launcher
+  code ran 26.2 perfectly and crashed every 1.21.x profile.
+
+### What changed
+- `installFabric` now adds `net.fabricmc:intermediary:<mc>` (from the official
+  meta `intermediary.maven`) to the download batch AND the patched version JSON
+  — only for obfuscated versions (`needsIntermediary` = major < 26; 26.1+
+  stays untouched, no intermediary exists for it). The launch classpath picks
+  it up automatically.
+- **Self-heal for existing broken installs**: on every launch, if a cached
+  Fabric install for an obfuscated version is missing the intermediary library
+  or its jar, the launcher patches the version JSON and downloads the jar in
+  place — no reinstall, no data loss. So the 1.21.11 profile that was crashing
+  fixes itself on next launch.
+- The user's live PVP Practice instance was also patched directly (JSON +
+  jar + stale remap cache cleared) so it launches correctly even before
+  updating.
+- Verified: `intermediary-1.21.11.jar` exists on maven.fabricmc.net (797 KB,
+  HTTP 200); `intermediary-26.2.jar` does NOT exist (302) — confirming the
+  major<26 gate; tsc 0 errors; build ✓.
+
 ## v1.0.79 — Fabric environment fixed for real: no more "Namespace (intermediary) does not match current runtime namespace (official)" crashes
 
 ### Root cause (found with real evidence)

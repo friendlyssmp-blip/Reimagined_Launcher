@@ -31,6 +31,23 @@ export function isLegacyFabricMc(mcVersion: string): boolean {
   return Number(m[1]) < 14
 }
 
+/**
+ * v1.0.80 — does this Minecraft version need the `net.fabricmc:intermediary`
+ * mappings jar? Minecraft 1.21.11 is the LAST obfuscated release; 26.1 is the
+ * first unobfuscated one. Fabric Loader runs the game in the `official`
+ * namespace and remaps every mod's intermediary classTweaker entries to it —
+ * for that remap it needs the intermediary mappings FOR THIS MC version on
+ * the classpath. 26.1+ ships unobfuscated: no intermediary is published for
+ * it (and none is needed). Mixing the two environments is exactly what the
+ * "Namespace (intermediary) does not match current runtime namespace
+ * (official)" crash describes.
+ */
+export function needsIntermediary(mcVersion: string): boolean {
+  const m = /^(\d+)/.exec(mcVersion)
+  if (!m) return true
+  return Number(m[1]) < 26
+}
+
 function fabricMetaBase(mcVersion: string): string {
   return isLegacyFabricMc(mcVersion) ? LEGACY_FABRIC_META : FABRIC_META
 }
@@ -43,7 +60,7 @@ interface FabricLoaderMeta {
 
 interface FabricInstallResponse {
   loader: { version: string }
-  intermediary: { version: string }
+  intermediary: { version: string; maven?: string }
   launcherMeta: {
     /** The Fabric meta API returns libraries grouped by side — a client needs
      * the `client` + `common` groups, NOT a flat array. */
@@ -156,6 +173,42 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
       const rels = libNames.map((n) => mavenPathFromName(n)).filter((r): r is string => r !== null)
       const allPresent = rels.length > 0 && rels.every((rel) => exists(path.join(paths.libraries, rel)))
       if (clientMain && allPresent) {
+        // v1.0.80 — OBFUSCATED Minecraft versions (everything below 26.1)
+        // need the intermediary mappings jar on the classpath; installs that
+        // predate this fix lack it and crash on every mod with a classTweaker
+        // (architectury, cloth-config, fabric-biome-api-v1…). Self-heal in
+        // place: add the library to the cached JSON + download the jar — no
+        // full reinstall. An unreadable JSON throws and falls through to the
+        // full install below.
+        if (needsIntermediary(mcVersion)) {
+          // Same name rule as the full-install path: prefer the maven group the
+          // meta API reported for THIS version (Legacy Fabric uses a different
+          // group, e.g. net.legacyfabric:intermediary), falling back to the
+          // standard net.fabricmc coordinate.
+          const metaIntermediary = (meta as { intermediary?: { maven?: string } }).intermediary?.maven
+          const intermediaryName = metaIntermediary ?? `net.fabricmc:intermediary:${mcVersion}`
+          const interRel = mavenPathFromName(intermediaryName)
+          if (interRel) {
+            const interDest = path.join(paths.libraries, interRel)
+            const cachedJson = JSON.parse(fs.readFileSync(jsonPath, 'utf-8')) as { libraries?: { name: string; url?: string }[] }
+            if (!Array.isArray(cachedJson.libraries)) throw new Error(`Fabric cached version JSON for ${versionId} has no libraries — reinstalling.`)
+            const hasLib = cachedJson.libraries.some((l) => l.name === intermediaryName)
+            const hasJar = (await sizeOf(interDest)) > 0
+            if (!hasLib || !hasJar) {
+              logger.warn(`Fabric ${loaderVersion} install for ${mcVersion} was missing the intermediary mappings — patching (classTweaker namespace fix).`)
+              if (!hasLib) {
+                cachedJson.libraries.push({ name: intermediaryName, url: FABRIC_MAVEN })
+                fs.writeFileSync(jsonPath, JSON.stringify(cachedJson, null, 2), 'utf-8')
+              }
+              if (!hasJar) {
+                await runDownloadBatch([{ url: `${FABRIC_MAVEN}/${interRel}`, dest: interDest }], {
+                  kind: 'loader',
+                  label: `Intermediary mappings for ${mcVersion}`
+                })
+              }
+            }
+          }
+        }
         logger.info(`Fabric ${loaderVersion} already installed for ${mcVersion} (${versionId})`)
         return { versionId, mainClass: clientMain, loaderVersion: meta.loader?.version ?? loaderVersion }
       }
@@ -190,9 +243,20 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
   // the official fabric-installer does. Without it Java fails with
   // "Could not find or load main class …KnotClient".
   const loaderLib = { name: `net.fabricmc:fabric-loader:${loaderVersion}`, url: FABRIC_MAVEN }
+  // v1.0.80 — OBFUSCATED Minecraft versions (below 26.1) additionally need
+  // the net.fabricmc:intermediary:<mc> mappings jar: the loader runs the game
+  // in the `official` namespace and remaps mods' intermediary classTweaker
+  // entries to it. Without this jar every such mod crashes with the
+  // "Namespace (intermediary) does not match current runtime namespace
+  // (official)" error — exactly what the official fabric-installer adds and
+  // this launcher previously omitted. 26.1+ is unobfuscated: no intermediary
+  // is published or needed.
+  const intermediaryLib = needsIntermediary(mcVersion)
+    ? { name: res.intermediary?.maven ?? `net.fabricmc:intermediary:${mcVersion}`, url: FABRIC_MAVEN }
+    : null
   // Drop any duplicate the meta response might ever include, then add ours.
   const deps = clientLibs.filter((l) => l.name !== loaderLib.name)
-  const allLoaderLibs = [...deps, loaderLib]
+  const allLoaderLibs = [...deps, loaderLib, ...(intermediaryLib ? [intermediaryLib] : [])]
 
   for (const lib of allLoaderLibs) {
     const rel = mavenPathFromName(lib.name)
@@ -220,7 +284,8 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
     libraries: [
       ...(vanilla.libraries as unknown[]),
       ...deps.map((l) => ({ name: l.name, url: l.url ?? FABRIC_MAVEN })),
-      loaderLib
+      loaderLib,
+      ...(intermediaryLib ? [intermediaryLib] : [])
     ]
   } as Record<string, unknown>
 

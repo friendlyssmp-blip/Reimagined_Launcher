@@ -1,7 +1,7 @@
 {
-  "version": "1.0.79",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.79.exe",
-  "sha256": "6851340d4a62f244504ac9cdee3bb84d4ccf8980e92c468ace51efc7d3922eef",
-  "size": 84014949,
-  "notes": "v1.0.79 - Fabric environment FIXED FOR REAL: no more \"Namespace (intermediary) does not match current runtime namespace (official)\" crashes. The launcher now validates the ENTIRE Fabric environment BEFORE launch (every jar checked against the profile MC version + the loader that will actually run), drops stale loader pins (re-resolves from the official Fabric meta per MC version), detects the crash in-game and offers Repair, and auto-quarantines incompatible mods to mods.incompatible/ when you change a profile's Minecraft version - nothing is deleted, saves are untouched. Validation is cached so launches stay fast."
+  "version": "1.0.80",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.80.exe",
+  "sha256": "587df703bfef294b48d9ad7d978d8f341b80b0ea47578369c4bd93e030abcc2e",
+  "size": 84015249,
+  "notes": "v1.0.80 - THE REAL Fabric 1.21.x fix. Root cause found: the launcher was missing the net.fabricmc:intermediary mappings jar, which Fabric Loader needs to remap mods intermediary classTweaker entries to the official runtime on OBFUSCATED versions like 1.21.11 (1.21.11 is the last obfuscated release; 26.1+ ships unobfuscated and needs no intermediary - that is why 26.2 always worked). installFabric now adds and downloads intermediary for versions below 26, and EXISTING broken 1.21.x installs self-heal on next launch (JSON patched + jar downloaded in place, nothing deleted). Your PVP Practice instance was already patched so it can launch even before updating."
 }
