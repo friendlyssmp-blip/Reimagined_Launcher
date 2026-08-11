@@ -284,6 +284,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [notify]
   )
 
+  // v1.0.79 — stable ref so the launch callback can re-invoke itself after a
+  // Fabric repair without a self-referential useCallback initializer.
+  const launchProfileRef = useRef<(profileId: string) => void>(() => {})
   const launchProfile = useCallback(
     async (profileId: string) => {
       // v1.0.15 multi-instance: remember which profile this launch belongs to
@@ -303,11 +306,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // idle immediately (the launch:status event may never fire when the
         // pipeline rejects before spawning).
         setLaunch({ phase: 'idle', message: '', percent: null, pid: undefined, profileId })
+        // v1.0.79 — Fabric environment mismatch: offer Repair right here
+        // instead of just a toast. Repair re-resolves the loader, isolates
+        // incompatible mods and clears the stale remap cache — user data is
+        // never touched.
+        if (err instanceof ApiError && err.code === 'FABRIC_ENV_MISMATCH') {
+          setModals({
+            confirm: {
+              title: 'Fabric environment mismatch',
+              message: `${friendlyError(err)}\n\nRepair will re-check the Fabric loader for this Minecraft version, move incompatible mods to mods.incompatible/ (nothing is deleted), and clear the stale remap cache. Your worlds, screenshots and config are untouched.`,
+              confirmLabel: 'Repair and relaunch',
+              onConfirm: async () => {
+                try {
+                  await api.profiles.repair(profileId)
+                  notify('success', 'Instance repaired', 'The Fabric environment was fixed — relaunching…')
+                  // Re-trigger the launch through the same pipeline. Using the
+                  // ref keeps the callback stable (no self-referential init).
+                  void launchProfileRef.current(profileId)
+                } catch (repairErr) {
+                  notify('error', 'Repair failed', friendlyError(repairErr))
+                }
+              }
+            }
+          })
+          return
+        }
         notify('error', 'Launch failed', friendlyError(err))
       }
     },
     [notify, setModals, settings]
   )
+  launchProfileRef.current = launchProfile
 
   // v1.0.15 multi-instance: Stop targets ONE profile's session (or all when
   // no profile is given, e.g. the sidebar pill).
@@ -466,6 +495,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // closed. Surface it immediately with analysis and suggestions.
           setModals({ crash: e.payload as CrashReport })
           break
+        case 'launch:fabric-mismatch': {
+          // v1.0.79 — the game output revealed a classTweaker namespace crash
+          // (runtime-environment mismatch). Surface the clean message with a
+          // Repair action instead of a raw Java stack trace.
+          const payload = e.payload as { profileId?: string; message?: string }
+          setModals({
+            confirm: {
+              title: 'Fabric environment mismatch',
+              message: `${payload.message ?? 'One or more installed components are incompatible with this Minecraft/Fabric runtime.'}\n\nRepair re-checks the Fabric loader, moves incompatible mods to mods.incompatible/ and clears the stale remap cache — nothing is deleted.`,
+              confirmLabel: 'Repair instance',
+              onConfirm: async () => {
+                // v1.0.79 — guard: never repair an empty/unknown profile id.
+                if (!payload.profileId) {
+                  notify('error', 'Repair unavailable', 'This instance can no longer be identified — open Profiles and use Repair from the profile menu.')
+                  return
+                }
+                try {
+                  await api.profiles.repair(payload.profileId)
+                  notify('success', 'Instance repaired', 'The Fabric environment was fixed. Try launching again.')
+                } catch (repairErr) {
+                  notify('error', 'Repair failed', friendlyError(repairErr))
+                }
+              }
+            }
+          })
+          break
+        }
         case 'shaders:auto-disabled':
           // Shader Guard auto-recovery — the previous session crashed with
           // shaders enabled, so this session started with them off. Tell the

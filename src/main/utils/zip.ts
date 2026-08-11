@@ -95,6 +95,32 @@ export function zipCreate(files: { name: string; data: Buffer | string }[]): Buf
   return Buffer.concat(chunks)
 }
 
+/** List every entry name in a ZIP archive buffer (central directory scan). */
+export function zipListEntries(archive: Buffer): string[] {
+  const names: string[] = []
+  if (archive.length < 22) return names
+  const tailStart = Math.max(0, archive.length - 65557)
+  let eocdAt = -1
+  for (let i = archive.length - 22; i >= tailStart; i--) {
+    if (archive.readUInt32LE(i) === SIG_EOCD) {
+      eocdAt = i
+      break
+    }
+  }
+  if (eocdAt < 0) return names
+  const entryCount = archive.readUInt16LE(eocdAt + 10)
+  let cdOffset = archive.readUInt32LE(eocdAt + 16)
+  for (let i = 0; i < entryCount && cdOffset + 46 <= archive.length; i++) {
+    if (archive.readUInt32LE(cdOffset) !== SIG_CENTRAL) break
+    const nameLen = archive.readUInt16LE(cdOffset + 28)
+    const extraLen = archive.readUInt16LE(cdOffset + 30)
+    const commentLen = archive.readUInt16LE(cdOffset + 32)
+    names.push(archive.subarray(cdOffset + 46, cdOffset + 46 + nameLen).toString('utf-8'))
+    cdOffset += 46 + nameLen + extraLen + commentLen
+  }
+  return names
+}
+
 /** Read a single named entry out of a ZIP archive buffer. */
 export function zipReadEntry(archive: Buffer, wanted: string): Buffer | null {
   if (archive.length < 22) return null

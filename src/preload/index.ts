@@ -71,7 +71,8 @@ const api = {
       ipcRenderer.invoke(IPC.profilesDelete, { id, deleteFiles }),
     duplicate: (id: string, opts?: { name?: string; copyWorlds?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke(IPC.profilesDuplicate, { id, opts }),
-    prepare: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.profilesPrepare, id)
+    prepare: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.profilesPrepare, id),
+    repair: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.profilesRepair, id)
   },
 
   mods: {

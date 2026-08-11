@@ -22,7 +22,7 @@ import { microsoftAuth } from '../auth/microsoft-auth'
 import { accountStore } from '../auth/account-store'
 import { profileManager } from '../profiles/profile-manager'
 import { versionManager, targetOs, archMatchesCurrent } from './version-manager'
-import { installFabric, latestFabricLoader } from './loaders/fabric'
+import { installFabric, resolveFabricLoader } from './loaders/fabric'
 import { installForge, recommendedForgeVersion } from './loaders/forge'
 import { pickJava, type JavaRuntime } from './java'
 import { dateStamp } from '../utils/format'
@@ -208,7 +208,35 @@ class Launcher {
           await ensureFpsBoost(profile)
         }
         this.emitProgress('installing-loader', `Resolving Fabric for ${mc}…`)
-        const loaderVersion = profile.loader.version ?? (await latestFabricLoader(mc))
+        // v1.0.79 — resolveFabricLoader validates the profile-pinned loader
+        // against the Fabric meta API for THIS Minecraft version and falls
+        // back to the latest valid loader when the pin is stale (the classic
+        // source of the classTweaker namespace mismatch: a loader from
+        // another MC version pinned onto this profile).
+        const loaderVersion = await resolveFabricLoader(mc, profile.loader.version)
+        // v1.0.79 — pre-launch environment validation: every jar in the mods
+        // folder is checked against this profile's MC version + loader before
+        // the game starts. A mismatched jar (e.g. built for 26.2 but profile
+        // is 1.21.11) would crash the loader with "Namespace (intermediary)
+        // does not match current runtime namespace (official)" — catch it
+        // here with a repair suggestion instead of letting the game crash.
+        try {
+          const { validateFabricEnvironment } = await import('./fabric-validate')
+          const report = await validateFabricEnvironment(profile)
+          if (report.hasFailures) {
+            const names = report.problems.map((p) => `“${p.fileName}” (${p.reason})`).join('; ')
+            throw new LauncherError(
+              'FABRIC_ENV_MISMATCH',
+              'Fabric environment mismatch.',
+              `One or more installed components are incompatible with this Minecraft/Fabric runtime. ${names} Reinstall the affected instance (or use Repair) to fix it.`
+            )
+          }
+          for (const w of report.warnings) logger.warn(`Fabric env (${profile.name}): ${w}`)
+        } catch (err) {
+          if (err instanceof LauncherError && err.code === 'FABRIC_ENV_MISMATCH') throw err
+          // Validation itself must never block a launch (defensive).
+          logger.warn(`Fabric env pre-check skipped for "${profile.name}": ${(err as Error).message}`)
+        }
         const fabric = await installFabric(mc, loaderVersion)
         versionId = fabric.versionId
         loaderLabel = `fabric ${fabric.loaderVersion}`
@@ -514,6 +542,24 @@ class Launcher {
     for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue
       this.emitLog(stream, line)
+      // v1.0.79 — catch the classTweaker namespace crash the MOMENT it appears
+      // in the game's output and surface a clean, actionable message instead
+      // of the raw Java stack trace. The root cause is a runtime-environment
+      // mismatch (mods/loader built for a different Minecraft version) — the
+      // launcher's pre-launch validation should have caught it, but this is
+      // the safety net for cases that slip through (manual jar drops, etc.).
+      if (
+        stream === 'stderr' &&
+        /Failed to read classTweaker file from mod|Namespace \(\w+\) does not match current runtime namespace/i.test(line)
+      ) {
+        logger.warn(`Fabric namespace mismatch detected for "${session.profile.name}": ${line.trim()}`)
+        eventBus.emit('launch:fabric-mismatch', {
+          profileId: session.profile.id,
+          message:
+            'Fabric environment mismatch: one or more installed components are incompatible with this Minecraft/Fabric runtime. ' +
+            'Use Repair (Profiles → right-click → Repair) to fix it — your worlds and config are safe.'
+        })
+      }
     }
   }
 

@@ -171,6 +171,20 @@ class ProfileManager {
           logger.warn(`FPS Boost sync failed: ${(err as Error).message}`)
         )
       )
+      // v1.0.79 — when a Fabric profile's Minecraft version changes, mods
+      // built for the OLD version would crash the loader at runtime with the
+      // classTweaker namespace error. Isolate them into mods.incompatible/
+      // (recoverable — never deleted) and clear the stale remap cache.
+      if (patch.minecraftVersion) {
+        void import('../minecraft/fabric-validate')
+          .then((m) => m.repairFabricEnvironment(updated))
+          .then((res) => {
+            if (res.moved.length > 0) {
+              logger.warn(`Profile "${updated.name}": isolated ${res.moved.length} incompatible mod(s) after the version change -> mods.incompatible/`)
+            }
+          })
+          .catch(() => {})
+      }
     }
 
     eventBus.emit('profile:changed', { action: 'updated', profile: updated })
@@ -296,9 +310,24 @@ class ProfileManager {
       let versionId = mc
       if (profile.loader.type === 'fabric') {
         progress('Installing Fabric loader…', 10)
-        const { installFabric, latestFabricLoader } = await import('../minecraft/loaders/fabric')
-        const loaderVersion = profile.loader.version ?? (await latestFabricLoader(mc))
+        const { installFabric, resolveFabricLoader } = await import('../minecraft/loaders/fabric')
+        // v1.0.79 — validate the pinned loader against THIS Minecraft version
+        // (never blindly reuse a loader cached for another MC version).
+        const loaderVersion = await resolveFabricLoader(mc, profile.loader.version)
+        // v1.0.79 — persist a corrected loader pin back to the profile so the
+        // stored record always matches what the launch path will resolve.
+        if (profile.loader.version !== loaderVersion) {
+          try {
+            await this.update(id, { loader: { type: 'fabric', version: loaderVersion } })
+          } catch {
+            /* non-fatal — the resolved loader still gets used below */
+          }
+        }
         versionId = (await installFabric(mc, loaderVersion)).versionId
+        // v1.0.79 — clear a stale remap cache when the environment changed.
+        void import('../minecraft/fabric-validate')
+          .then((m) => m.repairFabricEnvironment(profile))
+          .catch(() => {})
       } else if (profile.loader.type === 'forge') {
         progress('Installing Forge…', 10)
         const { installForge, recommendedForgeVersion } = await import('../minecraft/loaders/forge')

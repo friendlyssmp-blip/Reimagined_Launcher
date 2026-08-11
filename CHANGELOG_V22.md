@@ -1,3 +1,43 @@
+## v1.0.79 — Fabric environment fixed for real: no more "Namespace (intermediary) does not match current runtime namespace (official)" crashes
+
+### Root cause (found with real evidence)
+- The crash is a RUNTIME-ENVIRONMENT mismatch, not a broken mod: modern Fabric
+  Loader runs Minecraft in the Mojang-mapped `official` namespace and remaps
+  every mod's `intermediary` classTweaker entries at load time using the
+  mappings for THAT Minecraft version. When a jar was built for a DIFFERENT
+  Minecraft version (or a stale loader pin from another MC version is on the
+  profile), the intermediary names don't exist in the current mappings, the
+  remap fails, and the loader hard-crashes with the namespace error — which is
+  why different mods (fabric-biome-api-v1, cloth-config…) kept producing the
+  same message.
+
+### What the launcher now does
+- **Pre-launch environment validation**: before Minecraft starts, every jar in
+  the profile's mods/ folder is checked — its `fabric.mod.json` is parsed and
+  `depends.minecraft` / `depends.fabricloader` are matched against the
+  profile's exact Minecraft version and the loader that will ACTUALLY run
+  (Fabric's real range semantics: ANDed clauses, `.x` branches, `~` fuzzy
+  upper bound, `^` caret on the first non-zero component). A mismatched jar
+  blocks the launch with a clean message + Repair option instead of a crash.
+- **Stale loader pins are dropped**: `resolveFabricLoader` only honors a
+  profile-pinned loader version when meta.fabricmc.net actually lists it FOR
+  that Minecraft version; otherwise it uses the latest valid loader (and the
+  corrected pin is persisted back to the profile on edit/prepare).
+- **Repair instance** (Profiles → ⋯ → Repair, and offered automatically on the
+  crash): re-checks the loader, MOVES incompatible jars to `mods.incompatible/`
+  (recoverable — never deleted), clears the stale `.fabric/processedMods`
+  remap cache, and never touches saves/screenshots/config.
+- **Version change isolation**: editing a Fabric profile's Minecraft version
+  automatically quarantines jars built for the old version.
+- **In-game crash detector**: if the game output ever shows the classTweaker/
+  namespace pattern again, the launcher surfaces the clean repair dialog
+  instead of a raw Java stack trace.
+- **Fast**: validation results are cached per profile (keyed by MC version +
+  loader pin + every jar's name/size/mtime), so normal launches skip the
+  jar scan and the meta network call entirely.
+- Verified against the real instance: 87 jars all compatible on 26.2 (zero
+  false positives), 74 correctly flagged for a hypothetical 1.21.11 profile.
+
 ## v1.0.78 — FPS Boost MULTI-VERSION: now installable on x1.8, x1.21, x26.1 and x26.2 (FPS Boost 1.0.31)
 
 ### The big one: FPS Boost is no longer 26.2-only

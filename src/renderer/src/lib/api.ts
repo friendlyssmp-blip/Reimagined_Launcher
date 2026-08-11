@@ -129,7 +129,12 @@ export const api = {
     delete: (id: string, deleteFiles?: boolean) => unwrap<void>(window.reimagined.profiles.delete(id, deleteFiles)),
     duplicate: (id: string, opts?: { name?: string; copyWorlds?: boolean }) =>
       unwrap<Profile>(window.reimagined.profiles.duplicate(id, opts)),
-    prepare: (id: string) => unwrap<void>(window.reimagined.profiles.prepare(id))
+    prepare: (id: string) => unwrap<void>(window.reimagined.profiles.prepare(id)),
+    /** v1.0.79 — repair a profile's Fabric environment (loader re-pin,
+     *  incompatible-mod quarantine, remap-cache clear). Never touches user
+     *  data. Returns what was fixed/moved. */
+    repair: (id: string) =>
+      unwrap<{ fixed: string[]; moved: string[] }>(window.reimagined.profiles.repair(id))
   },
   mods: {
     list: (profileId: string) => unwrap<ProfileMod[]>(window.reimagined.mods.list(profileId)),

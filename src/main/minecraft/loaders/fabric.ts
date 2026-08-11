@@ -87,6 +87,30 @@ export async function latestFabricLoader(mcVersion: string): Promise<string> {
   return list[0]
 }
 
+/**
+ * v1.0.79 — resolve the loader version to USE for a Minecraft version.
+ * A profile-pinned loader version is only honored when the Fabric meta API
+ * actually lists it FOR THAT Minecraft version; a stale pin (e.g. copied from
+ * another profile, or the user edited the profile's MC version without
+ * touching the loader) falls back to the latest valid loader instead of
+ * launching a broken environment. This is the guard that prevents the
+ * classTweaker namespace crash class before it starts.
+ */
+export async function resolveFabricLoader(mcVersion: string, preferred?: string | null): Promise<string> {
+  const loaders = await getFabricLoaders(mcVersion)
+  if (loaders.length === 0) {
+    const eco = isLegacyFabricMc(mcVersion) ? 'Legacy Fabric' : 'Fabric'
+    throw new Error(
+      `No ${eco} loader version exists for Minecraft ${mcVersion} — this Minecraft version is not supported by ${eco}.`
+    )
+  }
+  if (preferred && loaders.includes(preferred)) return preferred
+  if (preferred) {
+    logger.warn(`Fabric loader ${preferred} is not valid for Minecraft ${mcVersion} — using ${loaders[0]} instead.`)
+  }
+  return loaders[0]
+}
+
 export interface InstalledFabric {
   versionId: string
   mainClass: string

@@ -265,6 +265,24 @@ export function jvmFlagsFor(tier: PerfTier): string[] {
   return flags
 }
 
+/**
+ * v1.0.74 — heap cap for low-core ParallelGC machines. A full GC with
+ * ParallelGC is fully stop-the-world, and on a 2C/4T iGPU laptop an
+ * oversized heap makes it a multi-second freeze (measured: 8GB heap ->
+ * gcMs=3607, tickMs=5165, "Can't keep up! 102 ticks behind" in real PROF
+ * data). Real usage is ~1-2GB, so capping at 4GB keeps the worst-case
+ * pause short without ever hitting the ceiling. Strong machines (G1,
+ * concurrent collection) keep whatever the user asked for.
+ */
+export function recommendedHeapFor(tier: PerfTier, cores: number, requestedXmx: number): number {
+  const lowCore = cores <= 4
+  const parallel = tier === 'potato' || tier === 'turbo' || (tier === 'balanced' && lowCore)
+  if (parallel) {
+    return Math.max(1024, Math.min(requestedXmx, 4096))
+  }
+  return requestedXmx
+}
+
 /** Vanilla's real framerateLimit slider values (10..260). */
 const VANILLA_FPS_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 144, 160, 180, 240, 260]
 

@@ -41,6 +41,7 @@ export const IPC = {
   profilesDelete: 'profiles:delete',
   profilesDuplicate: 'profiles:duplicate',
   profilesPrepare: 'profiles:prepare',
+  profilesRepair: 'profiles:repair',
 
   // Mods
   modsList: 'mods:list',
@@ -177,6 +178,7 @@ export type AppEventType =
   | 'update:progress'
   | 'crash:detected'
   | 'shaders:auto-disabled'
+  | 'launch:fabric-mismatch'
   | 'share:deep-link'
   | 'system:info'
 

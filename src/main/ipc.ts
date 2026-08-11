@@ -292,6 +292,27 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   )
   on(IPC.profilesPrepare, (id) => profileManager.prepare(id))
 
+  /* v1.0.79 — repair a profile's Fabric environment: re-resolve the loader
+   * for its Minecraft version, isolate incompatible mods (never deleted),
+   * clear the stale remap cache, and re-sync Fabric API. User data
+   * (saves/screenshots/resourcepacks/shaderpacks/config) is never touched. */
+  on(IPC.profilesRepair, async (id: string) => {
+    const profile = await profileManager.get(id)
+    if (!profile) throw new Error('Profile not found.')
+    if (profile.loader.type === 'fabric') {
+      const { repairFabricEnvironment } = await import('./minecraft/fabric-validate')
+      const res = await repairFabricEnvironment(profile)
+      // Re-sync the Fabric API for the (possibly re-pinned) environment.
+      const { ensureFabricApi } = await import('./mods/fabric-api')
+      await ensureFabricApi(profile)
+      const { ensureFpsBoost } = await import('./mods/fps-boost')
+      await ensureFpsBoost(profile)
+      eventBus.emit('mods:changed', { profileId: id, action: 'repaired' })
+      return { fixed: res.fixed, moved: res.moved }
+    }
+    return { fixed: ['Nothing to repair — this profile does not use Fabric.'], moved: [] }
+  })
+
   /* ----------------------------------- mods ----------------------------------- */
 
   on(IPC.modsList, (profileId) => modManager.list(profileId))

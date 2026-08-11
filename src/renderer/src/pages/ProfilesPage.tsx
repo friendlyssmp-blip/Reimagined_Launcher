@@ -3,7 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, EmptyState, ProfileGlyph } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
 import { humanDuration } from '../lib/format'
-import { IconFolder, IconPlay, IconStop, IconDots, IconShare, IconPencil, IconCopy, IconTrash, IconArchive } from '../components/icons'
+import { IconFolder, IconPlay, IconStop, IconDots, IconShare, IconPencil, IconCopy, IconTrash, IconArchive, IconRefresh } from '../components/icons'
 import type { Page } from '../App'
 import type { Profile } from '@shared/types'
 
@@ -90,6 +90,27 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
     } catch (err) {
       notify('error', 'Could not open folder', friendlyError(err))
     }
+  }
+
+  /** v1.0.79 — repair a Fabric profile's environment (loader re-pin,
+   *  incompatible-mod quarantine, remap-cache clear). Never touches user data. */
+  const repair = async (p: Profile) => {
+    setCtxMenu(null)
+    setModals({
+      confirm: {
+        title: 'Repair Fabric instance?',
+        message: `Repair “${p.name}” re-checks the Fabric loader for ${p.minecraftVersion}, moves incompatible mods to mods.incompatible/ (nothing is deleted), and clears the stale remap cache. Your worlds, screenshots and config are untouched.`,
+        confirmLabel: 'Repair',
+        onConfirm: async () => {
+          try {
+            const res = await api.profiles.repair(p.id)
+            notify('success', 'Instance repaired', [...res.fixed, ...(res.moved.length > 0 ? [`Moved ${res.moved.length} incompatible mod(s) to mods.incompatible/`] : [])].join(' · ') || 'The Fabric environment is healthy.')
+          } catch (err) {
+            notify('error', 'Repair failed', friendlyError(err))
+          }
+        }
+      }
+    })
   }
 
   return (
@@ -223,6 +244,11 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
           <button onClick={() => share(ctxMenu.profile)}>
             <IconShare style={{ width: 14, height: 14 }} /> Share
           </button>
+          {ctxMenu.profile.loader.type === 'fabric' && (
+            <button onClick={() => repair(ctxMenu.profile)} title="Re-check the Fabric loader, isolate incompatible mods and clear the remap cache">
+              <IconRefresh style={{ width: 14, height: 14 }} /> Repair
+            </button>
+          )}
           <div className="ctx-sep" />
           <button className="danger" onClick={() => confirmDelete(ctxMenu.profile)}>
             <IconTrash style={{ width: 14, height: 14 }} /> Delete

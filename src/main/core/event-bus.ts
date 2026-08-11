@@ -59,6 +59,7 @@ class EventBus {
       'update:progress': true,
       'crash:detected': true,
       'shaders:auto-disabled': true,
+      'launch:fabric-mismatch': true,
       'share:deep-link': true,
       'system:info': true
     }
