@@ -1,7 +1,7 @@
 {
-  "version": "1.0.72",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.72.exe",
-  "sha256": "a4e8da3b2ef80887bf512bc6c96216879bb4ef7510ba697d20926e85f1d788c8",
-  "size": 83919730,
-  "notes": "v1.0.72: adaptive chunks restored - you start at RD 10 again (Smart RD no longer persists throttled RD to options.txt)"
+  "version": "1.0.73",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.73.exe",
+  "sha256": "f5475395fd3fdb516abd331bc0eae72a41cad1bd359d1b73ed739c2442ba7da8",
+  "size": 83919701,
+  "notes": "v1.0.73: CRITICAL FPS fix - explosion debris cap was throwing on every TNT/gravel debris spawn (server tick at 846ms); cap now works"
 }

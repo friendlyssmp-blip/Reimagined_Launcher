@@ -1,4 +1,32 @@
-## v1.0.72 — "adaptive chunks" restored: you start at RD 10 again + FPS Boost 1.0.27
+## v1.0.73 — CRITICAL: fixes the "can't move, feels like crashing" FPS bug + FPS Boost 1.0.28
+
+### Root cause: the explosion-debris cap was throwing on EVERY debris spawn
+- Real session logs showed 126+ "debrisCap failed in the render path"
+  exceptions, second after second, in the SERVER thread. The cap counts
+  falling blocks (TNT/gravel/sand debris) with an infinite AABB
+  (-INF..+INF); on MC 26.2 EntitySectionStorage converts that AABB into a
+  section range and with infinity the start becomes LARGER than the end, so
+  subSet() threw IllegalArgumentException every time a block fell.
+- The SafetyGate logged "falling back to vanilla" but had NO "debrisCap"
+  case in its switch — so the module was never actually disabled and the
+  exception repeated for the whole session.
+- Because the mixin threw BEFORE counting, the cap NEVER worked: every TNT
+  chain spawned UNBOUNDED falling blocks (each ticked + rendered as its own
+  model), ballooning the integrated-server tick to 846ms per tick
+  (tickMs=846.7) — the world barely moved, felt like a crash.
+
+### Fix
+- FallingBlockDebrisMixin now uses the bounded getEntities(EntityTypeTest,
+  Predicate, List, cap) overload — no AABB math, capped collection, no
+  crash. The cap finally works: the first cap-worth of debris flies, the
+  overflow is trimmed (gameplay identical, only the flying animation of the
+  overflow is skipped).
+- SafetyGate now has a "debrisCap" case (disables the module) so any future
+  failure degrades instead of spamming forever.
+- (This also explains the old V2 test: "Explose 5x5 TNT = 6-53 fps" — the
+  cap has been broken since the 26.2 port.)
+
+
 
 ### Root cause: throttled render distance was being PERSISTED into options.txt
 - The v1.0.26 queue-pressure branch (mesh queue >= 120 AND fpsEma < 60) fired
