@@ -1,7 +1,7 @@
 {
-  "version": "1.0.71",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.71.exe",
-  "sha256": "051ef2b76fbe86a9d7ac402e70b573aa68b0ac2c48b2deba85f85fb65d78d9aa",
-  "size": 83919022,
-  "notes": "v1.0.71 - fixes the bad FPS on GPU-strong/CPU-weak machines (the nVidia test PC) + FPS Boost 1.0.26. Root cause from the test-PC report (i3-2120 2C/4T, GTX 1650 SUPER 4GB, DDR3-1333, HDD): the GPU is fine (shaders 66-140 fps) - the machine scored balanced so the mod used 3 chunk-mesh threads + game thread + integrated server + GC threads = 7 work streams on 4 logical threads, starving the render thread during chunk streaming (sustained 54-60 fps while flying vs 90-180 walking), and Smart RD never fired (it only dropped below 22 fps). Now: (1) the chunk-build pool is capped at 2 threads on <=4-thread CPUs regardless of preset (user-set cap still wins; >4 cores unchanged); (2) Smart RD drops the render distance when the mesh queue backs up (>=120 pending) at display-rate FPS (<60), and restores only once the queue drains below 60; (3) ParallelGC is capped at 2 threads on all low-core tiers (2 physical cores get no speedup from 3 workers). NOTE: the V1 test ran an older launcher - re-run the test on that PC with this build; the launcher downloads its own Java 25 (system Java 8 cannot run Minecraft 26.2)."
+  "version": "1.0.72",
+  "url": "https://github.com/friendlyssmp-blip/Reimagined_Launcher/raw/main/update/Reimagined-Setup-1.0.72.exe",
+  "sha256": "a4e8da3b2ef80887bf512bc6c96216879bb4ef7510ba697d20926e85f1d788c8",
+  "size": 83919730,
+  "notes": "v1.0.72: adaptive chunks restored - you start at RD 10 again (Smart RD no longer persists throttled RD to options.txt)"
 }

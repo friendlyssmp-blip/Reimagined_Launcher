@@ -1,4 +1,30 @@
-## v1.0.71 — fixes the bad FPS on GPU-strong/CPU-weak machines (the nVidia test PC) + FPS Boost 1.0.26
+## v1.0.72 — "adaptive chunks" restored: you start at RD 10 again + FPS Boost 1.0.27
+
+### Root cause: throttled render distance was being PERSISTED into options.txt
+- The v1.0.26 queue-pressure branch (mesh queue >= 120 AND fpsEma < 60) fired
+  almost constantly on 60Hz vsync displays (fpsEma hovers just under 60), so
+  any chunk burst ratcheted the render distance down 1 per 2s. Every drop
+  called options.save(), writing the throttled RD (2) into options.txt. The
+  next launch then SEEDED the restore ceiling from that persisted 2, so the
+  adaptive chunks never came back and the game started fogged at 2 instead
+  of your real 10.
+
+### Fix
+- Smart RD drops are now IN-MEMORY ONLY — a throttled RD is never written to
+  options.txt.
+- The queue signal requires 2 CONSECUTIVE deep evals (4+ seconds sustained)
+  before dropping, so a single transient spike no longer punishes you.
+- Leaving the world and closing the game now restore the player's own render
+  distance (and persist it) before anything is saved.
+- Session-start HEAL: if options.txt was left at the throttle floor (2-3) by
+  an older version, the first world join raises it back to the player's own
+  saved render distance (default 10) before the restore ceiling is seeded.
+- Restore no longer requires fps > 45 — it only needs the mesh queue drained
+  and fps above 20, so shader sessions (29-44 fps on the HD 620) recover too.
+- AFK mode also restores its cap/RD when the game closes, so closing while
+  AFK can't leak the ~12 fps cap or RD 4 into the next session.
+
+
 
 ### Root cause: thread oversubscription + Smart RD never firing at moderate FPS
 - Diagnosed from the test-PC FPS report (i3-2120 2C/4T, GTX 1650 SUPER 4GB,
