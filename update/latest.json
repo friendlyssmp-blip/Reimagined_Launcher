@@ -1,7 +1,7 @@
 {
-  "version": "1.0.75",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.75.exe",
-  "sha256": "ae4a5ad0884b3c809715d73fdcd0827d6d51c65e076ad4407f5e39b96373fbf1",
-  "size": 83919976,
-  "notes": "v1.0.75 - Update All now lets you skip any mod from the batch (per-row Skip toggle in the preview)."
+  "version": "1.0.76",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.76.exe",
+  "sha256": "9c0a69253dac31fb0c81eabed69555797932aaf76b52bd6179c05c87d8a58570",
+  "size": 83920437,
+  "notes": "v1.0.76 - Update All live countdown: the number ticks down in real time as each mod updates, with per-row Updating/Done/Failed states."
 }

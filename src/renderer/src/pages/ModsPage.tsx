@@ -7,7 +7,7 @@ import { api, friendlyError } from '../lib/api'
 import { normalizeTitle } from '../lib/text'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { InstallConfirmModal, type InstallTarget } from '../components/InstallConfirmModal'
-import { UpdateAllModal } from '../components/UpdateAllModal'
+import { UpdateAllModal, type UpdateAllProgress } from '../components/UpdateAllModal'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo, ShaderCrashRecord, ShaderSupport } from '@shared/types'
@@ -119,6 +119,12 @@ export function ModsPage() {
   const [updatingAll, setUpdatingAll] = useState(false)
   /* v1.0.52 — Update All preview list (Bug 2). */
   const [updateAllOpen, setUpdateAllOpen] = useState(false)
+  /* v1.0.76 — live progress while Update All runs: the modal stays open and
+     the remaining count ticks down as each item finishes. updateBatch is a
+     frozen snapshot of the batch so rows keep their Done/Failed states even
+     if the installed list refreshes mid-run. */
+  const [updateProgress, setUpdateProgress] = useState<UpdateAllProgress | null>(null)
+  const [updateBatch, setUpdateBatch] = useState<ProfileMod[] | null>(null)
   // Install confirmation with real dependencies (plain click = dialog,
   // Shift-click = install immediately with dependencies).
   const [installConfirm, setInstallConfirm] = useState<InstallTarget | null>(null)
@@ -491,21 +497,42 @@ export function ModsPage() {
   /* Part 4 (V2) — the actual "update everything" work, shared by the
    * confirmation flow and the Shift-click fast path.
    * v1.0.75 — accepts the slugs the user skipped in the preview modal; those
-   * stay on their current version while every other outdated item updates. */
+   * stay on their current version while every other outdated item updates.
+   * v1.0.76 — reports per-item progress so the modal count ticks down live. */
   const runUpdateAll = async (excluded: string[] = []) => {
     if (!activeProfile) return
     setUpdatingAll(true)
+    const skip = new Set(excluded)
+    const updatable = installed.filter((m) => m.updateAvailable && !skip.has(m.slug))
+    // v1.0.76 — freeze the batch for the run so the modal's rows stay stable
+    // even if the installed list refreshes mid-run (Done/Failed states hold).
+    setUpdateBatch(updatable)
+    setUpdateProgress({ total: updatable.length, done: [], failed: [], current: null })
     try {
-      const skip = new Set(excluded)
-      const updatable = installed.filter((m) => m.updateAvailable && !skip.has(m.slug))
+      const failedSlugs: string[] = []
       for (const m of updatable) {
+        setUpdateProgress((p) => (p ? { ...p, current: m.slug } : p))
         notify('info', 'Updating', `${m.title} → ${m.updateAvailable!.versionNumber}`)
-        await api.mods.update(activeProfile.id, m.slug).catch((err) => notify('error', `Update failed: ${m.title}`, friendlyError(err)))
+        try {
+          await api.mods.update(activeProfile.id, m.slug)
+        } catch (err) {
+          failedSlugs.push(m.slug)
+          notify('error', `Update failed: ${m.title}`, friendlyError(err))
+        }
+        setUpdateProgress((p) => (p ? { ...p, done: [...p.done, m.slug], failed: [...failedSlugs], current: null } : p))
       }
       setInstalled(await api.mods.list(activeProfile.id))
-      notify('success', 'Updates finished', `${updatable.length} item(s) updated${skip.size > 0 ? `, ${skip.size} skipped` : ''}.`)
+      const okCount = updatable.length - failedSlugs.length
+      notify(
+        'success',
+        'Updates finished',
+        `${okCount} item(s) updated${failedSlugs.length > 0 ? `, ${failedSlugs.length} failed` : ''}${skip.size > 0 ? `, ${skip.size} skipped` : ''}.`
+      )
     } finally {
       setUpdatingAll(false)
+      setUpdateProgress(null)
+      setUpdateBatch(null)
+      setUpdateAllOpen(false)
     }
   }
 
@@ -1260,11 +1287,13 @@ export function ModsPage() {
           {updateAllOpen &&
             createPortal(
               <UpdateAllModal
-                items={installed.filter((m) => m.updateAvailable)}
+                items={updateBatch ?? installed.filter((m) => m.updateAvailable)}
                 busy={updatingAll}
+                progress={updateProgress}
                 onClose={() => setUpdateAllOpen(false)}
                 onConfirm={(excluded) => {
-                  setUpdateAllOpen(false)
+                  // v1.0.76 — keep the modal open so the count ticks down live;
+                  // runUpdateAll closes it when the batch finishes.
                   void runUpdateAll(excluded)
                 }}
               />,

@@ -1,3 +1,20 @@
+## v1.0.76 — "Update All" live countdown: the number ticks down as each mod finishes
+
+### Real-time progress while the batch runs
+- The Update All modal now **stays open while updates run** and shows live
+  state per item: the current mod shows a spinner ("Updating"), finished mods
+  get a green border + "Updated" badge with a check, and pending ones say
+  "Queued".
+- The count in the modal title and the confirm button **ticks down in real
+  time** — `Update All (4)` becomes `3 → 2 → 1 → 0` as each mod downloads and
+  installs. A header line reports "N of M done".
+- If an individual update fails, that row shows a red **Failed** state (never
+  a fake "Updated") and the summary reports "N updated, M failed, K skipped".
+- The row list is frozen for the duration of the batch, so Done/Failed states
+  stay accurate even if the installed list refreshes mid-run.
+- Skip toggles and Cancel are disabled while the batch is running; the modal
+  closes itself when everything is processed.
+
 ## v1.0.75 — "Update All" with per-mod exclusion (skip what you don't want to update)
 
 ### New: skip any mod in the Update All preview
