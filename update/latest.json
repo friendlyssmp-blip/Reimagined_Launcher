@@ -1,7 +1,7 @@
 {
-  "version": "1.0.73",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.73.exe",
-  "sha256": "f5475395fd3fdb516abd331bc0eae72a41cad1bd359d1b73ed739c2442ba7da8",
-  "size": 83919701,
-  "notes": "v1.0.73: CRITICAL FPS fix - explosion debris cap was throwing on every TNT/gravel debris spawn (server tick at 846ms); cap now works"
+  "version": "1.0.74",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.74.exe",
+  "sha256": "34cb23f30465d7ba7cc6d2aeb973ce8ca07bfc0c7e40c90bcd3509706fa33c3a",
+  "size": 83920078,
+  "notes": "v1.0.74 - fixes dead async chunk decode (mixin rejection) + multi-second ParallelGC freezes (4GB heap cap). FPS Boost 1.0.29 bundled."
 }
