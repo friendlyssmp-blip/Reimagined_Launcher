@@ -1,6 +1,6 @@
 {
   "version": "1.0.72",
-  "url": "https://github.com/friendlyssmp-blip/Reimagined_Launcher/raw/main/update/Reimagined-Setup-1.0.72.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.72.exe",
   "sha256": "a4e8da3b2ef80887bf512bc6c96216879bb4ef7510ba697d20926e85f1d788c8",
   "size": 83919730,
   "notes": "v1.0.72: adaptive chunks restored - you start at RD 10 again (Smart RD no longer persists throttled RD to options.txt)"
