@@ -1,7 +1,7 @@
 {
-  "version": "1.0.76",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.76.exe",
-  "sha256": "9c0a69253dac31fb0c81eabed69555797932aaf76b52bd6179c05c87d8a58570",
-  "size": 83920437,
-  "notes": "v1.0.76 - Update All live countdown: the number ticks down in real time as each mod updates, with per-row Updating/Done/Failed states."
+  "version": "1.0.77",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.77.exe",
+  "sha256": "fdfe364920437ffc8c2ab2ea48c76c89f6e691f3f225a7bd3635a07c51f1fc68",
+  "size": 83920557,
+  "notes": "v1.0.77 - FIX: render distance stuck below your preference (now always restored to it) + less CPU contention with the integrated server (1 mesh thread on low-core). FPS Boost 1.0.30."
 }

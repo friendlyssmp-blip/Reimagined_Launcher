@@ -1,3 +1,36 @@
+## v1.0.77 — FIX: "always 10 chunks, now stuck at 4" + the post-update FPS drop (FPS Boost 1.0.30)
+
+### Root cause 1: the render distance got STUCK below your preference and the mod forgot what you actually want
+- Real session logs showed the exact chain: your stored preference is **10**, but a
+  throttled render distance of 4 leaked in and the Smart RD heal only covered
+  `current <= 3`, so 4 was adopted as the ceiling — and then the mod
+  **overwrote your stored preference with 4** (`remembered player render distance 4`
+  in the log). The AFK restore did the same: it put the throttled 4 back and the
+  smart tick read it as a "manual lower".
+- **Fix:** the player's stored preference is now the single source of truth. On
+  world entry, ANY render distance below your preference is restored to it
+  (10 stays 10; a genuine manual 4-5 is still respected because manual changes
+  are remembered). The ceiling is never seeded from a throttled value, and a
+  healed value can never overwrite your preference. AFK no longer writes the
+  throttled render distance / FPS cap to options.txt either.
+
+### Root cause 2: the chunk-build pool stole CPU from the integrated server
+- On your dual-core iGPU laptop (4 logical threads), the render thread AND the
+  integrated server share the same cores. A 2-thread mesh pool stole time from
+  server chunk generation — your log shows `Can't keep up! 115-206 ticks behind`
+  repeatedly, which drags frame rate down with it.
+- **Fix:** weak CPUs (≤4 threads) now use **1 mesh thread** unless you explicitly
+  set a custom chunk-thread limit. The storm governor and the (now rarer) Smart
+  RD drops were also retuned: normal exploration bursts no longer yank your
+  render distance down (240+ queued for 6s sustained before it acts), and
+  recovery is much faster once the burst is over.
+
+### Verification
+- Gradle build (mod **1.0.30**) ✅ · tsc node+web 0 errors ✅ · build launcher ✅ · reviewer ✅.
+- After updating, you should see `Smart RD: restored render distance to your preference 10`
+  in the log on your next world entry, and the adaptive RD should hold 10 through
+  normal play instead of dropping to 4.
+
 ## v1.0.76 — "Update All" live countdown: the number ticks down as each mod finishes
 
 ### Real-time progress while the batch runs
