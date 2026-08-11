@@ -1,7 +1,7 @@
 {
-  "version": "1.0.70",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.70.exe",
-  "sha256": "6ba1c0c3aefefdde1359b99e94353804ddbb8a6aa30d162f9cbf3965e285f861",
-  "size": 83918918,
-  "notes": "v1.0.70 - chunk-pipeline deep audit + FPS Boost 1.0.25: the async chunk decode apply read the target slot and called isValidChunk on it - on the rare case the slot was never installed (first-time chunk / view-ring pre-fill miss) existing was null, NPE, and 3 NPEs in 30s made the SafetyGate silently disable the whole async decode module (the ghost-failure pattern); a null/absent slot now simply installs the decoded chunk. The stale-mesh compile skip was gated on asyncChunkDecode, but the tuned chunk-build pool is used whenever the mod is active without Sodium (even with async decode OFF) - fast movement with decode off kept re-compiling stale sections and backlogged the mesh queue; the skip now matches the pool gate (active && !Sodium). applyReady no longer allocates a batch list every tick when the ready queue is empty (peek first)."
+  "version": "1.0.71",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.71.exe",
+  "sha256": "051ef2b76fbe86a9d7ac402e70b573aa68b0ac2c48b2deba85f85fb65d78d9aa",
+  "size": 83919022,
+  "notes": "v1.0.71 - fixes the bad FPS on GPU-strong/CPU-weak machines (the nVidia test PC) + FPS Boost 1.0.26. Root cause from the test-PC report (i3-2120 2C/4T, GTX 1650 SUPER 4GB, DDR3-1333, HDD): the GPU is fine (shaders 66-140 fps) - the machine scored balanced so the mod used 3 chunk-mesh threads + game thread + integrated server + GC threads = 7 work streams on 4 logical threads, starving the render thread during chunk streaming (sustained 54-60 fps while flying vs 90-180 walking), and Smart RD never fired (it only dropped below 22 fps). Now: (1) the chunk-build pool is capped at 2 threads on <=4-thread CPUs regardless of preset (user-set cap still wins; >4 cores unchanged); (2) Smart RD drops the render distance when the mesh queue backs up (>=120 pending) at display-rate FPS (<60), and restores only once the queue drains below 60; (3) ParallelGC is capped at 2 threads on all low-core tiers (2 physical cores get no speedup from 3 workers). NOTE: the V1 test ran an older launcher - re-run the test on that PC with this build; the launcher downloads its own Java 25 (system Java 8 cannot run Minecraft 26.2)."
 }

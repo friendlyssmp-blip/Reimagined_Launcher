@@ -220,9 +220,13 @@ export function jvmFlagsFor(tier: PerfTier): string[] {
   // measurably smoother there. Strong machines keep G1 (concurrent
   // collection wins on big heaps with threads to spare).
   const useParallel = tier === 'potato' || tier === 'turbo' || (tier === 'balanced' && lowCore)
-  // ParallelGC path: potato/turbo 2 GC threads, balanced-on-weak-CPU 3.
-  // G1 path (balanced-with-cores, high): 4 — never more than cores.
-  const pgc = useParallel ? Math.min(tier === 'balanced' ? 3 : 2, cores) : Math.min(4, cores)
+  // v1.0.71 — ParallelGC path caps at 2 threads on ALL low-core tiers: these
+  // machines have <=4 logical threads (often 2 PHYSICAL cores, e.g. the
+  // i3-2120 2C/4T test PC), and hyperthreading gives a parallel GC pause no
+  // speedup beyond 2 workers — 3 threads just spreads the same work thinner
+  // while the game + integrated server sit stopped. G1 path (balanced-with-
+  // cores, high): 4 — never more than cores.
+  const pgc = useParallel ? Math.min(2, cores) : Math.min(4, cores)
   const cgc = Math.max(1, Math.min(2, cores))
   const flags: string[] = [
     '-Dreimagined.preset=' + presetId,

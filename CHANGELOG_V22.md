@@ -1,3 +1,43 @@
+## v1.0.71 — fixes the bad FPS on GPU-strong/CPU-weak machines (the nVidia test PC) + FPS Boost 1.0.26
+
+### Root cause: thread oversubscription + Smart RD never firing at moderate FPS
+- Diagnosed from the test-PC FPS report (i3-2120 2C/4T, GTX 1650 SUPER 4GB,
+  9GB DDR3-1333, HDD): the GPU is NOT the problem (shaders run 66-140 fps).
+  The machine scores "balanced", which used 3 chunk-mesh threads + the game
+  thread + the integrated server + 2-3 GC threads = 7 work streams on 4
+  logical threads — the render thread starves during chunk streaming
+  (sustained 54-60 fps while flying fast, vs 90-180 walking). Smart RD also
+  never fired: it only dropped the render distance below 22 fps, so the RD
+  stayed high while the mesh queue backed up.
+
+### Chunk-build pool capped at 2 threads on <=4-thread CPUs (FPS Boost 1.0.26)
+- `chunkBuildThreads()` now caps the mesh pool at 2 threads (was cores-1 = 3)
+  on 4-thread machines, regardless of preset: game thread + integrated server
+  already take 2 logical threads, so 3 mesh threads on top oversubscribe the
+  CPU. The pool still scales with bursts up to that max; user-set
+  `chunkThreadsMax` overrides still win. Machines with >4 cores unchanged.
+
+### Smart Render Distance now reacts to a backed-up mesh queue (FPS Boost 1.0.26)
+- New trigger: when the chunk-mesh queue is deep (>=120 pending) AND the fps
+  is stuck near display rate (<60), Smart RD drops the render distance by 1
+  every 2s until the queue drains — the exact "outrunning the chunk loader"
+  case that the old <22fps trigger never caught (54-60 fps while flying).
+- Restore now also waits for the queue to drain below 60 before raising the
+  distance back, so it doesn't fight the streaming.
+
+### ParallelGC capped at 2 threads on all low-core tiers (launcher)
+- `jvmFlagsFor`: the ParallelGC path now uses Math.min(2, cores) for every
+  low-core tier (was 3 for balanced-on-weak). 2 physical cores get no
+  parallel-GC speedup beyond 2 workers; 3 just spreads the same work thinner
+  while the game + integrated server sit stopped. G1/strong machines unchanged.
+- FPS Boost 1.0.25 → 1.0.26; existing profiles auto-upgrade (stale jar sweep).
+- NOTE: the V1 test ran an OLDER launcher version. Re-run the test on that PC
+  with this build to validate; the launcher downloads its own Java 25 (the
+  system Java 8 reported can't run Minecraft 26.2 at all).
+
+Verified: gradle build (mod, JDK 25, Minecraft 26.2), tsc node+web clean,
+launcher build clean.
+
 ## v1.0.70 — chunk-pipeline deep audit: async decode can't self-disable on a rare null slot + stale-mesh protection follows the build pool + FPS Boost 1.0.25
 
 ### Async chunk decode can no longer silently disable itself (FPS Boost 1.0.25)
