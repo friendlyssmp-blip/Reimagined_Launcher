@@ -285,6 +285,12 @@ class Launcher {
       // carries the in-game knobs; the JVM flags apply regardless). The
       // values come from the RPE for the current hardware tier.
       await this.seedFpsBoostConfig(gameDir)
+      // v1.0.85 — Xaero's Minimap / World Map render cost: the maps re-light
+      // and re-blend every frame on CPU, which is the "110 → 88 fps when the
+      // map is on" gap on iGPUs. The launcher flips the KNOWN cost keys to
+      // their lighter value, in place, only for keys that already exist in
+      // the user's config (never adds new keys, never touches anything else).
+      await this.seedXaeroPerformance(gameDir)
       mark('fps-config')
 
       // Shader Guard (anti-crash, v1.0.12): a safety net, not a gate (v1.0.14).
@@ -984,6 +990,53 @@ class Launcher {
         logger.info(`Reconnected game for "${session.profile.name}" exited after ${Math.round(duration)}s`)
       }
     }, 3000)
+  }
+
+  /**
+   * v1.0.85 — Xaero's maps on low-end hardware. The minimap re-calculates
+   * lighting + biome blending every frame it is on screen, and the world map
+   * keeps updating chunks in the background — together they cost the exact
+   * "110 → 88 fps" the user measured when toggling the map. For each known
+   * cost key that ALREADY exists in the config we write its lighter value
+   * in place (preserving comments/formatting); keys the user's config
+   * doesn't have are never added. Reversible in-game via the Xaero settings.
+   */
+  private async seedXaeroPerformance(gameDir: string): Promise<void> {
+    try {
+      const cfgDir = path.join(gameDir, 'config', 'xaero')
+      if (!fs.existsSync(cfgDir)) return
+      const apply = (file: string, targets: Record<string, string>): void => {
+        const p = path.join(cfgDir, file)
+        if (!fs.existsSync(p)) return
+        const lines = fs.readFileSync(p, 'utf-8').split('\n')
+        let changed = false
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^\s]+)/)
+          if (!m) continue
+          const next = targets[m[1]]
+          if (next !== undefined && m[2] !== next) {
+            lines[i] = line.replace(m[2], next)
+            changed = true
+          }
+        }
+        if (changed) {
+          fs.writeFileSync(p, lines.join('\n'), 'utf-8')
+          logger.info(`Xaero performance: tuned ${file} (lighting/biome/chunk cost keys)`)
+        }
+      }
+      apply(path.join('minimap', 'profiles', 'default.cfg'), {
+        minimap_lighting: 'false',
+        minimap_biome_blending: 'false'
+      })
+      apply(path.join('world-map', 'profiles', 'default.cfg'), {
+        lighting: 'false',
+        biome_blending: 'false',
+        update_chunks: 'false'
+      })
+    } catch (err) {
+      logger.warn(`Xaero performance seeding skipped: ${(err as Error).message}`)
+    }
   }
 
   /* ---------------------------------- events ---------------------------------- */

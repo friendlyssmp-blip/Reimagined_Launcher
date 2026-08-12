@@ -5,7 +5,7 @@ import { Button, EmptyState, Spinner, AnimatedNumber } from '../components/ui'
 import { ModIcon } from '../components/ModIcon'
 import { api, friendlyError } from '../lib/api'
 import { humanDuration, fmtBytes } from '../lib/format'
-import { IconDownload, IconRefresh } from '../components/icons'
+import { IconDownload, IconRefresh, IconCheck, IconX } from '../components/icons'
 
 interface Download {
   id: string
@@ -32,11 +32,10 @@ const kindLabel: Record<string, string> = {
 }
 
 /**
- * Premium Downloads (Change 3b, v1.0.36). The mod/project artwork is the
- * centerpiece of every card (real Modrinth/CurseForge artwork from the
- * download engine), progress/speed/ETA come from the REAL measured state,
- * and history is grouped into In progress / Completed / Failed so the page
- * reads like a modern launcher. Nothing here re-implements the engine.
+ * Downloads — v1.0.85 rebuild.
+ * Same engine, same colors — a cleaner, calmer reading of the page:
+ * a single "Now" hero, quiet summary chips and grouped history cards
+ * with the real artwork, byte-level progress, speed and ETA.
  */
 export function DownloadsPage() {
   const { launch, notify } = useApp()
@@ -108,9 +107,10 @@ export function DownloadsPage() {
   }, [refresh])
 
   const active = history.find((d) => d.status === 'downloading') ?? null
-  const launchActive = launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
-    ? { label: launch.message || 'Working…', percent: launch.percent ?? 0, id: undefined as string | undefined }
-    : null
+  const launchActive =
+    launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
+      ? { label: launch.message || 'Working…', percent: launch.percent ?? 0, id: undefined as string | undefined }
+      : null
 
   const activeSpeed = active?.id ? (speedMap[active.id] ?? 0) : 0
   const activeRemaining = active && (active.totalBytes || 0) > 0
@@ -122,77 +122,78 @@ export function DownloadsPage() {
   const done = history.filter((d) => d.status === 'done')
   const failed = history.filter((d) => d.status === 'failed')
 
+
+function renderCard(d: Download) {
+  const isActive = d.status === 'downloading'
+  return (
+    <div
+      key={d.id}
+      className={'dl-card' + (isActive ? ' dl-card-active' : d.status === 'failed' ? ' dl-card-err' : ' dl-card-done')}
+    >
+      <div className="dl-card-art">
+        {d.iconUrl ? (
+          <ModIcon src={d.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <IconDownload style={{ width: 20, height: 20 }} />
+        )}
+      </div>
+      <div className="dl-card-main">
+        <div className="dl-card-head">
+          <b className="dl-card-title" title={d.label}>{d.label}</b>
+          <span className={'badge ' + (d.status === 'done' ? 'badge-success' : d.status === 'failed' ? 'badge-danger' : '')}>
+            {d.status === 'done' ? 'Complete' : d.status === 'failed' ? 'Failed' : 'In progress'}
+          </span>
+        </div>
+        <div className="dl-card-sub">
+          {kindLabel[d.kind] ?? d.kind}
+          {' · '}{new Date(d.at).toLocaleTimeString()}
+        </div>
+        {isActive && <ActiveCardBody d={d} />}
+        {d.status === 'done' && <div className="dl-card-meta done">Complete · {fmtBytes(d.totalBytes)}</div>}
+        {d.status === 'failed' && <div className="dl-card-meta err">The download stopped before finishing.</div>}
+      </div>
+      <div className="dl-card-actions">
+        {isActive && (
+          <Button size="sm" variant="danger" onClick={() => void cancel(d)}>
+            Cancel
+          </Button>
+        )}
+        {d.status === 'failed' && (
+          <Button size="sm" variant="ghost" onClick={() => void refresh()} title="Re-check the download state (the operation can be re-run from its source)">
+            Retry
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ActiveCardBody({ d }: { d: Download }) {
+  const speed = speedMap[d.id] ?? 0
+  const remaining = Math.max(0, (d.totalBytes || 0) - d.downloadedBytes)
+  const eta = speed > 0 ? remaining / speed : null
+  return (
+    <>
+      <div className="progress dl-card-progress">
+        <span style={{ width: `${Math.max(2, d.percent)}%` }} />
+      </div>
+      <div className="dl-card-meta">
+        <AnimatedNumber value={d.percent} format={(v) => `${Math.round(v)}%`} />
+        {d.totalBytes > 0 && <span>{fmtBytes(d.downloadedBytes)} / {fmtBytes(d.totalBytes)}</span>}
+        {speed > 0 && <span>{fmtBytes(speed)}/s</span>}
+        {eta !== null && eta < 3600 && <span>~{humanDuration(eta)} left</span>}
+      </div>
+    </>
+  )
+}
+
+
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spinner /></div>
   }
 
-  const renderCard = (d: Download) => {
-    const speed = speedMap[d.id] ?? 0
-    const remaining = Math.max(0, (d.totalBytes || 0) - d.downloadedBytes)
-    const eta = speed > 0 ? remaining / speed : null
-    const isActive = d.status === 'downloading'
-    return (
-      <div key={d.id} className={'dl-card' + (isActive ? ' dl-card-active' : d.status === 'failed' ? ' dl-card-err' : ' dl-card-done')}>
-        <div className="dl-card-art">
-          {/* v1.0.58 — render artwork through ModIcon (the main-process image
-              proxy): direct <img> to remote CDNs is blocked by the renderer
-              CSP and failed intermittently, which is why download covers
-              sometimes didn't show. ModIcon loads via the proxy with a clean
-              fallback. */}
-          {d.iconUrl ? (
-            <ModIcon src={d.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <IconDownload style={{ width: 20, height: 20 }} />
-          )}
-        </div>
-        <div className="dl-card-main">
-          <div className="dl-card-head">
-            <b className="dl-card-title" title={d.label}>{d.label}</b>
-            <span className={'badge ' + (d.status === 'done' ? 'badge-success' : d.status === 'failed' ? 'badge-danger' : '')}>
-              {d.status === 'done' ? 'Complete' : d.status === 'failed' ? 'Failed' : 'In progress'}
-            </span>
-          </div>
-          <div className="dl-card-sub">
-            {kindLabel[d.kind] ?? d.kind}
-            {' · '}{new Date(d.at).toLocaleTimeString()}
-          </div>
-          {isActive && (
-            <>
-              <div className="progress dl-card-progress">
-                <span style={{ width: `${Math.max(2, d.percent)}%` }} />
-              </div>
-              <div className="dl-card-meta">
-                <AnimatedNumber value={d.percent} format={(v) => `${Math.round(v)}%`} />
-                {d.totalBytes > 0 && <span>{fmtBytes(d.downloadedBytes)} / {fmtBytes(d.totalBytes)}</span>}
-                {speed > 0 && <span>{fmtBytes(speed)}/s</span>}
-                {eta !== null && eta < 3600 && <span>~{humanDuration(eta)} left</span>}
-              </div>
-            </>
-          )}
-          {d.status === 'done' && (
-            <div className="dl-card-meta done">Complete · {fmtBytes(d.totalBytes)}</div>
-          )}
-          {d.status === 'failed' && (
-            <div className="dl-card-meta err">The download stopped before finishing.</div>
-          )}
-        </div>
-        <div className="dl-card-actions">
-          {isActive && (
-            <Button size="sm" variant="danger" onClick={() => void cancel(d)}>
-              Cancel
-            </Button>
-          )}
-          {d.status === 'failed' && (
-            <Button size="sm" variant="ghost" onClick={() => void refresh()} title="Re-check the download state (the operation can be re-run from its source)">
-              Retry
-            </Button>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   const hero = active ?? launchActive
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="section-head">
@@ -203,47 +204,61 @@ export function DownloadsPage() {
         <Button onClick={refresh}><IconRefresh style={{ width: 14, height: 14 }} /> Refresh</Button>
       </div>
 
+      {/* Now — the single hero of the page */}
+      <div className="dl-hero">
+        {hero ? (
+          <>
+            <div className="dl-hero-art">
+              {active?.iconUrl ? (
+                <ModIcon src={active.iconUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <IconDownload style={{ width: 26, height: 26 }} />
+              )}
+            </div>
+            <div className="dl-hero-main">
+              <div className="dl-hero-top">
+                <div style={{ minWidth: 0 }}>
+                  <b className="dl-hero-title" title={hero.label}>{hero.label}</b>
+                  <small>
+                    {hero.id ? 'Downloading in real time' : 'Streaming from the launch pipeline'}
+                    {active?.kind && ` · ${kindLabel[active.kind] ?? active.kind}`}
+                  </small>
+                </div>
+                {hero.id && (
+                  <Button size="sm" variant="danger" onClick={() => void cancel(hero as { id: string; label: string })}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+              <div className="dl-hero-progress">
+                <span style={{ width: `${Math.max(3, hero.percent)}%` }} />
+              </div>
+              <div className="dl-hero-meta">
+                <span className="dl-hero-pct"><AnimatedNumber value={hero.percent} format={(v) => `${Math.round(v)}%`} /></span>
+                {active && active.totalBytes > 0 && (
+                  <span>{fmtBytes(active.downloadedBytes)} / {fmtBytes(active.totalBytes)}</span>
+                )}
+                {activeSpeed > 0 && <span className="dl-hero-speed">{fmtBytes(activeSpeed)}/s</span>}
+                {activeEta !== null && activeEta < 3600 && <span>~{humanDuration(activeEta)} left</span>}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="dl-hero-idle">
+            <div className="dl-hero-art idle"><IconDownload style={{ width: 24, height: 24 }} /></div>
+            <div>
+              <b>All quiet here</b>
+              <small>Installs appear the moment they start — with real artwork and byte-level progress.</small>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Summary chips */}
       <div className="dl-summary">
         <span className="dl-summary-chip">{inProgress.length} in progress</span>
         <span className="dl-summary-chip ok">{done.length} completed</span>
         {failed.length > 0 && <span className="dl-summary-chip err">{failed.length} failed</span>}
-      </div>
-
-      <div className="panel dl-now">
-        {hero ? (
-          <>
-            <div className="dl-now-head">
-              <div className="dl-now-icon"><IconDownload /></div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <b>{hero.label}</b>
-                <small>{hero.id ? 'Downloading in real time' : 'Streaming from the launch pipeline'}</small>
-              </div>
-              {hero.id && (
-                <Button size="sm" variant="danger" onClick={() => void cancel(hero as { id: string; label: string })}>
-                  Cancel
-                </Button>
-              )}
-              {!hero.id && <Spinner />}
-            </div>
-            <div className="progress dl-now-progress"><span style={{ width: `${Math.max(3, hero.percent)}%` }} /></div>
-            <div className="dl-meta" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              <span>Progress <AnimatedNumber value={hero.percent} format={(v) => `${Math.round(v)}%`} /></span>
-              {active && active.totalBytes > 0 && (
-                <span>{fmtBytes(active.downloadedBytes)} / {fmtBytes(active.totalBytes)}</span>
-              )}
-              {activeSpeed > 0 && <span>{fmtBytes(activeSpeed)}/s</span>}
-              {activeEta !== null && activeEta < 3600 && <span>~{humanDuration(activeEta)} left</span>}
-            </div>
-          </>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 2px' }}>
-            <div className="dl-now-icon idle"><IconDownload /></div>
-            <div>
-              <b>No active downloads</b>
-              <small>Installs appear here the moment they start — with the mod's real artwork and byte-level progress.</small>
-            </div>
-          </div>
-        )}
       </div>
 
       {history.length === 0 ? (
@@ -261,8 +276,6 @@ export function DownloadsPage() {
               <div className="dl-grid">{inProgress.map(renderCard)}</div>
             </div>
           )}
-          {/* v1.0.52 — never an awkward empty "in progress" area: when nothing
-              is downloading but history exists, say so in the app's tone. */}
           {inProgress.length === 0 && (done.length > 0 || failed.length > 0) && (
             <div className="dl-group">
               <div className="dl-group-title">In progress</div>

@@ -25,6 +25,8 @@ import type { ProjectType } from './mods/modrinth'
 import { launcher } from './minecraft/launcher'
 import { futureSystems } from './mods/placeholders'
 import { shareService } from './share/share'
+import { musicStore } from './music/music-store'
+import { spotifyService } from './music/spotify'
 import {
   openConsoleWindow,
   hideConsoleWindow,
@@ -723,6 +725,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.shareImportZip, (zipPath: string, exclude?: string[]) => shareService.importZip(zipPath, exclude ?? []))
   // v1.0.81 — per-folder byte sizes for the export picker UI.
   on(IPC.shareFolderSizes, (profileId) => shareService.folderSizes(profileId))
+
+  /* ------------------------- music + spotify (v1.0.85) ------------------------- */
+
+  on(IPC.musicList, () => musicStore.listTracks())
+  on(IPC.musicAdd, () => musicStore.addTracks())
+  on(IPC.musicRemove, (id: string) => musicStore.removeTrack(id))
+  on(IPC.spotifyStatus, () => spotifyService.status())
+  on(IPC.spotifyBegin, (clientId: string) => spotifyService.beginAuth(clientId))
+  on(IPC.spotifyToken, () => spotifyService.getAccessToken())
+  on(IPC.spotifyDisconnect, () => spotifyService.disconnect())
   on(IPC.sharePickZip, async () => {
     const res = await dialog.showOpenDialog(win, {
       title: 'Select a modpack (.mrpack / .zip)',

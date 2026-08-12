@@ -1,12 +1,13 @@
 import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner, ProfileGlyph } from '../components/ui'
 import { api } from '../lib/api'
-import { IconPlay, IconStop, IconTerminal, IconLog, IconFolder } from '../components/icons'
+import { IconPlay, IconStop, IconTerminal, IconLog, IconFolder, IconBolt } from '../components/icons'
 import { humanDuration, timeAgo } from '../lib/format'
 import type { Page } from '../App'
 
-/** The primary launch experience — big play button, live launch progress,
- *  and the selected instance's full setup at a glance. */
+/** The primary launch experience — v1.0.85 visual rebuild. Same engine,
+ *  same actions; a big glowing play card, the instance switch, live launch
+ *  progress and the full setup at a glance. */
 export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const { profiles, activeProfile, setActiveProfile, launchProfile, stopLaunch, launch, running, settings, refreshProfiles, notify } = useApp()
 
@@ -53,16 +54,13 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
         </div>
       </div>
 
-      <div className="card" style={{ padding: '26px 28px', display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
-        {/* Part 6 (V2) — the instance card shows the icon the user chose in
-            Edit/creation (ProfileGlyph handles preset icons + uploaded photos);
-            never a generic launcher logo or letter. */}
+      <div className="card play-card" style={{ padding: '28px 30px', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
         <div className={`profile-avatar instance-avatar ${activeProfile?.icon ? '' : 'plain'}`}>
           {activeProfile ? <ProfileGlyph icon={activeProfile.icon} name={activeProfile.name} /> : '?'}
         </div>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div className="hero-tagline">Ready to play</div>
-          <h2 style={{ fontSize: 24, color: 'var(--text-1)', textShadow: '0 2px 14px rgba(0, 0, 0, 0.45)' }}>
+          <h2 style={{ fontSize: 26, color: 'var(--text-1)', textShadow: '0 2px 14px rgba(0, 0, 0, 0.45)' }}>
             {activeProfile ? activeProfile.name : 'No instance selected'}
           </h2>
           <div className="profile-meta" style={{ marginTop: 8 }}>
@@ -78,7 +76,7 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
             )}
           </div>
         </div>
-        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch', minWidth: 200 }}>
+        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch', minWidth: 210 }}>
           {running ? (
             <Button variant="danger" onClick={() => void stopLaunch()}><IconStop /> Stop game</Button>
           ) : (
@@ -97,7 +95,7 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
       {(busy || running) && (
         <div className="panel dl-active">
           <div className="dl-active-head">
-            <div className="dl-icon"><IconPlay /></div>
+            <div className="dl-icon"><IconBolt /></div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <b>{launch.message || (running ? 'Running' : 'Working…')}</b>
               <small>{running ? 'Minecraft is running — keep using the launcher freely.' : 'Downloading and preparing files…'}</small>

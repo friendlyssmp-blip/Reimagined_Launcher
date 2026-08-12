@@ -82,6 +82,19 @@ export interface LauncherSettings {
   /** Menu music — OFF by default; enabled from Settings. */
   audioMusic: boolean
 
+  /* --------------------- Music library (v1.0.85) --------------------- */
+
+  /** Track file names (relative ids) in the local music library. */
+  audioMusicFiles: string[]
+  /** Background music volume, 0..1 (defaults quiet). */
+  audioMusicVolume: number
+  /** Shuffle the local playlist. */
+  audioMusicShuffle: boolean
+  /** Repeat mode for the local playlist. */
+  audioMusicRepeat: 'off' | 'all' | 'one'
+  /** Spotify for Developers Client ID (user-provided, for PKCE). */
+  spotifyClientId: string
+
   /* ------------------------------ Updates ------------------------------ */
 
   /** Check for new releases automatically on startup (official repo only). */

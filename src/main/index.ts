@@ -5,7 +5,8 @@
  * Supports `--smoke-test` for CI-style verification without a window.
  */
 import path from 'node:path'
-import { app, dialog, Menu } from 'electron'
+import { pathToFileURL } from 'node:url'
+import { app, dialog, Menu, net, protocol } from 'electron'
 import { paths, ensureDataDirs, appVersion } from './paths'
 import { logger, configureLogger, cleanupOldLogs } from './logs/logger'
 import { settingsManager } from './settings/settings-manager'
@@ -16,6 +17,7 @@ import { shareService } from './share/share'
 import { detectJavaRuntimes } from './minecraft/java'
 import { registerIpcHandlers } from './ipc'
 import { createMainWindow, getMainWindow } from './window'
+import { createTray, destroyTray } from './tray'
 import { eventBus } from './core/event-bus'
 import type { Profile } from '@shared/types'
 
@@ -24,6 +26,13 @@ import type { Profile } from '@shared/types'
 // compositor issue). Software rendering is visually flawless for a launcher UI
 // and fixes it everywhere: main window, splash and the game console window.
 // Must run before `app.whenReady()` — see https://electronjs.org/docs/latest/api/app#appdisablehardwareacceleration
+// v1.0.85 — privileged protocol for the local music library: the renderer
+// streams <audio> from reimagined-music://, which the main process serves
+// ONLY from data/music (no arbitrary file reads).
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'reimagined-music', privileges: { secure: true, supportFetchAPI: true, stream: true } }
+])
+
 app.disableHardwareAcceleration()
 
 // Crash net: an uncaught error must be logged (with stack) before anything
@@ -90,6 +99,20 @@ if (!gotLock && !SMOKE && !BENCH) {
         configureLogger(settings)
         await accountStore.load()
 
+        // Serve the local music library over a locked-down custom protocol.
+        const musicRoot = path.resolve(path.join(paths.data, 'music'))
+        protocol.handle('reimagined-music', (request) => {
+          try {
+            const url = new URL(request.url)
+            const name = decodeURIComponent(url.pathname.replace(/^\//, ''))
+            const p = path.resolve(musicRoot, path.basename(name))
+            if (!p.startsWith(musicRoot + path.sep)) return new Response('Forbidden', { status: 403 })
+            return net.fetch(pathToFileURL(p).toString())
+          } catch {
+            return new Response('Not found', { status: 404 })
+          }
+        })
+
         logger.info('Launcher started successfully')
         logger.info(`Reimagined v${appVersion} — platform ${process.platform}/${process.arch}`)
         logger.info(`Data directory: ${paths.data}`)
@@ -109,6 +132,25 @@ if (!gotLock && !SMOKE && !BENCH) {
 
         const win = createMainWindow()
         registerIpcHandlers(win)
+        createTray()
+
+        // v1.0.85 — if the launcher's renderer ever crashes (e.g. memory
+        // pressure while Minecraft is eating RAM), the window dies but the
+        // APP must not: recreate the window so the game session, console and
+        // tray keep working. This is the "the launcher closed by itself" fix.
+        win.webContents.on('render-process-gone', (_e, details) => {
+          logger.warn(`Launcher renderer crashed (${details.reason}) — rebuilding the window`)
+          setTimeout(() => {
+            if (getMainWindow()) return
+            try {
+              const w2 = createMainWindow()
+              registerIpcHandlers(w2)
+              createTray()
+            } catch (err) {
+              logger.exception('Could not rebuild the window after renderer crash', err)
+            }
+          }, 800)
+        })
 
         // v1.0.19: Minecraft survives launcher restarts — reconnect to any
         // game process still running from a previous session (validated PIDs).
@@ -136,7 +178,20 @@ if (!gotLock && !SMOKE && !BENCH) {
     })
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    if (process.platform === 'darwin') return
+    // v1.0.85 — NEVER let the launcher die while a game is running: closing
+    // the window (even accidentally) only hides it to the tray, keeping the
+    // game session and console alive. With no game, quit as before.
+    void import('./minecraft/launcher')
+      .then(({ launcher }) => {
+        if (launcher.isRunning()) {
+          logger.info('Window closed while a game is running — keeping the launcher alive in the tray')
+          // app stays alive; the user can reopen from the tray
+        } else {
+          app.quit()
+        }
+      })
+      .catch(() => app.quit())
   })
 
   // v1.0.19: before a normal quit, remember which Minecraft processes are
@@ -147,6 +202,7 @@ if (!gotLock && !SMOKE && !BENCH) {
   app.on('before-quit', (e) => {
     if (SMOKE || BENCH || quitSessionsSaved) return
     quitSessionsSaved = true
+    destroyTray()
     e.preventDefault()
     void import('./minecraft/session-state')
       .then((m) => m.saveRunningSessions())

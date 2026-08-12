@@ -159,7 +159,16 @@ export const IPC = {
   fpsBoostRemove: 'fpsboost:remove',
 
   // Reliable image proxy (V2 fix) — main-process fetch → data URL
-  contentImage: 'content:image'
+  contentImage: 'content:image',
+
+  // Music (v1.0.85) — local background library + Spotify
+  musicList: 'music:list',
+  musicAdd: 'music:add',
+  musicRemove: 'music:remove',
+  spotifyStatus: 'spotify:status',
+  spotifyBegin: 'spotify:begin',
+  spotifyToken: 'spotify:token',
+  spotifyDisconnect: 'spotify:disconnect'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

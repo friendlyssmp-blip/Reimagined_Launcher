@@ -22,6 +22,9 @@ const activityIcons: Record<string, typeof IconSparkle> = {
   system: IconSparkle
 }
 
+/** Home — v1.0.85 visual rebuild. Same logic, same actions; a calmer,
+ *  more premium reading: a glass hero with the player's skin and the
+ *  active instance front and centre. */
 export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
   const { account, activeProfile, profiles, launchProfile, launch, setModals, setActiveProfile, settings } = useApp()
 
@@ -35,8 +38,9 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div className="hero">
-        <div>
+      <div className="hero home-hero">
+        <div className="home-hero-glow" />
+        <div className="home-hero-main">
           <div className="hero-tagline">Minecraft, rebuilt around the player.</div>
           <h1>{Greeting()}{account.profile ? `, ${account.profile.name}` : ''}</h1>
           <p>Create, manage, and launch your perfect Minecraft experience with a premium launcher built for modders.</p>
@@ -46,7 +50,6 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
                 {starting ? <><Spinner /> Launching…</> : playing ? <><IconGamepad style={{ width: 16, height: 16 }} /> Playing…</> : <><IconPlay style={{ width: 16, height: 16 }} /> Play Minecraft</>}
               </Button>
             ) : signedIn ? (
-              // Signed in but no profiles yet — never show a login prompt here.
               <Button variant="primary" onClick={() => onNavigate('profiles')}>Create your first profile</Button>
             ) : (
               <Button variant="primary" onClick={() => setModals({ login: true })}>Sign in with Microsoft</Button>
@@ -58,9 +61,10 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
         </div>
         {signedIn && account.profile?.id && (
           <div className="hero-stage">
-            <div className="hero-face">
+            <div className="hero-face home-hero-face">
               <SkinHeadPreview url={account.profile?.skins?.[0]?.url} size={96} />
             </div>
+            <div className="home-hero-ring" />
           </div>
         )}
       </div>
@@ -73,7 +77,6 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
               <div className="profile-switch" style={{ marginTop: 12 }}>
                 {profiles.slice(0, 8).map((p) => (
                   <button key={p.id} className={`chip ${activeProfile?.id === p.id ? 'active' : ''}`} onClick={() => setActiveProfile(p.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                    {/* Part 6 (V2) — the instance's own icon travels everywhere. */}
                     <span className="chip-glyph"><ProfileGlyph icon={p.icon} name={p.name} /></span>
                     {p.name}
                     <Badge variant={p.loader.type !== 'vanilla' ? 'accent' : 'default'}>{p.loader.type}</Badge>
@@ -116,7 +119,7 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="panel">
+            <div className="panel home-profile-panel">
               <div className="panel-title">Current Profile</div>
               {activeProfile ? (
                 <>

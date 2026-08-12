@@ -1,3 +1,33 @@
+## v1.0.85 — Portable share codes, tray keep-alive, Music & Spotify, UI rebuilds
+
+### Share codes now work on ANY PC (no server needed)
+- Share codes are now **self-contained**: the full profile snapshot is compressed into the code itself, so it resolves offline on any machine — no more "code doesn't work on another PC".
+- The Share dialog shows the portable code plus the short link; both import the same profile.
+
+### The launcher never dies while you play
+- New system tray: closing the window (or a renderer crash) hides to the tray instead of quitting, and the app stays alive while a game is running — no more losing the console/game because the launcher closed itself.
+- Quit only happens deliberately from the tray menu.
+
+### Music & Spotify (Settings → Audio)
+- **Local library**: drop your own .mp3/.flac/.ogg files into the launcher and play them as background music (play/pause/next/prev, shuffle, repeat, volume) — streamed over a locked-down local protocol.
+- **Spotify**: full connection via Authorization Code + PKCE — paste a free Client ID, authorize inside Spotify's own page, stream through the Web Playback SDK (Premium required). Tokens stored encrypted. Your IP is only ever visible to Spotify.
+- New **startup song** composed to match the splash animation (soft attack, no harsh frequencies).
+
+### Performance & fixes
+- **Xaero's Minimap/World Map** now get a performance-first seed at launch (lighting & biome blending off) — the 110→88 fps map drop is gone.
+- **Mod descriptions** render properly: badges inside links become clean images, raw markdown no longer dumps into the page.
+- **Duplicate-install confirm** now renders above every modal (was hidden behind the UI).
+
+### Settings reorganized + Credits page
+- Sections reordered to make sense (General / Audio / Downloads / Gameplay / Java & Performance / Credits).
+- "Advanced" is now a proper **Credits** page: creator @MoustachePetit and contributor @Fasticraft_MC with their channels, animated and styled.
+
+### UI rebuilds (same colors, same actions — cleaner)
+- **Downloads**: single live hero with real artwork, byte-level progress, speed & ETA; grouped history (In progress / Failed / Completed); friendly empty state.
+- **Home**: glass hero with a glowing player portrait, refined profile panel.
+- **Play**: big glowing play card, cleaner instance picker and progress panel.
+- **Account**: new actions — Refresh session, Copy UUID, Microsoft account link; status badges and a secure-session note.
+
 ## v1.0.84 — Shader crash fixed for real (shadow-safe recovery) + FPS Boost 1.0.32 (faster respawn/teleport + entity crowd fix)
 
 ### The Miniature-shader crash is fixed — surgically

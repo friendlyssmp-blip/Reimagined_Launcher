@@ -16,6 +16,7 @@
  */
 import path from 'node:path'
 import fsp from 'node:fs/promises'
+import zlib from 'node:zlib'
 import { randomBytes } from 'node:crypto'
 import { paths } from '../paths'
 import { exists, readJson, writeJson, mkdirp, dirSize } from '../utils/fs'
@@ -754,6 +755,79 @@ export async function readZip(zipPath: string): Promise<ShareSnapshot> {
 
 /* ------------------------------ Online codes ------------------------------ */
 
+/* ------------------------- PORTABLE CODES (v1.0.85) -------------------------
+ *
+ * A "portable" code embeds the ENTIRE snapshot inside the code string itself
+ * (deflate → base32). It works on ANY launcher, on ANY PC, with NO server,
+ * forever — the code IS the data. This is the fix for share codes failing on
+ * another computer: the Render free-tier backend keeps codes in memory and
+ * loses them on spin-down/restart, so a server-only code could vanish before
+ * the receiver used it. A portable code can't.
+ *
+ * The alphabet is pure uppercase base32 (A–Z, 2–7, no padding) so codes
+ * survive the existing .toUpperCase() normalization and the reimagined://
+ * deep-link regex ([A-Za-z0-9]+) unchanged.
+ */
+const PORTABLE_PREFIX = 'R1'
+
+const B32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+function toBase32(buf: Buffer): string {
+  let bits = 0
+  let value = 0
+  let out = ''
+  for (const byte of buf) {
+    value = (value << 8) | byte
+    bits += 8
+    while (bits >= 5) {
+      out += B32_ALPHABET[(value >>> (bits - 5)) & 31]
+      bits -= 5
+    }
+  }
+  if (bits > 0) out += B32_ALPHABET[(value << (5 - bits)) & 31]
+  return out
+}
+
+function fromBase32(s: string): Buffer {
+  let bits = 0
+  let value = 0
+  const out: number[] = []
+  for (const ch of s) {
+    const idx = B32_ALPHABET.indexOf(ch)
+    if (idx === -1) continue
+    value = (value << 5) | idx
+    bits += 5
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff)
+      bits -= 8
+    }
+  }
+  return Buffer.from(out)
+}
+
+/** Encode a snapshot into a self-contained, portable code. */
+export function encodePortableCode(snapshot: ShareSnapshot): string {
+  const deflated = zlib.deflateSync(Buffer.from(JSON.stringify(snapshot), 'utf-8'))
+  return PORTABLE_PREFIX + toBase32(deflated)
+}
+
+/** Decode a portable code back to a snapshot (null if it isn't one). */
+function decodePortableCode(key: string): ShareSnapshot | null {
+  try {
+    const raw = fromBase32(key.slice(PORTABLE_PREFIX.length))
+    const json = zlib.inflateSync(raw).toString('utf-8')
+    const snap = JSON.parse(json) as ShareSnapshot
+    if (!snap || snap.schema !== 'reimagined-profile' || !Array.isArray(snap.items)) return null
+    return sanitizeSnapshot(snap)
+  } catch {
+    return null
+  }
+}
+
+/** True when a code is a self-contained portable code (R1 prefix + long). */
+function isPortable(key: string): boolean {
+  return key.startsWith(PORTABLE_PREFIX) && key.length > 40
+}
+
 function genLocalCode(): string {
   return randomBytes(8).toString('base64url').replace(/[^A-Za-z0-9]/g, '').slice(0, 11).toUpperCase()
 }
@@ -768,8 +842,9 @@ function genLocalCode(): string {
  * the generating machine can also resolve it offline. If the server is
  * unreachable the code still works on this device (with a warning).
  */
-export async function createCode(profileId: string): Promise<{ code: string; expiresAt: string; snapshot: ShareSnapshot; serverPublished?: boolean }> {
+export async function createCode(profileId: string): Promise<{ code: string; portable: string; expiresAt: string; snapshot: ShareSnapshot; serverPublished?: boolean }> {
   const snapshot = await prepareSnapshot(profileId)
+  const portable = encodePortableCode(snapshot)
   const records = await readRecords()
   pruneExpired(records)
 
@@ -804,7 +879,7 @@ export async function createCode(profileId: string): Promise<{ code: string; exp
   } catch (err) {
     logger.warn(`Could not persist local share record for ${code}: ${(err as Error).message}`)
   }
-  return { code, expiresAt, snapshot, serverPublished }
+  return { code, portable, expiresAt, snapshot, serverPublished }
 }
 
 /**
@@ -815,6 +890,17 @@ export async function createCode(profileId: string): Promise<{ code: string; exp
 export async function resolveCode(code: string): Promise<ShareSnapshot> {
   const key = (code ?? '').trim().toUpperCase()
   if (!key) throw new LauncherError('SHARE_NOT_FOUND', 'Enter a share code first.')
+
+  // v1.0.85 — a portable code IS the snapshot: decode it directly, no server,
+  // no local record needed. Works on any PC even fully offline.
+  if (isPortable(key)) {
+    const portable = decodePortableCode(key)
+    if (portable) {
+      logger.info(`Share code resolved (portable): "${portable.name}" (${portable.minecraftVersion}, ${portable.items.length} items)`)
+      return portable
+    }
+  }
+
   const records = await readRecords()
   const rec = records[key]
   if (rec) {

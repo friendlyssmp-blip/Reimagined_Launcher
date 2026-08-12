@@ -274,7 +274,7 @@ export const api = {
   share: {
     prepare: (profileId: string) => unwrap<ShareSnapshot>(window.reimagined.share.prepare(profileId)),
     create: (profileId: string) =>
-      unwrap<{ code: string; expiresAt: string; snapshot: ShareSnapshot; serverPublished?: boolean }>(
+      unwrap<{ code: string; portable: string; expiresAt: string; snapshot: ShareSnapshot; serverPublished?: boolean }>(
         window.reimagined.share.create(profileId)
       ),
     resolve: (code: string) => unwrap<ShareSnapshot>(window.reimagined.share.resolve(code)),
@@ -293,6 +293,21 @@ export const api = {
     folderSizes: (profileId: string) =>
       unwrap<Record<string, number>>(window.reimagined.share.folderSizes(profileId))
   },
+
+  /** v1.0.85 — local background music + Spotify. */
+  music: {
+    list: () => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.list()),
+    add: () => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.add()),
+    remove: (id: string) => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.remove(id))
+  },
+
+  spotify: {
+    status: () => unwrap<{ connected: boolean; displayName?: string }>(window.reimagined.spotify.status()),
+    begin: (clientId: string) => unwrap<{ ok: boolean; error?: string }>(window.reimagined.spotify.begin(clientId)),
+    token: () => unwrap<{ ok: boolean; token?: string; error?: string }>(window.reimagined.spotify.token()),
+    disconnect: () => unwrap<void>(window.reimagined.spotify.disconnect())
+  },
+
   onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),
   onMaximized: (cb: (v: boolean) => void) => window.reimagined.onMaximized(cb)
 }

@@ -37,6 +37,9 @@ export function ShareModal({ profile }: { profile: Profile }) {
   const [preparing, setPreparing] = useState(true)
   const [busy, setBusy] = useState(false)
   const [code, setCode] = useState<string | null>(null)
+  /* v1.0.85 — self-contained portable code: embeds the whole snapshot, works
+     on any PC with no server. The reliable way to share across machines. */
+  const [portable, setPortable] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
 
   // Part 2 — prepare the shareable package once, then offer both outputs.
@@ -57,25 +60,25 @@ export function ShareModal({ profile }: { profile: Profile }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id])
 
-  const copy = async () => {
-    if (!code) return
+  const copy = async (what: string, label: string) => {
+    if (!what) return
     try {
-      await navigator.clipboard.writeText(code)
-      notify('success', 'Share code copied', 'Paste it in another launcher under “Import with Code”.')
+      await navigator.clipboard.writeText(what)
+      notify('success', label + ' copied', 'Paste it in another launcher under “Import with Code”.')
     } catch {
-      notify('info', 'Share code', code)
+      notify('info', label, what)
     }
   }
 
   const copyLink = async () => {
-    if (!code) return
-    // v1.0.19: the link is a real reimagined:// deep link — opening it (or
-    // pasting it into a launcher that has the protocol registered) lands on
-    // Import with Code with this code ready to preview.
-    const link = `reimagined://share/${code}`
+    // v1.0.19 + v1.0.85: the link embeds the PORTABLE code, so opening it on
+    // any launcher with reimagined:// registered resolves even with no server.
+    const target = portable ?? code
+    if (!target) return
+    const link = `reimagined://share/${target}`
     try {
       await navigator.clipboard.writeText(link)
-      notify('success', 'Share link copied', 'Opening it on this launcher opens Import with the code ready. The code itself is the portable form — it resolves on the launcher that generated it.')
+      notify('success', 'Share link copied', 'Opening it on any launcher with reimagined:// registered imports this profile — it works even without the share server.')
     } catch {
       notify('info', 'Share link', link)
     }
@@ -89,6 +92,7 @@ export function ShareModal({ profile }: { profile: Profile }) {
     try {
       const res = await api.share.create(profile.id)
       setCode(res.code)
+      setPortable(res.portable)
       setExpiresAt(res.expiresAt)
       notify(
         'success',
@@ -176,7 +180,7 @@ export function ShareModal({ profile }: { profile: Profile }) {
               <Field label="Share Code">
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <code className="share-code">{code}</code>
-                  <Button onClick={copy}>Copy Code</Button>
+                  <Button onClick={() => copy(code, 'Share code')}>Copy Code</Button>
                   <Button variant="ghost" onClick={copyLink}>Copy Link</Button>
                 </div>
                 <p style={{ color: 'var(--warning)', fontSize: 12, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -186,6 +190,24 @@ export function ShareModal({ profile }: { profile: Profile }) {
                 <p style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>
                   This code is a fixed snapshot — editing “{profile.name}” later won't change what it resolves to.
                 </p>
+                {portable && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-1)', marginBottom: 6 }}>
+                      Portable code — always works
+                    </div>
+                    <p style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginBottom: 8 }}>
+                      This longer code contains the whole profile itself. It works on <b>any</b> PC, even
+                      offline and even after the share server resets — use it when the short code fails on
+                      another launcher, or send it as the <code className="mono">reimagined://</code> link.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <code className="share-code portable" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.5, fontSize: 11, maxHeight: 96, overflow: 'auto', flex: 1 }}>
+                        {portable}
+                      </code>
+                      <Button onClick={() => copy(portable, 'Portable code')} style={{ flex: '0 0 auto' }}>Copy</Button>
+                    </div>
+                  </div>
+                )}
                 <Button variant="ghost" size="sm" onClick={openExport} style={{ marginTop: 10 }}>
                   Also export as .mrpack (choose folders)
                 </Button>

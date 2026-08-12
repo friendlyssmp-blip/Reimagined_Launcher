@@ -397,6 +397,78 @@ const LEGACY_EMOJI: Record<string, string> = {
   '🛡️': 'shield', '🛡': 'shield'
 }
 
+/* ---------------------- v1.0.85 — music player icons ---------------------- */
+
+export const IconPause = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="6" y="4" width="4" height="16" rx="1.2" />
+    <rect x="14" y="4" width="4" height="16" rx="1.2" />
+  </svg>
+)
+
+export const IconSkipBack = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M19 20 9 12l10-8v16Z" />
+    <path d="M5 19V5" />
+  </svg>
+)
+
+export const IconSkipForward = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m5 4 10 8-10 8V4Z" />
+    <path d="M19 5v14" />
+  </svg>
+)
+
+export const IconShuffle = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M2 18h1.4a2 2 0 0 0 1.6-.8L12 8.8a2 2 0 0 1 1.6-.8H22" />
+    <path d="M2 6h1.4a2 2 0 0 1 1.6.8l2.2 2.9" />
+    <path d="M16 16h-1.4a2 2 0 0 1-1.6-.8l-2.2-2.9" />
+    <path d="M18 4l4 4-4 4" />
+    <path d="M18 16l4 4-4 4" />
+  </svg>
+)
+
+export const IconRepeat = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </svg>
+)
+
+export const IconMusic = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9 18V5l12-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="18" cy="16" r="3" />
+  </svg>
+)
+
+export const IconSpotify = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M7 9.2c3.4-1.2 7-0.8 9.8 0.6" />
+    <path d="M6.6 13.2c2.9-1 5.9-0.7 8.3 0.6" />
+    <path d="M6.8 16.9c2.4-0.9 4.9-0.6 6.9 0.5" />
+  </svg>
+)
+
+export const IconPlus = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+)
+
+export const IconYoutube = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M22.5 7.2a2.8 2.8 0 0 0-2-2C18.9 4.8 12 4.8 12 4.8s-6.9 0-8.5.4a2.8 2.8 0 0 0-2 2A29 29 0 0 0 1.2 12a29 29 0 0 0 .3 4.8 2.8 2.8 0 0 0 2 2c1.6.4 8.5.4 8.5.4s6.9 0 8.5-.4a2.8 2.8 0 0 0 2-2A29 29 0 0 0 22.8 12a29 29 0 0 0-.3-4.8Z" />
+    <path d="m9.8 15.2 5.4-3.2-5.4-3.2v6.4Z" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 /** Resolves any stored profile icon value to a preset icon id, or null when
  *  it is a photo (data URL) / unknown — callers fall back to a letter then. */
 export function profileIconId(icon?: string | null): ProfileIconId | null {

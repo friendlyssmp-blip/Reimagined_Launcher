@@ -65,6 +65,10 @@ let musicBus: GainNode | null = null
 let masterGain: GainNode | null = null
 let limiter: DynamicsCompressorNode | null = null
 let musicEl: HTMLAudioElement | null = null
+/* v1.0.85 — the menu music source can be overridden with a local library
+ * track (reimagined-music://…). null = the bundled track. */
+let musicUrl: string | null = null
+let musicEndedCb: (() => void) | null = null
 let musicBase = 0.45 /* music bus level before ducking, relative to master */
 let ducking = false
 let lastHoverAt = 0
@@ -363,27 +367,44 @@ export const sound = {
     if (!cfg.enabled) return
     switch (phase) {
       case 'atmosphere':
-        /* v1.0.54 — a more developed intro bed: deep sub pad, warm pad,
-         * fifth shimmer and a faint high air — all soft, nothing piercing. */
-        tone(55, 2.4, 0.05, 0, 82, 400)
-        tone(110, 1.9, 0.05, 0.06, 165, 340)
-        tone(220, 1.5, 0.028, 0.16, 330, 280)
-        tone(880, 0.8, 0.012, 0.55, undefined, 220)
+        /* v1.0.85 — the opening of the cue: a warm A-minor bed built in
+         * layers (sub → fifth → root → third), nothing piercing. */
+        tone(55, 2.6, 0.05, 0, 82, 420)
+        tone(110, 2.2, 0.045, 0.05, 165, 380)
+        tone(164.8, 2.0, 0.035, 0.1, 220, 340)
+        tone(220, 1.8, 0.028, 0.18, 261.6, 300)
+        tone(261.6, 1.4, 0.016, 0.38, 329.6, 260)
+        tone(880, 0.9, 0.01, 0.6, undefined, 240)
         break
       case 'ring':
-        /* The energy ring draws — a faint rising shimmer. */
-        tone(440, 0.6, 0.032, 0.05, 660, 220)
-        tone(660, 0.4, 0.02, 0.32, 880, 180)
+        /* The energy ring draws — a soft rising arpeggio (E·A·C). */
+        tone(329.6, 0.5, 0.03, 0.05, 440, 200)
+        tone(440, 0.55, 0.026, 0.16, 523.25, 200)
+        tone(523.25, 0.6, 0.022, 0.3, 659.25, 220)
         break
       case 'logo':
-        /* Logo reveal — gentle bloom at the construction moment. */
-        tone(523, 0.42, 0.05, 0.06, 784, 200)
-        tone(880, 0.5, 0.026, 0.2, undefined, 220)
+        /* Logo reveal — the motif resolves: warm root swell + faint bell. */
+        tone(220, 1.1, 0.045, 0.04, 261.6, 320)
+        tone(329.6, 0.9, 0.032, 0.1, 440, 280)
+        tone(659.25, 0.5, 0.02, 0.18, 880, 240)
+        tone(1046.5, 0.7, 0.012, 0.3, undefined, 300)
         break
       case 'word':
-        /* Typography accent — kept as a soft secondary shimmer. */
-        tone(660, 0.16, 0.04, 0.05, undefined, 140)
-        tone(880, 0.22, 0.028, 0.12, undefined, 180)
+        /* Typography accent — gentle fifth shimmer, quiet. */
+        tone(392, 0.22, 0.028, 0.05, undefined, 160)
+        tone(523.25, 0.3, 0.02, 0.12, undefined, 200)
+        break
+      case 'signature':
+        /* v1.0.85 — the finale: full A-minor → F resolution swell with a
+         * high sparkle; longer and more developed than any UI tick, but
+         * still soft — never fatiguing even on every launch. */
+        tone(110, 2.0, 0.05, 0, 82, 460)
+        tone(220, 1.8, 0.042, 0.06, 174.6, 400)
+        tone(261.6, 1.6, 0.034, 0.14, 220, 360)
+        tone(329.6, 1.4, 0.026, 0.24, 261.6, 320)
+        tone(659.25, 0.9, 0.02, 0.32, 523.25, 300)
+        tone(880, 1.1, 0.016, 0.4, 1046.5, 380)
+        tone(1567.98, 1.4, 0.008, 0.55, 2093, 480)
         break
       case 'signature':
         /* Signature moment — a soft resolving chord, nothing cinematic. */
@@ -473,9 +494,13 @@ export const sound = {
   musicStart(): void {
     if (!cfg.enabled || !cfg.music || musicEl) return
     try {
-      const el = new Audio('./ui/sound/menu1.ogg')
-      el.loop = true
+      // v1.0.85 — a custom library track when one is set (loop off so the
+      // player can auto-advance to the next song), else the bundled loop.
+      const custom = !!musicUrl
+      const el = new Audio(musicUrl ?? './ui/sound/menu1.ogg')
+      el.loop = !custom
       el.volume = Math.min(1, cfg.volume * musicBase)
+      if (custom) el.onended = () => musicEndedCb?.()
       const c = ac()
       if (c && musicBus) {
         /* Route through WebAudio so the limiter + ducking cover it too. */
@@ -488,6 +513,18 @@ export const sound = {
     } catch {
       /* audio unavailable */
     }
+  },
+  /** v1.0.85 — override the menu music source with a local library track. */
+  setMusicUrl(url: string | null): void {
+    if (url === musicUrl) return
+    const wasPlaying = !!musicEl
+    if (musicEl) this.musicStop()
+    musicUrl = url
+    if (wasPlaying && url && cfg.music && cfg.enabled) this.musicStart()
+  },
+  /** v1.0.85 — callback fired when a custom track finishes (auto-advance). */
+  onMusicEnded(cb: (() => void) | null): void {
+    musicEndedCb = cb
   },
   musicStop(): void {
     if (!musicEl) return

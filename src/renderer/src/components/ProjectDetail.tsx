@@ -61,6 +61,20 @@ function renderMarkdown(md: string): string {
 
   const inline = (raw: string): string => {
     let h = escapeHtml(raw)
+    // v1.0.85 — badges: [![alt](image)](link) — image INSIDE a link (the
+    // classic shields.io pattern). Handled first so the generic link regex
+    // never leaves raw syntax behind.
+    h = h.replace(
+      /\[!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)\]\((https?:\/\/[^)\s]+)\)/g,
+      (_m, alt, img, url) => {
+        let isrc = ''
+        let href = ''
+        try { isrc = new URL(String(img)).href } catch { return String(alt) }
+        try { href = new URL(String(url)).href } catch { return String(alt) }
+        const esc = (s: string) => s.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E')
+        return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer"><img src="${esc(isrc)}" alt="${String(alt ?? '').replace(/"/g, '&quot;').slice(0, 120)}" loading="lazy" /></a>`
+      }
+    )
     // Images — rendered inline, never raw markdown syntax.
     h = h.replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, (_m, alt, url) => {
       let href = ''
@@ -190,15 +204,35 @@ function renderMarkdown(md: string): string {
 }
 
 /**
+ * v1.0.85 — detect content that is actually markdown (headings, bold,
+ * images, links, fences, lists, tables, quotes) even when the provider
+ * didn't flag the format — the old "plain text" path showed raw `# title`
+ * and `[![badge]](url)` syntax to the user.
+ */
+function looksLikeMarkdown(t: string): boolean {
+  return /(^|\n)\s{0,3}#{1,6}\s|\*\*|__|!\[|\[[^\]]+\]\((https?:|\/)|```|^\s*[-*+]\s|^\s*\d+[.)]\s|^\s*>\s?|^\s*\|.*\|/m.test(t)
+}
+
+/**
  * Render a provider description/changelog safely. HTML (CurseForge) and
  * markdown-that-is-really-HTML (some Modrinth changelogs) are sanitized;
  * plain markdown goes through the escaped markdown renderer; plain text is
- * escaped paragraph by paragraph.
+ * escaped paragraph by paragraph. v1.0.85 — markdown-looking content with no
+ * explicit format is now rendered as markdown, and badge-style image-in-link
+ * syntax inside HTML content is converted before sanitizing so it can never
+ * show raw.
  */
 function renderBody(text: string, format?: string): string {
   if (!text) return ''
-  if (format === 'html' || isHtmlish(text)) return sanitizeHtml(text)
-  if (format === 'markdown') return renderMarkdown(text)
+  if (format === 'html') return sanitizeHtml(text)
+  if (isHtmlish(text)) {
+    const withBadges = text.replace(
+      /\[!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)\]\((https?:\/\/[^)\s]+)\)/g,
+      '<a href="$3" target="_blank" rel="noopener noreferrer"><img src="$2" alt="$1" loading="lazy" /></a>'
+    )
+    return sanitizeHtml(withBadges)
+  }
+  if (format === 'markdown' || looksLikeMarkdown(text)) return renderMarkdown(text)
   return text
     .split('\n').filter(Boolean)
     .map((p) => '<p>' + p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>')
@@ -1024,16 +1058,21 @@ export function ProjectDetail({
         </span>
       </div>
 
-      {/* Install confirmation with real dependency data */}
-      {confirm && (
-        <InstallConfirmModal
-          target={confirm}
-          onClose={() => setConfirm(null)}
-          onInstalled={(mod) => {
-            if (mod) onInstalledChange(mod)
-          }}
-        />
-      )}
+      {/* Install confirmation with real dependency data. v1.0.85 — portaled to
+          <body> like the lightbox: the page wrapper (.page-enter) animates
+          with transforms, which would trap a fixed overlay inside its stacking
+          context and render it BEHIND the UI. */}
+      {confirm &&
+        createPortal(
+          <InstallConfirmModal
+            target={confirm}
+            onClose={() => setConfirm(null)}
+            onInstalled={(mod) => {
+              if (mod) onInstalledChange(mod)
+            }}
+          />,
+          document.body
+        )}
 
       {/* Part 1 (V2) — full-screen gallery lightbox, portaled to <body> so no
           ancestor transform/overflow can clip it. Click outside or Esc to

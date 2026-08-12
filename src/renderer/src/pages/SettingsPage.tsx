@@ -4,8 +4,9 @@ import { Button, Field, TextInput, Toggle, Slider, Select, Spinner } from '../co
 import { api, friendlyError } from '../lib/api'
 import { sound } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
+import { MusicSection } from '../components/MusicSection'
 import { ModIcon } from '../components/ModIcon'
-import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket } from '../components/icons'
+import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconYoutube } from '../components/icons'
 
 const IconBolt = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -27,15 +28,18 @@ const themes: { id: ThemeId; label: string; colors: string[] }[] = [
   { id: 'obsidian', label: 'Obsidian', colors: ['#0a0a0e', '#15151d', '#9d8cff'] }
 ]
 
+/* v1.0.85 — reorganized settings: logical flow (how it looks → how it sounds
+ * → how it plays → maintenance) and the old "Advanced" section became
+ * "Credits" — a proper animated credits page for the team. */
 const sections = [
   { id: 'general', label: 'General', icon: IconSettings },
+  { id: 'appearance', label: 'Appearance', icon: IconImage },
+  { id: 'audio', label: 'Audio & Music', icon: IconVolume },
   { id: 'minecraft', label: 'Minecraft', icon: IconGamepad },
   { id: 'performance', label: 'Performance', icon: IconBolt },
   { id: 'downloads', label: 'Downloads', icon: IconDownload },
   { id: 'updates', label: 'Updates', icon: IconRefresh },
-  { id: 'appearance', label: 'Appearance', icon: IconImage },
-  { id: 'audio', label: 'Audio', icon: IconVolume },
-  { id: 'advanced', label: 'Advanced', icon: IconGauge }
+  { id: 'credits', label: 'Credits', icon: IconSparkle }
 ] as const
 
 type SectionId = (typeof sections)[number]['id']
@@ -62,9 +66,10 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
   { query: ['preset', 'potato', 'balanced', 'high', 'turbo', 'tier'], section: 'performance', label: 'Performance preset (tier)', desc: 'Engine profile applied on every launch' },
   { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
+  { query: ['music', 'spotify', 'background', 'tracks', 'mp3', 'playlist'], section: 'audio', label: 'Music & Spotify', desc: 'Local music library + Spotify connection for background playback' },
   { query: ['sound pack', 'customize sounds', 'preview sounds', 'aurora'], section: 'audio', label: 'Preview sounds', desc: 'Hear each action cue (single Aurora theme)' },
-  { query: ['about', 'version', 'credits'], section: 'advanced', label: 'About', desc: 'Version, credits and data directory' },
-  { query: ['reset', 'clean release', 'danger'], section: 'advanced', label: 'Clean Release Reset', desc: 'Restore the launcher to a fresh installation' }
+  { query: ['about', 'version', 'credits', 'team', 'creator'], section: 'credits', label: 'Credits', desc: 'The team behind Reimagined, version and data directory' },
+  { query: ['reset', 'clean release', 'danger'], section: 'credits', label: 'Clean Release Reset', desc: 'Restore the launcher to a fresh installation' }
 ]
 
 export function SettingsPage() {
@@ -478,23 +483,52 @@ export function SettingsPage() {
                   ))}
                 </div>
               </div>
+              {/* v1.0.85 — local music library + Spotify, in Settings → Audio */}
+              <div className="panel">
+                <div className="panel-title">Music & Spotify</div>
+                <p className="panel-sub">Your own tracks or your Spotify account — play them quietly in the background while you use the launcher.</p>
+                <div style={{ marginTop: 14 }}>
+                  <MusicSection />
+                </div>
+              </div>
             </>
           )}
 
-          {section === 'advanced' && (
+          {section === 'credits' && (
             <>
-              <div className="panel" style={{ textAlign: 'center', padding: '36px 28px' }}>
-                <BrandLogo height={40} style={{ margin: '0 auto 18px' }} />
-                <h3 style={{ fontSize: 18, marginBottom: 4 }}>Reimagined Launcher</h3>
-                <p className="muted" style={{ marginBottom: 20 }}>Version {info?.version ?? 'Unknown'} · {info?.platform ?? ''}</p>
-                <div className="about-section" style={{ textAlign: 'left', maxWidth: 460, margin: '0 auto', gap: 10 }}>
-                  <div className="about-item">
-                    <div className="about-dot" />
-                    <div className="about-text">
-                      <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Credits</h4>
-                      <p><span style={{ color: 'var(--accent-3)', fontWeight: 600 }}>@MoustachePetit</span> — creator</p>
-                    </div>
+              {/* v1.0.85 — Credits, rebuilt: animated team cards + links */}
+              <div className="panel credits-hero">
+                <BrandLogo height={46} style={{ margin: '0 auto 14px' }} />
+                <h3 style={{ fontSize: 20, marginBottom: 2 }}>Reimagined Launcher</h3>
+                <p className="muted" style={{ fontSize: 12.5 }}>Version {info?.version ?? 'Unknown'} · {info?.platform ?? ''}</p>
+              </div>
+              <div className="credits-grid">
+                <div className="panel credits-card">
+                  <div className="credits-avatar creator">MP</div>
+                  <div>
+                    <div className="credits-role">Creator</div>
+                    <div className="credits-name">@MoustachePetit</div>
+                    <p className="credits-bio">The mind behind Reimagined — every pixel, every sound, every launch.</p>
                   </div>
+                  <Button variant="ghost" size="sm" onClick={() => window.open('https://www.youtube.com/@MoustachePetit', '_blank')}>
+                    <IconYoutube style={{ width: 14, height: 14 }} /> YouTube
+                  </Button>
+                </div>
+                <div className="panel credits-card">
+                  <div className="credits-avatar contributor">FC</div>
+                  <div>
+                    <div className="credits-role">Contributor</div>
+                    <div className="credits-name">@Fasticraft_MC</div>
+                    <p className="credits-bio">Helping shape Reimagined — feedback, testing and ideas that made it better.</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => window.open('https://www.youtube.com/@FireRedzzmc', '_blank')}>
+                    <IconYoutube style={{ width: 14, height: 14 }} /> YouTube
+                  </Button>
+                </div>
+              </div>
+              <div className="panel">
+                <div className="panel-title">About</div>
+                <div className="about-section" style={{ marginTop: 10, gap: 10 }}>
                   <div className="about-item">
                     <div className="about-dot" />
                     <div className="about-text">
