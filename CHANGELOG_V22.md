@@ -1,3 +1,33 @@
+## v1.0.83 — Duplicate-aware installs (Shift + confirm) + Mods version menu matches Modpacks + fixed the instance "…" overflow menu
+
+### Intentional duplicate installs (no accidental ones)
+- The Mods browse rows now detect when an item is **already installed** in the
+  instance: the Install button is disabled and labeled "Installed" (with a hint
+  tooltip). Holding **Shift** re-arms it — the button turns into "Install
+  Duplicate" and clicking shows an explicit confirmation dialog
+  ("Install a duplicate?") before anything downloads. All copy in English.
+- The backend now accepts an `allowDuplicate` flag for installs: the duplicate
+  file gets its own unique name (`Name (duplicate).jar`, then numbered) so it
+  **never overwrites the original**, and the tracked entry keeps a distinct
+  slug so Remove / Update / Change Version act on exactly one copy.
+- The Games → Mods instance picker does the same per-instance: instances that
+  already have the item show an "Installed" badge and need Shift + confirmation
+  to be selected (worlds are exempt — they always install into saves/).
+- Worlds browsing already works from the picker (install into saves/, infinite
+  scroll, search) — unchanged, just verified end-to-end.
+
+### Version menu matches the Modpacks section
+- The Mods global browser's Minecraft version filter is now the same
+  `SearchableSelect` the Modpacks section uses (live filter, pinned
+  "Any Minecraft version") instead of the plain dropdown.
+
+### Fixed the instance "…" overflow menu (Open Folder / Repair / Duplicate / Delete)
+- The menu was rendering as plain unstyled boxes, misaligned under the button.
+  It now uses the shared, properly-styled `ctx-menu` dropdown (dark surface,
+  purple hover, danger-red Delete, icons, anchored below the button) — the same
+  component the mod detail page already uses. This was the only leftover
+  instance of the old unstyled class, so there is nothing else to consolidate.
+
 ## v1.0.82 — Installed list in real time (no more ghost duplicates) + new Games → Mods global browser (any version/loader, worlds included) + faster CurseForge
 
 ### Installed list is now REAL-TIME (no restart, no stale cache)

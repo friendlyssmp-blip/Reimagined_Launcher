@@ -104,20 +104,20 @@ const api = {
       ipcRenderer.invoke(IPC.worldsInstall, { profileId, projectId }),
     searchCurseforge: (profileId: string, query: string, sort?: string, projectType?: string, category?: string, opts?: { offset?: number; limit?: number }): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsSearchCurseforge, { profileId, query, sort, projectType, category, offset: opts?.offset ?? 0, limit: opts?.limit ?? 24 }),
-    installCurseforge: (profileId: string, projectId: string, meta?: unknown, projectType?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsInstallCurseforge, { profileId, projectId, projectType, ...(meta as Record<string, unknown> | undefined) }),
+    installCurseforge: (profileId: string, projectId: string, meta?: unknown, projectType?: string, opts?: { allowDuplicate?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsInstallCurseforge, { profileId, projectId, projectType, allowDuplicate: opts?.allowDuplicate, ...(meta as Record<string, unknown> | undefined) }),
     changeVersion: (profileId: string, slug: string, versionId: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsChangeVersion, { profileId, slug, versionId }),
     setEnabled: (profileId: string, slug: string, enabled: boolean): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsSetEnabled, { profileId, slug, enabled }),
     availableVersions: (profileId: string, slug: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsAvailableVersions, { profileId, slug }),
-    installVersion: (profileId: string, provider: string, projectId: string, versionId: string, projectType?: string, title?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsInstallVersion, { profileId, provider, projectId, versionId, projectType, title }),
+    installVersion: (profileId: string, provider: string, projectId: string, versionId: string, projectType?: string, title?: string, opts?: { allowDuplicate?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsInstallVersion, { profileId, provider, projectId, versionId, projectType, title, allowDuplicate: opts?.allowDuplicate }),
     dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
       ipcRenderer.invoke(IPC.modsDependencies, { profileId, projectId, versionId, projectType }),
-    installWithDeps: (profileId: string, projectId: string, versionId: string, projectType?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modsInstallWithDeps, { profileId, projectId, versionId, projectType })
+    installWithDeps: (profileId: string, projectId: string, versionId: string, projectType?: string, opts?: { allowDuplicate?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modsInstallWithDeps, { profileId, projectId, versionId, projectType, allowDuplicate: opts?.allowDuplicate })
   },
 
   launch: {

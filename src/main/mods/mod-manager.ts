@@ -730,9 +730,10 @@ class ModManager {
     projectId: string,
     versionId: string,
     projectType: ProjectType = 'mod',
-    itemTitle?: string
+    itemTitle?: string,
+    opts?: { allowDuplicate?: boolean }
   ): Promise<ProfileMod> {
-    return runQueued(() => this.installVersionQueued(profileId, provider, projectId, versionId, projectType, itemTitle))
+    return runQueued(() => this.installVersionQueued(profileId, provider, projectId, versionId, projectType, itemTitle, opts))
   }
 
   private async installVersionQueued(
@@ -741,7 +742,8 @@ class ModManager {
     projectId: string,
     versionId: string,
     projectType: ProjectType = 'mod',
-    itemTitle?: string
+    itemTitle?: string,
+    opts?: { allowDuplicate?: boolean }
   ): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mc = profile.minecraftVersion
@@ -760,7 +762,8 @@ class ModManager {
         /* best-effort — the id check below still applies */
       }
     }
-    if (alreadyInstalled(profile, { id: projectId, slug: projectSlug ?? undefined, title: itemTitle }, projectType)) {
+    const existing = alreadyInstalled(profile, { id: projectId, slug: projectSlug ?? undefined, title: itemTitle }, projectType)
+    if (existing && !opts?.allowDuplicate) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 
@@ -808,17 +811,43 @@ class ModManager {
     }
 
     const destDir = this.modsDir(profile, projectType)
-    const dest = path.join(destDir, safeBaseName(file.filename))
-    file = { ...file, filename: safeBaseName(file.filename) }
+    let destName = safeBaseName(file.filename)
+    // Intentional duplicate installs must never overwrite the original file —
+    // give the new copy its own name (Name (duplicate).jar, then numbered).
+    if (existing) {
+      const ext = path.extname(destName)
+      const base = path.basename(destName, ext)
+      let i = 1
+      destName = `${base} (duplicate)${ext}`
+      while (exists(path.join(destDir, destName))) {
+        i += 1
+        destName = `${base} (duplicate ${i})${ext}`
+      }
+    }
+    const dest = path.join(destDir, destName)
+    file = { ...file, filename: destName }
     const { mkdirp } = await import('../utils/fs')
     mkdirp(destDir)
-    if (exists(dest)) await remove(dest)
+    if (!existing && exists(dest)) await remove(dest)
 
     logger.info(`Installing ${provider} ${projectId} @ ${versionId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
       label: `${title} — ${file.version}`
     })
+
+    // Duplicates keep a DISTINCT slug so per-item actions (remove / update /
+    // change version) target exactly one entry instead of every copy of the
+    // same project (remove() filters by slug).
+    if (existing) {
+      let s = `${slug}-dup`
+      let n = 2
+      while (profile.mods.some((m) => m.slug === s)) {
+        s = `${slug}-dup-${n}`
+        n += 1
+      }
+      slug = s
+    }
 
     const mod: ProfileMod = {
       id: projectId,
@@ -843,27 +872,30 @@ class ModManager {
     profileId: string,
     projectId: string,
     meta?: { title?: string; iconUrl?: string; downloads?: number },
-    projectType: ProjectType = 'mod'
+    projectType: ProjectType = 'mod',
+    opts?: { allowDuplicate?: boolean }
   ): Promise<ProfileMod> {
-    return runQueued(() => this.installCurseforgeQueued(profileId, projectId, meta, projectType))
+    return runQueued(() => this.installCurseforgeQueued(profileId, projectId, meta, projectType, opts))
   }
 
   private async installCurseforgeQueued(
     profileId: string,
     projectId: string,
     meta?: { title?: string; iconUrl?: string; downloads?: number },
-    projectType: ProjectType = 'mod'
+    projectType: ProjectType = 'mod',
+    opts?: { allowDuplicate?: boolean }
   ): Promise<ProfileMod> {
     const profile = await this.requireProfile(profileId)
     const mc = profile.minecraftVersion
     const loader: LoaderType = profile.loader.type
 
-    if (alreadyInstalled(profile, { id: String(projectId), slug: String(projectId), title: meta?.title }, projectType)) {
+    const existing = alreadyInstalled(profile, { id: String(projectId), slug: String(projectId), title: meta?.title }, projectType)
+    if (existing && !opts?.allowDuplicate) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
 
     // Loader filtering only applies to mods — packs aren't loader-specific.
-    const file = await curseforge.latestFile(projectId, mc, projectType === 'mod' ? loader : 'vanilla')
+    let file = await curseforge.latestFile(projectId, mc, projectType === 'mod' ? loader : 'vanilla')
     if (!file) {
       const label = projectType === 'mod' ? (loader === 'vanilla' ? 'Minecraft' : loader) : 'Minecraft'
       throw new LauncherError(
@@ -874,10 +906,25 @@ class ModManager {
     }
 
     const destDir = this.modsDir(profile, projectType)
-    const dest = path.join(destDir, file.filename)
+    let destName = file.filename
+    // Intentional duplicate installs must never overwrite the original file.
+    if (existing) {
+      const ext = path.extname(destName)
+      const base = path.basename(destName, ext)
+      let i = 1
+      destName = `${base} (duplicate)${ext}`
+      while (exists(path.join(destDir, destName))) {
+        i += 1
+        destName = `${base} (duplicate ${i})${ext}`
+      }
+    }
+    const dest = path.join(destDir, destName)
     const { mkdirp } = await import('../utils/fs')
     mkdirp(destDir)
-    if (exists(dest)) await remove(dest)
+    if (!existing && exists(dest)) await remove(dest)
+    // Record the ACTUAL written filename (the duplicate suffix included), so
+    // remove() deletes the copy this entry owns, never the original.
+    file = { ...file, filename: destName }
 
     logger.info(`Installing CurseForge mod ${projectId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
@@ -886,9 +933,23 @@ class ModManager {
       iconUrl: meta?.iconUrl
     })
 
+    // Duplicates keep a DISTINCT slug so per-item actions (remove / update /
+    // change version) target exactly one entry instead of every copy of the
+    // same project (remove() filters by slug).
+    let slug = String(projectId)
+    if (existing) {
+      let s = `${slug}-dup`
+      let n = 2
+      while (profile.mods.some((m) => m.slug === s)) {
+        s = `${slug}-dup-${n}`
+        n += 1
+      }
+      slug = s
+    }
+
     const mod: ProfileMod = {
       id: projectId,
-      slug: projectId,
+      slug,
       title: meta?.title ?? projectId,
       filename: file.filename,
       versionId: String(file.fileId),
@@ -1647,20 +1708,22 @@ class ModManager {
     profileId: string,
     projectId: string,
     versionId?: string,
-    projectType: ProjectType = 'mod'
+    projectType: ProjectType = 'mod',
+    opts?: { allowDuplicate?: boolean }
   ): Promise<InstallWithDepsResult> {
-    return runQueued(() => this.installWithDepsQueued(profileId, projectId, versionId, projectType))
+    return runQueued(() => this.installWithDepsQueued(profileId, projectId, versionId, projectType, opts))
   }
 
   private async installWithDepsQueued(
     profileId: string,
     projectId: string,
     versionId?: string,
-    projectType: ProjectType = 'mod'
+    projectType: ProjectType = 'mod',
+    opts?: { allowDuplicate?: boolean }
   ): Promise<InstallWithDepsResult> {
     const profile = await this.requireProfile(profileId)
     const project = await modrinth.getProject(projectId)
-    if (profile.mods.some((m) => m.id === projectId || m.slug === project.slug)) {
+    if (!opts?.allowDuplicate && profile.mods.some((m) => m.id === projectId || m.slug === project.slug)) {
       throw new LauncherError('MOD_INSTALLED', 'This is already installed in the profile.')
     }
     let targetVersionId = versionId
@@ -1673,7 +1736,7 @@ class ModManager {
     }
 
     // 1. The item itself.
-    const mod = await this.installVersion(profileId, 'modrinth', projectId, targetVersionId, projectType)
+    const mod = await this.installVersion(profileId, 'modrinth', projectId, targetVersionId, projectType, undefined, opts)
     const installedTitles = [mod.title]
     const skipped: string[] = []
 

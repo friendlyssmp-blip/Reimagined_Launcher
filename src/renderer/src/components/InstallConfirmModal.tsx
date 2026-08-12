@@ -29,6 +29,8 @@ export type InstallTarget = {
   projectType: 'mod' | 'resourcepack' | 'datapack' | 'shader'
   /** Specific version (detail page Versions tab); empty = newest compatible. */
   versionId?: string
+  /** v1.0.83 — intentional duplicate install (already present in the profile). */
+  allowDuplicate?: boolean
 }
 
 export function InstallConfirmModal({
@@ -119,7 +121,13 @@ export function InstallConfirmModal({
     setBusy(withDeps ? 'deps' : 'only')
     try {
       if (withDeps && target.provider === 'modrinth') {
-        const res = await api.mods.installWithDeps(activeProfile.id, target.projectId, info.version.id, target.projectType)
+        const res = await api.mods.installWithDeps(
+          activeProfile.id,
+          target.projectId,
+          info.version.id,
+          target.projectType,
+          target.allowDuplicate ? { allowDuplicate: true } : undefined
+        )
         onInstalled(res.mod, res)
         notify(
           'success',
@@ -129,7 +137,15 @@ export function InstallConfirmModal({
       } else {
         // Modrinth = the pinned version; CurseForge = the pinned file id —
         // both go through installVersion with the REAL provider now.
-        const mod = await api.mods.installVersion(activeProfile.id, target.provider, target.projectId, info.version!.id, target.projectType, info.detail?.title)
+        const mod = await api.mods.installVersion(
+          activeProfile.id,
+          target.provider,
+          target.projectId,
+          info.version!.id,
+          target.projectType,
+          info.detail?.title,
+          target.allowDuplicate ? { allowDuplicate: true } : undefined
+        )
         onInstalled(mod)
         // v1.0.35 — install-complete payoff with the success checkmark.
         sound.installComplete()

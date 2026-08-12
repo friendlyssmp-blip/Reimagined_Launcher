@@ -87,6 +87,26 @@ export function ModsPage() {
      overflow (open folder / repair / duplicate / delete) so you never have
      to leave the mods screen to control the instance. */
   const [instanceMenu, setInstanceMenu] = useState(false)
+  /* v1.0.83 — Shift re-arms the Install button so already-installed items can
+     be installed as intentional duplicates (with a confirmation dialog). */
+  const [shiftHeld, setShiftHeld] = useState(false)
+  useEffect(() => {
+    const down = (e: KeyboardEvent): void => {
+      if (e.key === 'Shift') setShiftHeld(true)
+    }
+    const up = (e: KeyboardEvent): void => {
+      if (e.key === 'Shift') setShiftHeld(false)
+    }
+    const blur = (): void => setShiftHeld(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', blur)
+    }
+  }, [])
 
   // Close the instance overflow menu on outside click / Escape.
   useEffect(() => {
@@ -425,18 +445,18 @@ export function ModsPage() {
   }
 
   /** Shift-click fast path — install immediately WITH dependencies. */
-  const installFast = async (r: ProviderResult, versionId?: string) => {
+  const installFast = async (r: ProviderResult, versionId?: string, opts?: { allowDuplicate?: boolean }) => {
     if (!activeProfile) return
     setInstallingId(r.projectId)
     try {
       if (r.source === 'curseforge') {
-        const m = await api.mods.installCurseforge(activeProfile.id, r.projectId, { title: r.title, iconUrl: r.iconUrl, downloads: r.downloads }, contentType)
+        const m = await api.mods.installCurseforge(activeProfile.id, r.projectId, { title: r.title, iconUrl: r.iconUrl, downloads: r.downloads }, contentType, opts)
         setInstalled(await api.mods.list(activeProfile.id))
         notify('success', 'Installed from CurseForge', `${m.title} v${m.versionNumber}`)
         setInstallingId(null)
         return
       }
-      const res = await api.mods.installWithDeps(activeProfile.id, r.projectId, versionId, contentType)
+      const res = await api.mods.installWithDeps(activeProfile.id, r.projectId, versionId, contentType, opts)
       setInstalled(await api.mods.list(activeProfile.id))
       notify(
         'success',
@@ -894,16 +914,40 @@ export function ModsPage() {
         <Button
           size="sm"
           variant={isInstalled(r) ? 'ghost' : 'primary'}
-          disabled={installingId === r.projectId || isInstalled(r)}
+          disabled={installingId === r.projectId || (isInstalled(r) && !shiftHeld)}
           onClick={(e) => {
             e.stopPropagation()
+            const wasShift = e.shiftKey
+            // v1.0.83 — an already-installed item needs Shift + an explicit
+            // duplicate confirmation before it can be installed again (the
+            // button is only clickable while Shift is held, so the install
+            // always uses the with-deps fast path + allowDuplicate).
+            if (isInstalled(r)) {
+              setModals({
+                confirm: {
+                  title: 'Install a duplicate?',
+                  message: `“${r.title}” is already installed in this instance. Do you want to install a duplicate copy?`,
+                  confirmLabel: 'Install Duplicate',
+                  onConfirm: () => void installFast(r, undefined, { allowDuplicate: true })
+                }
+              })
+              return
+            }
             // Shift-click skips the confirmation and installs with deps.
-            if (e.shiftKey) void installFast(r)
+            if (wasShift) void installFast(r)
             else setInstallConfirm({ provider: r.source === 'curseforge' ? 'curseforge' : 'modrinth', projectId: r.projectId, projectType: contentType })
           }}
-          title="Install (hold Shift to install immediately with dependencies)"
+          title={isInstalled(r) ? 'Already installed in this instance — hold Shift to install a duplicate' : 'Install (hold Shift to install immediately with dependencies)'}
         >
-          {installingId === r.projectId ? <Spinner /> : isInstalled(r) ? 'Installed' : 'Install'}
+          {installingId === r.projectId ? (
+            <Spinner />
+          ) : isInstalled(r) && shiftHeld ? (
+            'Install Duplicate'
+          ) : isInstalled(r) ? (
+            'Installed'
+          ) : (
+            'Install'
+          )}
         </Button>
       </div>
     </div>
@@ -1244,16 +1288,21 @@ export function ModsPage() {
           <Button variant="ghost" onClick={() => setModals({ share: { profile: activeProfile } })} title="Share this instance">
             <IconShare style={{ width: 14, height: 14 }} /> Share
           </Button>
-          <div className="overflow-menu" style={{ position: 'relative' }}>
-            <Button variant="ghost" size="sm" onClick={() => setInstanceMenu((v) => !v)} title="More actions">
+          <div className="overflow-menu">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (!instanceMenu) sound.menuOpen()
+                setInstanceMenu((v) => !v)
+              }}
+              title="More actions"
+            >
               <IconDots style={{ width: 15, height: 15 }} />
             </Button>
             {instanceMenu && (
-              <div
-                className="overflow-menu-pop"
-                onMouseDown={(e) => e.stopPropagation()}
-                style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 80, minWidth: 190 }}
-              >
+              <div className="ctx-menu" onMouseDown={(e) => e.stopPropagation()}>
+
                 <button onClick={() => { setInstanceMenu(false); void openInstTabFolder() }}>
                   <IconFolder style={{ width: 14, height: 14 }} /> Open Folder
                 </button>

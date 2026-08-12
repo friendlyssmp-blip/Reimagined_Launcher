@@ -10,13 +10,27 @@
  *     version that WILL be installed for that instance's MC version/loader
  *     (real API resolution, nothing downloaded yet)
  */
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { Modal, Button, Spinner, Badge, ProfileGlyph, TextInput } from './ui'
 import { api, friendlyError } from '../lib/api'
 import { sound } from '../lib/sound'
+import { normalizeTitle } from '../lib/text'
 import { IconCheck } from './icons'
-import type { Profile } from '@shared/types'
+import type { Profile, ProfileMod } from '@shared/types'
+
+/** v1.0.83 — is this item already tracked as installed in a profile? Matches
+ *  by real id / slug / normalized title so a Modrinth install is caught when
+ *  browsing the same project on CurseForge (and vice versa). */
+function matchInstalled(mods: ProfileMod[], t: PickTarget): boolean {
+  if (t.projectType === 'world') return false
+  return mods.some(
+    (m) =>
+      m.id === t.projectId ||
+      m.slug === t.projectId ||
+      (t.title !== undefined && normalizeTitle(m.title) === normalizeTitle(t.title))
+  )
+}
 
 export type PickTarget = {
   provider: 'modrinth' | 'curseforge'
@@ -45,13 +59,59 @@ export function PickInstanceModal({
   target: PickTarget
   onClose: () => void
 }) {
-  const { profiles, activeProfile, notify, runGuarded, refreshProfiles } = useApp()
+  const { profiles, activeProfile, notify, runGuarded, refreshProfiles, setModals } = useApp()
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [versionFor, setVersionFor] = useState<Record<string, { versionNumber: string; versionId: string; error?: string }>>({})
   const [resolving, setResolving] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const resolveSeq = useRef(0)
+  /* v1.0.83 — per-instance already-installed detection (local disk scan). */
+  const [installedIn, setInstalledIn] = useState<Record<string, boolean>>({})
+  /* v1.0.83 — Shift re-arms selection for intentional duplicates. */
+  const [shiftHeld, setShiftHeld] = useState(false)
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent): void => {
+      if (e.key === 'Shift') setShiftHeld(true)
+    }
+    const up = (e: KeyboardEvent): void => {
+      if (e.key === 'Shift') setShiftHeld(false)
+    }
+    const blur = (): void => setShiftHeld(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', blur)
+    }
+  }, [])
+
+  /* Load each instance's tracked mods once to flag duplicates (worlds skip). */
+  useEffect(() => {
+    if (target.projectType === 'world') return
+    let active = true
+    void (async () => {
+      const map: Record<string, boolean> = {}
+      await Promise.all(
+        profiles.map(async (p) => {
+          try {
+            const mods = await api.mods.list(p.id)
+            if (active) map[p.id] = matchInstalled(mods, target)
+          } catch {
+            /* leave unmarked — the backend still guards duplicates */
+          }
+        })
+      )
+      if (active) setInstalledIn(map)
+    })()
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles, target.projectId, target.projectType])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -93,6 +153,7 @@ export function PickInstanceModal({
   const installInto = async (p: Profile) => {
     setBusy(true)
     try {
+      const allowDup = target.projectType !== 'world' && installedIn[p.id] === true
       if (target.projectType === 'world') {
         const res = await api.mods.installWorld(p.id, target.projectId)
         sound.installComplete()
@@ -101,14 +162,14 @@ export function PickInstanceModal({
         const v = await resolveVersion(p)
         if (!v?.versionId) throw new Error('Could not resolve a compatible version.')
         await runGuarded('Install', () =>
-          api.mods.installVersion(p.id, 'curseforge', target.projectId, v.versionId, target.projectType, target.title)
+          api.mods.installVersion(p.id, 'curseforge', target.projectId, v.versionId, target.projectType, target.title, allowDup ? { allowDuplicate: true } : undefined)
         )
         sound.installComplete()
         notify('success', 'Installed', `Installed into "${p.name}".`)
       } else {
         const v = await resolveVersion(p)
         await runGuarded('Install', () =>
-          api.mods.installWithDeps(p.id, target.projectId, v?.versionId, target.projectType)
+          api.mods.installWithDeps(p.id, target.projectId, v?.versionId, target.projectType, allowDup ? { allowDuplicate: true } : undefined)
         )
         sound.installComplete()
         notify('success', 'Installed', `"${target.title ?? 'Item'}" added to "${p.name}".`)
@@ -120,6 +181,20 @@ export function PickInstanceModal({
     } finally {
       setBusy(false)
     }
+  }
+
+  /** v1.0.83 — duplicate gate: already-installed instances need Shift + an
+   *  explicit confirmation before selection is allowed. */
+  const isDup = (p: Profile): boolean => target.projectType !== 'world' && installedIn[p.id] === true
+  const confirmDup = (p: Profile, onYes: () => void): void => {
+    setModals({
+      confirm: {
+        title: 'Install a duplicate?',
+        message: `“${target.title ?? target.projectId}” is already installed in “${p.name}”. Do you want to install a duplicate copy?`,
+        confirmLabel: 'Install Duplicate',
+        onConfirm: onYes
+      }
+    })
   }
 
   const install = async () => {
@@ -181,7 +256,13 @@ export function PickInstanceModal({
       {activeProfile && !gateReason(target, activeProfile) && (
         <button
           className="inst-current-btn"
-          onClick={() => void installInto(activeProfile)}
+          onClick={() => {
+            if (isDup(activeProfile) && !shiftHeld) {
+              confirmDup(activeProfile, () => void installInto(activeProfile))
+              return
+            }
+            void installInto(activeProfile)
+          }}
           disabled={busy}
           style={{
             display: 'flex',
@@ -205,9 +286,12 @@ export function PickInstanceModal({
             <ProfileGlyph icon={activeProfile.icon} name={activeProfile.name} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Use “{activeProfile.name}” — current instance</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>
+              Use “{activeProfile.name}” — current instance
+              {isDup(activeProfile) && <span style={{ marginLeft: 8 }}><Badge variant="success">Installed</Badge></span>}
+            </div>
             <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-              {activeProfile.minecraftVersion} · {activeProfile.loader.type} — installs right away
+              {activeProfile.minecraftVersion} · {activeProfile.loader.type} — {isDup(activeProfile) ? (shiftHeld ? 'will install a duplicate' : 'hold Shift to install a duplicate') : 'installs right away'}
             </div>
           </div>
           {busy ? <Spinner /> : <IconCheck style={{ width: 15, height: 15, color: 'var(--accent-3)', flexShrink: 0 }} />}
@@ -230,13 +314,23 @@ export function PickInstanceModal({
         )}
         {filtered.map((p) => {
           const blocked = gateReason(target, p)
+          const dup = isDup(p)
           const v = versionFor[p.id]
           const isSel = selectedId === p.id
           return (
             <button
               key={p.id}
               className={`inst-pick-row${isSel ? ' selected' : ''}${blocked ? ' blocked' : ''}`}
-              onClick={() => void pick(p)}
+              onClick={() => {
+                if (dup && !shiftHeld) {
+                  confirmDup(p, () => {
+                    setSelectedId(p.id)
+                    void pick(p)
+                  })
+                  return
+                }
+                void pick(p)
+              }}
               disabled={!!blocked || busy}
               style={{
                 display: 'flex',
@@ -252,7 +346,7 @@ export function PickInstanceModal({
                 cursor: blocked ? 'not-allowed' : 'pointer',
                 opacity: blocked ? 0.55 : 1
               }}
-              title={blocked ?? (v?.error ? v.error : undefined)}
+              title={blocked ?? (dup ? (shiftHeld ? 'Will install a duplicate copy' : 'Already installed in this instance — hold Shift to install a duplicate') : v?.error ? v.error : undefined)}
             >
               <div
                 className="profile-avatar"
@@ -268,6 +362,7 @@ export function PickInstanceModal({
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3, flexWrap: 'wrap' }}>
                   <Badge>{p.minecraftVersion}</Badge>
                   <Badge variant="accent">{p.loader.type}</Badge>
+                  {dup && <Badge variant="success">Installed</Badge>}
                   {isSel && !blocked && (
                     <span style={{ fontSize: 11.5, color: resolving === p.id ? 'var(--text-3)' : v?.error ? 'var(--danger)' : 'var(--success-2)', fontWeight: 600 }}>
                       {resolving === p.id ? (

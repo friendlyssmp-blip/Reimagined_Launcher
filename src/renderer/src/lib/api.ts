@@ -154,20 +154,20 @@ export const api = {
       unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename, projectType ?? 'mod')),
     searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string, opts?: { offset?: number; limit?: number }) =>
       unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType, category, opts)),
-    installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string) =>
-      unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType)),
+    installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string, opts?: { allowDuplicate?: boolean }) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType, opts)),
     changeVersion: (profileId: string, slug: string, versionId: string) =>
       unwrap<ProfileMod>(window.reimagined.mods.changeVersion(profileId, slug, versionId)),
     setEnabled: (profileId: string, slug: string, enabled: boolean) =>
       unwrap<ProfileMod>(window.reimagined.mods.setEnabled(profileId, slug, enabled)),
     availableVersions: (profileId: string, slug: string) =>
       unwrap<ProjectVersionInfo[]>(window.reimagined.mods.availableVersions(profileId, slug)),
-    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string, title?: string) =>
-      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType, title)),
+    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string, title?: string, opts?: { allowDuplicate?: boolean }) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType, title, opts)),
     dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string) =>
       unwrap<InstallDepInfo[]>(window.reimagined.mods.dependencies(profileId, projectId, versionId, projectType)),
-    installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string) =>
-      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType)),
+    installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string, opts?: { allowDuplicate?: boolean }) =>
+      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType, opts)),
     /** v1.0.82 — global browse (Games → Mods), any MC version + loader. */
     searchAny: (query: string, index?: string, opts?: { mcVersion?: string; loader?: string; projectType?: string; offset?: number; limit?: number }) =>
       unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.mods.searchAny(query, index, opts)),

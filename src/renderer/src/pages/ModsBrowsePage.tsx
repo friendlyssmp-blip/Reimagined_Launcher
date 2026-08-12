@@ -15,6 +15,7 @@ import { Button, TextInput, Spinner, EmptyState, Badge, TabBar } from '../compon
 import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { PickInstanceModal, type PickTarget } from '../components/PickInstanceModal'
+import { SearchableSelect } from '../components/SearchableSelect'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconGlobe } from '../components/icons'
 import type { ModrinthSearchResult } from '@shared/types'
@@ -338,14 +339,18 @@ export function ModsBrowsePage() {
         ))}
       </div>
 
-      {/* Version + loader filters */}
+      {/* Version + loader filters — v1.0.83: the version picker matches the
+          Modpacks section's SearchableSelect (live filter, pinned "Any"). */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <select className="select sort-select" value={mcVersion} onChange={(e) => setMcVersion(e.target.value)} title="Filter by Minecraft version (default: all)">
-          <option value="">All Minecraft versions</option>
-          {mcVersions.map((v) => (
-            <option key={v} value={v}>{v}</option>
-          ))}
-        </select>
+        <SearchableSelect
+          options={mcVersions}
+          value={mcVersion}
+          onChange={(v) => setMcVersion(v)}
+          firstOption="Any Minecraft version"
+          firstValue=""
+          placeholder="Search versions…"
+          className="sort-select"
+        />
         {isMod && (
           <select className="select sort-select" value={loader} onChange={(e) => setLoader(e.target.value as LoaderFilter)} title="Filter by loader">
             <option value="any">Any loader</option>

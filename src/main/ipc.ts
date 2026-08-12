@@ -398,7 +398,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         iconUrl: payload.iconUrl ?? undefined,
         downloads: payload.downloads ?? undefined
       },
-      payload.projectType ?? 'mod'
+      payload.projectType ?? 'mod',
+      payload.allowDuplicate ? { allowDuplicate: true } : undefined
     )
   )
   on(IPC.modsChangeVersion, (payload) =>
@@ -417,7 +418,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       payload.projectId,
       payload.versionId,
       payload.projectType ?? 'mod',
-      payload.title ?? undefined
+      payload.title ?? undefined,
+      payload.allowDuplicate ? { allowDuplicate: true } : undefined
     )
   )
   // Install confirmation — real dependency data + install-with-dependencies.
@@ -434,7 +436,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       payload.profileId,
       payload.projectId,
       payload.versionId ?? undefined,
-      payload.projectType ?? 'mod'
+      payload.projectType ?? 'mod',
+      payload.allowDuplicate ? { allowDuplicate: true } : undefined
     )
   )
 
