@@ -297,14 +297,29 @@ class Launcher {
         if (support.level === 'unsupported') {
           logger.warn('Shader Guard: borderline hardware detected — proceeding anyway (' + support.reasons.join(' ') + ')')
         }
-        // Auto-recovery: the previous session crashed with shaders armed —
-        // disable shaders now and tell the user why (breaks the crash loop).
-        if (settingsManager.get().autoDisableShadersOnCrash && guard.shaderCrashPending(profile)) {
-          guard.disableShadersForSession(profile)
-          eventBus.emit('shaders:auto-disabled', {
-            profileId: profile.id,
-            message: 'Minecraft crashed last time while shaders were enabled, so we disabled them for this session — you can re-enable them in the game.'
-          })
+        // Auto-recovery: the previous session crashed with shaders (armed
+        // flag OR a fresh crash record — the record path covers shaders
+        // enabled in-game after launch, when the flag was never armed) —
+        // recover now and tell the user why (breaks the crash loop). The
+        // recovery MODE is chosen from the recorded crash signature: the
+        // Sodium fence crash (shadow pass) gets the surgical shadow-safe
+        // recovery (pack stays on, shadows off — faster AND stable), any
+        // other shader crash gets the full disable.
+        if (settingsManager.get().autoDisableShadersOnCrash && (await guard.shaderRecoveryPending(profile))) {
+          const mode = (await guard.recoveryModeFor(profile)) ?? 'disable'
+          if (mode === 'shadow-safe') {
+            guard.enableShadowSafeMode(profile)
+            eventBus.emit('shaders:auto-disabled', {
+              profileId: profile.id,
+              message: 'Minecraft crashed last time in the shader shadow pass (a known Intel iGPU issue). Shadows were disabled — the shader pack stays on and will run much faster. You can re-enable shadows in Iris settings at your own risk.'
+            })
+          } else {
+            guard.disableShadersForSession(profile)
+            eventBus.emit('shaders:auto-disabled', {
+              profileId: profile.id,
+              message: 'Minecraft crashed last time while shaders were enabled, so we disabled them for this session — you can re-enable them in the game.'
+            })
+          }
         } else if (settingsManager.get().shaderAutoReduceRd) {
           // Low-VRAM safety: apply the real render-distance cap to options.txt
           // so the shader session starts at a distance this GPU can hold.
@@ -632,10 +647,14 @@ class Launcher {
           // from real data, never from guesswork.
           logger.info(`Crash report (${report.file}) content for debugging:\n${report.snippet.slice(0, 4000)}`)
           eventBus.emit('crash:detected', report)
-          // Shader Guard: a crash on a shader-armed session is recorded so the
-          // next launch auto-disables shaders (no endless crash loop).
-          if (profileUsesShaders(profile)) {
-            const { recordShaderCrash, activeShaderPack } = await import('../anti-crash/shader-guard')
+          // Shader Guard: a crash on a shader session is recorded so the next
+          // launch can auto-recover (no endless crash loop). Recorded whenever
+          // the profile plausibly uses shaders OR the report itself matches a
+          // shader/fence pattern — the armed flag is the in-launch trigger but
+          // the record must survive even when the pack was enabled in-game.
+          const { recordShaderCrash, activeShaderPack, crashSignature } = await import('../anti-crash/shader-guard')
+          const { isShaderCrash } = await import('../game/crash-assistant')
+          if (profileUsesShaders(profile) || isShaderCrash(report.snippet ?? '')) {
             await recordShaderCrash({
               profileId: profile.id,
               profileName: profile.name,
@@ -643,6 +662,9 @@ class Launcher {
               // v1.0.63 — attribute the crash to the ACTIVE pack so the
               // shader browse badges can flag packs that crashed here.
               shaderPack: activeShaderPack(profile) ?? undefined,
+              // v1.0.8x — classify the crash so recovery can pick the
+              // surgical shadow-safe mode for the Sodium fence bug.
+              signature: crashSignature(report.snippet ?? ''),
               at: new Date().toISOString()
             })
             logger.warn(`Shader Guard: session for "${profile.name}" crashed with shaders enabled (${report.cause.slice(0, 120)}) — auto-recovery armed for next launch.`)
@@ -998,6 +1020,16 @@ class Launcher {
         /* malformed or unreadable — fall back to tier defaults */
       }
       const merged: Record<string, unknown> = { ...config, ...existing }
+      // v1.0.8x — reconcile the legacy entity-crowd budget. Pre-1.0.32 config
+      // files keep entityCrowdBudget at the old flat 700 (the field default),
+      // which never engages the entity-animation throttle at realistic crowds
+      // (e.g. a 355-zombie test). The tiered values (240 potato / 420
+      // balanced / 800 high) only fill MISSING keys under the merge, so a
+      // legacy 700 would stick forever — adopt the tier value when the file
+      // still has the old flat default. Any user-chosen value != 700 wins.
+      if (existing.entityCrowdBudget === 700 && typeof config.entityCrowdBudget === 'number') {
+        merged.entityCrowdBudget = config.entityCrowdBudget
+      }
       merged.asyncChunkDecode = s.asyncChunkDecode ?? true
       // v1.0.13 frame-rate safety: the launcher decides the cap every launch
       // (never left to a stale file). When the user opted into "unlimited FPS"

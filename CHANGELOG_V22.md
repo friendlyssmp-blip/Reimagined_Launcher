@@ -1,3 +1,20 @@
+## v1.0.84 — Shader crash fixed for real (shadow-safe recovery) + FPS Boost 1.0.32 (faster respawn/teleport + entity crowd fix)
+
+### The Miniature-shader crash is fixed — surgically
+- Root-caused from FIVE identical real crash reports (Aug 8-12): `Cannot wait on a fence for the current submit` in Sodium's `MappedStagingBuffer.delete` during Iris's SHADOW pass — a known Sodium↔Iris bug that crashes deterministically on older Intel iGPUs (HD 620).
+- New **shadow-safe recovery**: the launcher now disables ONLY shadows (`enableShadows=false`) instead of the whole shader pack. The pack keeps working and runs much faster — the shadow pass is the single most expensive (and crashing) part for a weak GPU.
+- Fixed the recovery pipeline bugs that let this crash loop forever: Iris writes `shaderPack=` (capital P) but the guard matched `shaderpack=`; in-game-enabled shader crashes were never recorded because the launch-time crash flag was never armed. Recording now triggers on the crash report content, classifies the fence signature, and recovery triggers on a fresh (24h) record even without the flag.
+
+### FPS Boost 1.0.32 (26.1 + 26.2)
+- **Teleport/respawn boost**: after a >=6-chunk camera jump (respawn, RTP, dimension travel) the chunk-apply budget rises 12→48/tick for ~1s — the 8-second respawn becomes a quick fill.
+- **Entity crowd budget tiered** (240 potato / 420 balanced / 800 high) so the entity-animation throttle actually engages at realistic crowds (e.g. a 355-zombie stress test) — less render-thread CPU on crowded scenes. Legacy configs with the old flat 700 are reconciled on next launch.
+- Build system: the 26.x build was broken (`Configuration 'mappings' has no dependencies`) — the plugin ID is now chosen per Minecraft generation (`net.fabricmc.fabric-loom` for unobfuscated 26.x, `fabric-loom` for obfuscated 1.21.x), dependencies switch to `implementation`, and `build-all.sh` passes the correct Loom version per target.
+
+### Instance hygiene
+- Removed a duplicated c2me jar (two alpha versions fighting over the chunk pipeline); the newer one stays.
+
+---
+
 ## v1.0.83 — Duplicate-aware installs (Shift + confirm) + Mods version menu matches Modpacks + fixed the instance "…" overflow menu
 
 ### Intentional duplicate installs (no accidental ones)

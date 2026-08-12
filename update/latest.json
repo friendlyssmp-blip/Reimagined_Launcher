@@ -1,8 +1,8 @@
 {
-  "version": "1.0.83",
-  "installer": "dist/Reimagined-Setup-1.0.83.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.83.exe",
-  "sha256": "5ae6581c403089dbd3f80b05dfd8cdffbd27f15a971b15dbd9a0d3357f700552",
-  "notes": "v1.0.83 - Duplicate-aware installs + Mods version menu matches Modpacks + fixed instance overflow menu:\n1) ALREADY-INSTALLED DETECTION + SAFE DUPLICATES: browsing a mod that is already installed in your\n   instance shows a disabled Installed button. Hold Shift to re-arm it (Install Duplicate) and click\n   to confirm - the copy installs with its own unique filename (Name (duplicate).jar), never\n   overwriting the original, and Remove/Update act on exactly one copy. Works in the per-instance\n   Mods page AND in the Games > Mods instance picker (Installed badge + Shift + confirmation).\n2) VERSION MENU: the Mods browser Minecraft version filter now matches the Modpacks section\n   (searchable dropdown with pinned Any Minecraft version).\n3) INSTANCE OVERFLOW MENU FIXED: the Open Folder / Repair Fabric / Duplicate / Delete menu now\n   renders as the proper dark styled dropdown anchored under the button (was unstyled boxes).\n4) Worlds keep working from your instances: browse worlds, infinite scroll, search, install into\n   saves/ of any instance you pick.",
-  "publishedAt": "2026-08-12T16:29:51.576102+00:00"
+  "version": "1.0.84",
+  "installer": "dist/Reimagined-Setup-1.0.84.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.84.exe",
+  "sha256": "ee6414924fceea72c48c541895dc720723016f687c8f76ee1c626a2e3024e90c",
+  "notes": "v1.0.84 - Shader crash fixed for real + FPS Boost 1.0.32 (respawn/teleport + entity fix):\n1) SHADER CRASH FIXED (Miniature/Mellow/TrueLightFX): five identical real crashes were the known\n   Sodium fence bug inside Iris shadow rendering on older Intel iGPUs. New shadow-safe recovery\n   disables ONLY shadows (enableShadows=false) - the shader pack stays on and runs much faster,\n   the crash is gone. Also fixed the recovery pipeline (iris.properties key casing + in-game\n   shader crashes now recorded + 24h recovery window).\n2) FPS BOOST 1.0.32: teleport/respawn boost (chunks apply 4x faster for 1s after a respawn/teleport\n   - the 8s respawn becomes a quick fill) and entity-crowd budget tiered so the animation throttle\n   engages at realistic crowds (355 zombies no longer eat the render thread).\n3) Fixed the mod build for 26.x (Loom plugin ID per generation) so future updates build cleanly;\n   removed a duplicated c2me jar from the instance.",
+  "publishedAt": "2026-08-12T18:00:00.000Z"
 }

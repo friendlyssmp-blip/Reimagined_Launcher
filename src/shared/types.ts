@@ -577,6 +577,8 @@ export interface ShaderCrashRecord {
   cause: string
   /** The shader pack that was ACTIVE at crash time (folder name) — v1.0.63. */
   shaderPack?: string
+  /** Crash-classification: 'fence' = Sodium shadow-pass sync bug (shadow-safe recovery), 'other' = full disable. */
+  signature?: 'fence' | 'other'
   at: string
 }
 

@@ -151,7 +151,11 @@ export function activeShaderPack(profile: Profile): string | null {
   try {
     const irisCfg = path.join(instanceDir(profile), 'config', 'iris.properties')
     const content = fs.readFileSync(irisCfg, 'utf-8')
-    const m = content.match(/^shaderpack=(.+)$/m)
+    // v1.0.8x — Iris writes "shaderPack" (capital P); older builds used
+    // "shaderpack". Match both casings so pack attribution + risk badges work
+    // on real iris.properties files. (Iris writes CRLF; `.` does not match
+    // `\r`, so the value is captured cleanly without the carriage return.)
+    const m = content.match(/^shader[pP]ack=(.+)$/m)
     const pack = m?.[1]?.trim()
     if (pack) return pack
   } catch {
@@ -305,9 +309,17 @@ export function disableShadersForSession(profile: Profile): void {
     } catch {
       content = ''
     }
-    // Blank the active pack (the real Iris key) — shaders will not load.
-    content = content.replace(/^shaderpack=.*$/m, '').replace(/^enableShaders=.*$/m, '')
-    content += '\nshaderpack=\nenableShaders=false\n'
+    // Blank the active pack regardless of key casing (Iris writes
+    // "shaderPack", older versions "shaderpack") — shaders will not load.
+    // Java Properties keeps the LAST occurrence of a key, so stripping every
+    // existing line and appending the authoritative empty values wins.
+    // CRLF-safe: Iris writes `\r\n`, so each stripped line must also consume
+    // the `\r` (`.` never matches it) or a stray carriage return is left
+    // behind on the blanked line.
+    content = content
+      .replace(/^shader[pP]ack=.*\r?$/m, '')
+      .replace(/^enableShaders=.*\r?$/m, '')
+    content += '\nshaderPack=\nenableShaders=false\n'
     fs.writeFileSync(irisCfg, content, 'utf-8')
     logger.info('Shader Guard: shaders auto-disabled for "' + profile.name + '" — recovering from the previous shader crash.')
   } catch (err) {
@@ -315,4 +327,92 @@ export function disableShadersForSession(profile: Profile): void {
   } finally {
     clearShaderCrashFlag(profile)
   }
+}
+
+/**
+ * Shadow-safe recovery (v1.0.8x) — the surgical fix for the Sodium
+ * "Cannot wait on a fence for the current submit" crash family on older
+ * Intel iGPUs. The crash fires inside Iris's shadow pass
+ * (ShadowRenderer → SodiumWorldRenderer.reload → MappedStagingBuffer.delete).
+ * Keeping the shader pack but disabling shadow rendering avoids the crashing
+ * code path entirely AND is the single biggest FPS win for a weak GPU
+ * (shadows can be half the frame cost). The pack stays fully usable — the
+ * user can re-enable shadows from Iris's in-game settings at their own risk.
+ */
+export function enableShadowSafeMode(profile: Profile): void {
+  const dir = instanceDir(profile)
+  try {
+    const irisCfg = path.join(dir, 'config', 'iris.properties')
+    fs.mkdirSync(path.dirname(irisCfg), { recursive: true })
+    let content = ''
+    try {
+      content = fs.readFileSync(irisCfg, 'utf-8')
+    } catch {
+      content = ''
+    }
+    content = content.replace(/^enableShadows=.*\r?$/m, '')
+    content += '\nenableShadows=false\n'
+    fs.writeFileSync(irisCfg, content, 'utf-8')
+    logger.info('Shader Guard: shadow-safe mode enabled for "' + profile.name + '" — shadows disabled, shader pack kept active (fence-crash prevention).')
+  } catch (err) {
+    logger.warn('Shader Guard: could not write shadow-safe iris.properties: ' + (err as Error).message)
+  } finally {
+    clearShaderCrashFlag(profile)
+  }
+}
+
+/**
+ * Sodium↔Iris fence/staging-buffer crash signature — the deterministic
+ * shadow-pass killer on Intel HD iGPUs ("Cannot wait on a fence for the
+ * current submit" in GlCommandEncoder.awaitSubmit / MappedStagingBuffer.delete).
+ */
+const FENCE_SIGNATURE = /fence|awaitsubmit|stagingbuffer|glcommandencoder|glfence/i
+
+/** Classify a crash report snippet: 'fence' (shadow-pass sync bug) or 'other'. */
+export function crashSignature(text: string): 'fence' | 'other' {
+  return FENCE_SIGNATURE.test(text) ? 'fence' : 'other'
+}
+
+/**
+ * Which recovery the next launch should apply for this profile, based on the
+ * most recent recorded shader crash: a fence crash → shadow-safe (keep the
+ * pack, kill only the crashing shadow pass); anything else → full disable.
+ * Returns null when there is no record for this profile. The armed crash flag
+ * is the freshness gate — this only picks the recovery mode, it never
+ * decides WHETHER to recover.
+ */
+/** A crash record is "fresh" for recovery purposes for 24h — long enough to
+ *  break a crash loop, short enough that a stale record after a driver/GPU
+ *  change never keeps forcing recovery forever. */
+const RECOVERY_FRESH_MS = 24 * 60 * 60 * 1000
+
+/**
+ * True when the previous session plausibly crashed with shaders: the armed
+ * in-instance flag OR a fresh (<=24h) shader-crash record for this profile.
+ * The record check covers the real gap where shaders were enabled IN-GAME
+ * (e.g. from the shader pack screen) after the launcher started without them
+ * — in that case the launch-time flag was never armed, but the crash report
+ * detection still writes the record, and this is what triggers recovery.
+ */
+export async function shaderRecoveryPending(profile: Profile): Promise<boolean> {
+  if (shaderCrashPending(profile)) return true
+  const list = await readJson<ShaderCrashRecord[] | null>(RECOVERY_FILE(), null)
+  const records = Array.isArray(list) ? list : []
+  const rec = records.find((r) => r.profileId === profile.id)
+  return !!rec && Date.now() - new Date(rec.at).getTime() < RECOVERY_FRESH_MS
+}
+
+/**
+ * Which recovery the next launch should apply for this profile, based on the
+ * most recent recorded shader crash: a FRESH fence crash → shadow-safe (keep
+ * the pack, kill only the crashing shadow pass); anything else (older record,
+ * non-fence signature, no record) → full disable (conservative).
+ */
+export async function recoveryModeFor(profile: Profile): Promise<'shadow-safe' | 'disable' | null> {
+  const list = await readJson<ShaderCrashRecord[] | null>(RECOVERY_FILE(), null)
+  const records = Array.isArray(list) ? list : []
+  const rec = records.find((r) => r.profileId === profile.id)
+  if (!rec) return null
+  const fresh = Date.now() - new Date(rec.at).getTime() < RECOVERY_FRESH_MS
+  return fresh && rec.signature === 'fence' ? 'shadow-safe' : 'disable'
 }
