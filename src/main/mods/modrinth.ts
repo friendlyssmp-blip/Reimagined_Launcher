@@ -269,11 +269,26 @@ interface FullProjectResponse {
 }
 
 /** Full project info for the shared detail page (body, gallery, stats). */
+/* v1.0.82 — 15-min in-memory detail/version caches. The detail page (and the
+ * per-instance version resolution) re-opens the same project repeatedly in a
+ * session; Modrinth throttles bursts (HTTP 429), so caching keeps previews
+ * instant and the API quiet. */
+const fullProjectCache = new Map<string, { at: number; data: FullProjectResponse }>()
+const versionsListCache = new Map<string, { at: number; data: ProjectVersionInfo[] }>()
+const CACHE_TTL = 15 * 60_000
+
 export async function getProjectFull(projectId: string, projectType: ProjectType = 'mod'): Promise<ProjectDetail> {
-  const project = await apiGet<FullProjectResponse>(`${API}/project/${projectId}`, {
-    headers: headers(),
-    timeoutMs: 15_000
-  })
+  const cached = fullProjectCache.get(projectId)
+  let project: FullProjectResponse
+  if (cached && Date.now() - cached.at < CACHE_TTL) {
+    project = cached.data
+  } else {
+    project = await apiGet<FullProjectResponse>(`${API}/project/${projectId}`, {
+      headers: headers(),
+      timeoutMs: 15_000
+    })
+    fullProjectCache.set(projectId, { at: Date.now(), data: project })
+  }
 
   // Author names come from the project's members endpoint.
   let author = 'Unknown'
@@ -316,6 +331,8 @@ export async function getProjectFull(projectId: string, projectType: ProjectType
 
 /** Every version of a project, newest first, with compatibility info. */
 export async function listVersions(projectId: string, _projectType: ProjectType = 'mod'): Promise<ProjectVersionInfo[]> {
+  const cached = versionsListCache.get(projectId)
+  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.data
   const versions = await apiGet<
     {
       id: string
@@ -333,7 +350,7 @@ export async function listVersions(projectId: string, _projectType: ProjectType 
       }[]
     }[]
   >(`${API}/project/${projectId}/version`, { headers: headers(), timeoutMs: 15_000 })
-  return (versions ?? []).map((v) => ({
+  const mapped = (versions ?? []).map((v) => ({
     id: v.id,
     versionNumber: v.version_number,
     datePublished: v.date_published ?? '',
@@ -354,6 +371,8 @@ export async function listVersions(projectId: string, _projectType: ProjectType 
         fileName: d.file_name
       }))
   }))
+  versionsListCache.set(projectId, { at: Date.now(), data: mapped })
+  return mapped
 }
 
 export const modrinth = { searchMods, getProject, getCategories, latestVersionFor, getProjectFull, listVersions, lookupVersionByHash }

@@ -1,3 +1,46 @@
+## v1.0.82 — Installed list in real time (no more ghost duplicates) + new Games → Mods global browser (any version/loader, worlds included) + faster CurseForge
+
+### Installed list is now REAL-TIME (no restart, no stale cache)
+- **Ghost duplicates fixed**: the Installed panel used to show repeated rows of the
+  same file (e.g. seven "Reimagined FPS Boost" entries) that only cleared after a
+  launcher restart. The reconcile now deduplicates by installed file, keeping the
+  entry with the most complete tracking data.
+- **Live refresh**: while the Installed panel is open, every window focus re-checks
+  the real files on disk — a mod deleted externally disappears immediately, a jar
+  dropped into the folder appears immediately. No delays, no cache to clear.
+
+### New Games → Mods section (global browser)
+- Browse **Modrinth AND CurseForge** for **any Minecraft version** with a loader
+  filter (Any / Fabric / Forge) — mods, resource packs, data packs, shader packs
+  and **Worlds** (1-block, skyblocks, adventure maps…).
+- Clicking Install/Download opens a clean **instance picker**: search your
+  instances by name, see each one's icon/version/loader, and the picker shows the
+  **exact version that will be installed** for that instance's Minecraft version.
+  A **Forge item can never be dropped into a Fabric instance** (and vice versa);
+  Vanilla instances can't take mods at all. Worlds install straight into saves/.
+- The picker has a **"Use current instance" shortcut** — one click installs into
+  the instance you're already working on, skipping the list entirely.
+- **Worlds have a full detail page** too: gallery (screenshots with lightbox),
+  description, stats and the download size — then Download routes through the
+  instance picker like everything else.
+- Library now holds **Instances + Downloads**; Games holds **Mods + Modpacks**.
+
+### Instance controls inside the mods screen
+- The per-instance Mods screen now has **Play/Stop, Edit, Share** and a **3-dot
+  menu** (open folder / repair Fabric / duplicate / delete) — no more leaving the
+  screen just to launch the game.
+
+### CurseForge is fast again
+- The CurseForge proxy (free-tier host) slept after ~15 min idle, so every first
+  request paid a 30–60 s cold boot and the screen could "think" for minutes.
+  Response caching (search/detail/versions) + a keep-warm ping every 5 min + a
+  warm-up on launcher start make repeat visits instant and first visits snappy.
+
+### Right-click menu fixed
+- The instance context menu used to appear in the middle of the launcher instead
+  of under the cursor (a `position:fixed`-inside-transformed-page bug). It's now
+  rendered at the document root and clamped to the screen edge.
+
 ## v1.0.81 — Share codes now REALLY work (server-backed) + .zip exports with your worlds, mods and configs
 
 ### Share codes work across launchers

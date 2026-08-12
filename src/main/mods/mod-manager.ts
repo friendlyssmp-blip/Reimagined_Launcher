@@ -478,11 +478,33 @@ class ModManager {
       if (!present) changed = true
       return present
     })
+    // v1.0.82 — deduplicate by INSTALLED FILE: identical filenames (e.g. a
+    // lost profile entry + a re-scan of the same bundled jar) must collapse
+    // into one row, keeping the entry with the most complete tracking data.
+    // This is what fixed the "7× Reimagined FPS Boost in Installed" ghost
+    // rows that only cleared after a launcher restart.
+    let deduped = verified
+    if (new Set(verified.map((m) => m.filename)).size < verified.length) {
+      const byFile = new Map<string, ProfileMod>()
+      for (const mod of verified) {
+        const key = `${mod.projectType ?? 'mod'}/${mod.filename}`
+        const cur = byFile.get(key)
+        if (!cur) {
+          byFile.set(key, mod)
+          continue
+        }
+        const score = (m: ProfileMod): number =>
+          (m.versionId ? 2 : 0) + (m.iconUrl ? 1 : 0) + (m.source !== 'local' ? 1 : 0)
+        if (score(mod) > score(cur)) byFile.set(key, mod)
+        changed = true
+      }
+      deduped = [...byFile.values()]
+    }
     if (changed) {
-      await profileManager.update(profileId, { mods: verified })
+      await profileManager.update(profileId, { mods: deduped })
       eventBus.emit('mods:changed', { profileId, action: 'reconciled' })
     }
-    return verified
+    return deduped
   }
 
   /**
@@ -518,6 +540,88 @@ class ModManager {
    *  to the browsing content type (mods, resource packs, shaders…). */
   async categories(projectType: string = 'mod'): Promise<string[]> {
     return modrinth.getCategories(projectType as ProjectType)
+  }
+
+  /* ---------------- global browse (v1.0.82) ---------------- */
+
+  /**
+   * Browse Modrinth for ANY Minecraft version + loader — the Games → Mods
+   * section is not tied to a profile. `loader` may be 'fabric' | 'forge' |
+   * undefined ('any'); packs ignore the loader facet.
+   */
+  async searchAny(
+    query: string,
+    index?: string,
+    opts?: { mcVersion?: string; loader?: string; projectType?: ProjectType; offset?: number; limit?: number }
+  ): Promise<{ items: ModrinthSearchResult[]; totalHits: number }> {
+    return modrinth.searchMods({
+      query,
+      mcVersion: opts?.mcVersion,
+      loader: (opts?.loader as LoaderType | undefined) ?? undefined,
+      projectType: opts?.projectType ?? 'mod',
+      index,
+      offset: opts?.offset,
+      limit: opts?.limit
+    })
+  }
+
+  /** Global CurseForge search for the Games → Mods section (any version/loader). */
+  async searchCurseforgeAny(
+    query: string,
+    sort?: 'downloads' | 'newest' | 'recent' | 'name',
+    projectType?: ProjectType,
+    category?: string,
+    opts?: { mcVersion?: string; loader?: string; offset?: number; limit?: number }
+  ): Promise<ModrinthSearchResult[]> {
+    return curseforge.searchMods({
+      query,
+      mcVersion: opts?.mcVersion,
+      sort,
+      projectType: projectType ?? 'mod',
+      category,
+      loader: opts?.loader as LoaderType | undefined,
+      offset: opts?.offset ?? 0,
+      limit: opts?.limit ?? 24
+    })
+  }
+
+  /**
+   * v1.0.82 — resolve the EXACT version that would be installed for a given
+   * instance WITHOUT downloading anything. Used by the instance picker in the
+   * global browse flow to show "will install vX.Y for MC 1.21.x" and to gate
+   * incompatible instances (Forge mod → Fabric profile is rejected here).
+   * Throws MOD_VERSION_MISSING / MOD_INCOMPATIBLE when nothing fits.
+   */
+  async previewVersion(
+    profileId: string,
+    provider: 'modrinth' | 'curseforge',
+    projectId: string,
+    projectType: ProjectType = 'mod'
+  ): Promise<{ versionId: string; versionNumber: string; filename: string }> {
+    const profile = await this.requireProfile(profileId)
+    const mc = profile.minecraftVersion
+    const loader: LoaderType = profile.loader.type
+    const isMod = projectType === 'mod'
+
+    if (provider === 'curseforge') {
+      // Worlds aren't loader-scoped — resolve with 'vanilla' so any instance can take them.
+      const file = await curseforge.latestFile(projectId, mc, isMod ? loader : 'vanilla')
+      if (!file) {
+        throw new LauncherError('MOD_VERSION_MISSING', `No ${loader === 'vanilla' ? 'Minecraft' : loader} version of this project supports Minecraft ${mc}.`)
+      }
+      return { versionId: String(file.fileId), versionNumber: file.version || 'latest', filename: file.filename }
+    }
+
+    const v = await modrinth.latestVersionFor(projectId, mc, loader, projectType)
+    if (!v || !v.files.length || !this.versionCompatible(v, mc, loader, projectType)) {
+      const label = isMod ? (loader === 'vanilla' ? 'Minecraft' : loader) : 'Minecraft'
+      throw new LauncherError(
+        'MOD_VERSION_MISSING',
+        `No ${label} version of this project supports Minecraft ${mc}.`,
+        isMod && loader === 'vanilla' ? 'Add a Fabric or Forge loader to this instance first.' : undefined
+      )
+    }
+    return { versionId: v.id, versionNumber: v.versionNumber, filename: v.files[0].filename }
   }
 
   /** CurseForge search — requires an API key configured in Settings. */

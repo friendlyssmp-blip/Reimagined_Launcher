@@ -22,7 +22,8 @@ const CLASS_IDS: Record<string, number> = {
   resourcepack: 12, // Resource Packs
   shader: 6552, // Shader Packs
   datapack: 6, // Data packs are filed under Mods on CurseForge
-  modpack: 4471 // Modpacks
+  modpack: 4471, // Modpacks
+  world: 17 // Worlds (maps)
 }
 const MOD_CLASS_ID = CLASS_IDS.mod
 
@@ -133,6 +134,50 @@ interface CfCategory {
 /** Cached Minecraft category tree from CurseForge (10 min TTL), per class. */
 const categoriesCache = new Map<number, { at: number; list: CfCategory[] }>()
 
+/* ---------- v1.0.82 — response caching + proxy keep-warm ---------- */
+
+/**
+ * The CurseForge proxy runs on a free-tier host (Render) that sleeps after
+ * ~15 min idle — every first request after a pause pays a 30–60 s cold boot,
+ * and the old code fired TWO+ cold requests per screen open (search + the
+ * category tree), which is exactly the "CurseForge thinks for 3 minutes"
+ * behaviour. Fixes:
+ *   1. in-memory result caches so repeat visits are instant (no network);
+ *   2. a keep-warm ping every 5 min while a proxy is configured, so the
+ *      host rarely sleeps in the first place;
+ *   3. a warm-up ping right after launcher start (before the user opens
+ *      CurseForge) so the first real request hits a hot proxy.
+ */
+const searchCache = new Map<string, { at: number; hits: CfSearchHit[] }>()
+const projectCache = new Map<string, { at: number; p: CfProject }>()
+const versionsCache = new Map<string, { at: number; files: CfFile[] }>()
+
+const SEARCH_TTL = 5 * 60_000
+const PROJECT_TTL = 15 * 60_000
+const VERSIONS_TTL = 15 * 60_000
+
+/** Fire-and-forget ping that keeps the Render instance awake. */
+function pingProxy(): void {
+  try {
+    const proxy = settingsManager.get().curseforgeProxyUrl?.trim()
+    if (!proxy) return
+    const target = `${proxy.replace(/\/+$/, '')}/health`
+    fetch(target, { method: 'GET', signal: AbortSignal.timeout(10_000) }).catch(() => {})
+  } catch {
+    /* warm-up is best-effort */
+  }
+}
+
+let warmTimer: ReturnType<typeof setInterval> | null = null
+
+/** Start (once) the keep-warm loop + an immediate warm-up ping. */
+export function startCurseforgeWarmup(): void {
+  pingProxy()
+  if (warmTimer) return
+  warmTimer = setInterval(pingProxy, 5 * 60_000)
+  warmTimer.unref?.()
+}
+
 class CurseForgeClient {
   /**
    * v1.0.51 — real CurseForge category list scoped to the browsing content
@@ -177,6 +222,25 @@ class CurseForgeClient {
     category?: string
     loader?: LoaderType
   }): Promise<ModrinthSearchResult[]> {
+    // v1.0.82 — first page of a repeated query returns instantly from cache.
+    if ((opts.offset ?? 0) === 0) {
+      const key = JSON.stringify({ q: opts.query, t: opts.projectType ?? 'mod', m: opts.mcVersion ?? '', l: opts.loader ?? '', c: opts.category ?? '', s: opts.sort ?? '' })
+      const cached = searchCache.get(key)
+      if (cached && Date.now() - cached.at < SEARCH_TTL) {
+        return cached.hits.map((h) => ({
+          projectId: String(h.id),
+          slug: h.slug,
+          title: h.name,
+          description: h.summary,
+          iconUrl: h.logo?.url,
+          downloads: h.downloadsCount,
+          followCount: 0,
+          categories: (h.categories ?? []).map((c) => c.name),
+          versions: (h.latestFilesIndexes ?? []).map((l) => l.gameVersion ?? '').filter(Boolean).slice(0, 12),
+          latestVersion: h.latestFilesIndexes?.find((l) => l.gameVersion)?.gameVersion ?? ''
+        }))
+      }
+    }
     const params: Record<string, string | number> = {
       gameId: GAME_ID,
       classId: CLASS_IDS[opts.projectType ?? 'mod'] ?? MOD_CLASS_ID,
@@ -203,6 +267,10 @@ class CurseForgeClient {
     else if (opts.loader === 'forge') params.modLoaderType = MOD_LOADER.forge
 
     const hits = await cfGet<CfSearchHit[]>('/mods/search', params)
+    if ((opts.offset ?? 0) === 0) {
+      const key = JSON.stringify({ q: opts.query, t: opts.projectType ?? 'mod', m: opts.mcVersion ?? '', l: opts.loader ?? '', c: opts.category ?? '', s: opts.sort ?? '' })
+      searchCache.set(key, { at: Date.now(), hits })
+    }
     return hits.map((h) => ({
       projectId: String(h.id),
       slug: h.slug,
@@ -219,7 +287,12 @@ class CurseForgeClient {
 
   /** Full project info for the shared detail page (Part 5). */
   async getProjectFull(projectId: string, projectType?: string): Promise<ProjectDetail> {
-    const p = await cfGet<CfProject>(`/mods/${projectId}`, {})
+    // v1.0.82 — 15-min detail cache: opening the same mod twice in a session
+    // (or back/forward in the detail history) is instant, no proxy round-trip.
+    const pk = `${projectId}|${projectType ?? 'mod'}`
+    const pc = projectCache.get(pk)
+    const p = pc && Date.now() - pc.at < PROJECT_TTL ? pc.p : await cfGet<CfProject>(`/mods/${projectId}`, {})
+    if (!pc || Date.now() - pc.at >= PROJECT_TTL) projectCache.set(pk, { at: Date.now(), p })
     const versionList = await this.listVersions(projectId, projectType)
     const mcPath =
       projectType === 'resourcepack'
@@ -251,10 +324,18 @@ class CurseForgeClient {
 
   /** Every version of a project, newest first, with compatibility info. */
   async listVersions(projectId: string, _projectType?: string): Promise<ProjectVersionInfo[]> {
-    const files = await cfGet<CfFile[]>(
-      `/mods/${projectId}/files`,
-      { pageSize: 50, sortField: 1, sortOrder: 'desc' }
-    )
+    const vk = `${projectId}`
+    const vc = versionsCache.get(vk)
+    let files: CfFile[]
+    if (vc && Date.now() - vc.at < VERSIONS_TTL) {
+      files = vc.files
+    } else {
+      files = await cfGet<CfFile[]>(
+        `/mods/${projectId}/files`,
+        { pageSize: 50, sortField: 1, sortOrder: 'desc' }
+      )
+      versionsCache.set(vk, { at: Date.now(), files: files ?? [] })
+    }
     return (files ?? []).map((f) => ({
       id: String(f.id),
       versionNumber: f.displayName,

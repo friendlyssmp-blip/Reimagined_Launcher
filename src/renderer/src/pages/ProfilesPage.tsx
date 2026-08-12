@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../state/AppContext'
 import { Button, Badge, EmptyState, ProfileGlyph } from '../components/ui'
 import { api, friendlyError } from '../lib/api'
@@ -219,8 +220,15 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
         </div>
       )}
 
-      {/* Custom context menu (Part 10.1) */}
-      {ctxMenu && (
+      {/* Custom context menu (Part 10.1).
+          v1.0.82 — portaled to <body>: .page-enter keeps `will-change:
+          transform`, which turns it into a containing block for position:fixed
+          descendants — the menu was being positioned relative to the page
+          instead of the viewport, so it appeared in the middle of the launcher
+          instead of under the cursor. Portaling escapes that. The position is
+          also clamped so the menu never overflows the screen edge. */}
+      {ctxMenu &&
+        createPortal(
         <div
           className="ctx-menu"
           style={{ left: ctxMenu.x, top: ctxMenu.y, transformOrigin: '0 0' }}
@@ -229,6 +237,18 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
           // before the button's click event can fire — the buttons' onClick
           // never ran as a result).
           onMouseDown={(e) => e.stopPropagation()}
+          ref={(el) => {
+            // v1.0.82 — clamp to the viewport so the menu is always fully visible.
+            if (!el) return
+            const r = el.getBoundingClientRect()
+            const pad = 8
+            const dx = Math.min(0, window.innerWidth - r.right - pad)
+            const dy = Math.min(0, window.innerHeight - r.bottom - pad)
+            if (dx || dy) {
+              el.style.left = `${Math.max(pad, ctxMenu.x + dx)}px`
+              el.style.top = `${Math.max(pad, ctxMenu.y + dy)}px`
+            }
+          }}
         >
           <button
             onClick={() => {
@@ -253,7 +273,8 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
           <button className="danger" onClick={() => confirmDelete(ctxMenu.profile)}>
             <IconTrash style={{ width: 14, height: 14 }} /> Delete
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -167,7 +167,17 @@ export const api = {
     dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string) =>
       unwrap<InstallDepInfo[]>(window.reimagined.mods.dependencies(profileId, projectId, versionId, projectType)),
     installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string) =>
-      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType))
+      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType)),
+    /** v1.0.82 — global browse (Games → Mods), any MC version + loader. */
+    searchAny: (query: string, index?: string, opts?: { mcVersion?: string; loader?: string; projectType?: string; offset?: number; limit?: number }) =>
+      unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.mods.searchAny(query, index, opts)),
+    searchCurseforgeAny: (query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string, opts?: { mcVersion?: string; loader?: string; offset?: number; limit?: number }) =>
+      unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforgeAny(query, sort, projectType, category, opts)),
+    /** v1.0.82 — the exact version a given instance would install (no download). */
+    previewVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, projectType?: string) =>
+      unwrap<{ versionId: string; versionNumber: string; filename: string }>(window.reimagined.mods.previewVersion(profileId, provider, projectId, projectType)),
+    installWorld: (profileId: string, projectId: string) =>
+      unwrap<{ folder: string; title: string }>(window.reimagined.mods.installWorld(profileId, projectId))
   },
   launch: {
     start: (profileId: string) => unwrap<LaunchHandle>(window.reimagined.launch.start(profileId)),

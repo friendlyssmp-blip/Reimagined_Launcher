@@ -25,6 +25,7 @@ import { HomePage } from './pages/HomePage'
 import { PlayPage } from './pages/PlayPage'
 import { ProfilesPage } from './pages/ProfilesPage'
 import { ModsPage } from './pages/ModsPage'
+import { ModsBrowsePage } from './pages/ModsBrowsePage'
 import { ModpacksPage } from './pages/ModpacksPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { DownloadsPage } from './pages/DownloadsPage'
@@ -38,6 +39,7 @@ export type Page =
   | 'play'
   | 'profiles'
   | 'mods'
+  | 'browse'
   | 'modpacks'
   | 'downloads'
   | 'settings'
@@ -62,7 +64,7 @@ function Shell() {
   const loggedInRef = useRef(loggedIn)
   loggedInRef.current = loggedIn
   const navigate = (p: Page): void => {
-    const locked = p === 'play' || p === 'profiles' || p === 'mods' || p === 'modpacks' || p === 'downloads' || p === 'logs'
+    const locked = p === 'play' || p === 'profiles' || p === 'mods' || p === 'browse' || p === 'modpacks' || p === 'downloads' || p === 'logs'
     const next = locked && !loggedIn ? 'home' : p
     if (next === page) return
     setSwitching(true)
@@ -263,7 +265,7 @@ function Shell() {
         {/* v1.0.54 — the global top-bar search is redundant on screens that
             have their own page-level search directly below it (Mods browse,
             Modpacks) — hide it there, keep it everywhere else. */}
-        <TopBar onNavigate={navigate} hideSearch={page === 'mods' || page === 'modpacks'} />
+        <TopBar onNavigate={navigate} hideSearch={page === 'mods' || page === 'modpacks' || page === 'browse'} />
         {/* The scroll surface is NOT keyed (scroll position survives nav); the
            keyed ErrorBoundary remounts the page subtree, so .page-enter inside
            replays the page-level entrance animation on every section switch. */}
@@ -274,6 +276,7 @@ function Shell() {
               {page === 'play' && <PlayPage onNavigate={navigate} />}
               {page === 'profiles' && <ProfilesPage onNavigate={navigate} />}
               {page === 'mods' && <ModsPage />}
+              {page === 'browse' && <ModsBrowsePage />}
               {page === 'modpacks' && <ModpacksPage />}
               {page === 'settings' && <SettingsPage />}
               {page === 'downloads' && <DownloadsPage />}

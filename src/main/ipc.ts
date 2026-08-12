@@ -62,6 +62,10 @@ async function dirBytes(fs: typeof import('node:fs/promises'), dir: string): Pro
 }
 
 export function registerIpcHandlers(win: BrowserWindow): void {
+  // v1.0.82 — keep the CurseForge proxy warm from the moment the launcher
+  // starts (first request after idle used to pay a 30–60 s cold boot, which
+  // is why CurseForge "thought for 3 minutes").
+  import('./mods/curseforge').then((m) => m.startCurseforgeWarmup()).catch(() => {})
   const send = (event: AppEvent): void => {
     if (!win.isDestroyed()) win.webContents.send(EVENT_CHANNEL, event)
   }
@@ -318,6 +322,45 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.modsList, (profileId) => modManager.list(profileId))
   on(IPC.modsSearch, (payload) =>
     modManager.search(payload.profileId, payload.query ?? '', payload.index ?? undefined, payload.opts ?? undefined)
+  )
+  /* v1.0.82 — global browse (Games → Mods): no profile required. */
+  on(IPC.modsSearchAny, (payload) =>
+    modManager.searchAny(
+      payload?.query ?? '',
+      payload?.index ?? undefined,
+      {
+        mcVersion: payload?.mcVersion || undefined,
+        loader: payload?.loader || undefined,
+        projectType: payload?.projectType ?? 'mod',
+        offset: payload?.offset ?? 0,
+        limit: payload?.limit ?? 24
+      }
+    )
+  )
+  on(IPC.modsSearchCurseforgeAny, (payload) =>
+    modManager.searchCurseforgeAny(
+      payload?.query ?? '',
+      payload?.sort ?? undefined,
+      payload?.projectType ?? 'mod',
+      payload?.category ?? undefined,
+      {
+        mcVersion: payload?.mcVersion || undefined,
+        loader: payload?.loader || undefined,
+        offset: payload?.offset ?? 0,
+        limit: payload?.limit ?? 24
+      }
+    )
+  )
+  on(IPC.modsPreviewVersion, (payload) =>
+    modManager.previewVersion(
+      payload?.profileId,
+      payload?.provider ?? 'modrinth',
+      payload?.projectId,
+      payload?.projectType ?? 'mod'
+    )
+  )
+  on(IPC.worldsInstall, (payload) =>
+    import('./game/content').then((m) => m.installWorld(payload?.profileId, payload?.projectId))
   )
   on(IPC.modsCategories, (projectType?: string) => modManager.categories(projectType ?? 'mod'))
   on(IPC.modsInstall, (payload) =>

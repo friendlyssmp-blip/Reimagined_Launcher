@@ -11,7 +11,7 @@ import path from 'node:path'
 import fsp from 'node:fs/promises'
 import { paths } from '../paths'
 import { profileManager } from '../profiles/profile-manager'
-import { listDir, dirSize, exists } from '../utils/fs'
+import { listDir, dirSize, exists, mkdirp } from '../utils/fs'
 import { eventBus } from '../core/event-bus'
 
 export interface WorldEntry {
@@ -79,6 +79,57 @@ export async function listWorlds(profileId: string): Promise<WorldEntry[]> {
   }
   // Largest worlds first.
   return worlds.sort((a, b) => b.sizeBytes - a.sizeBytes)
+}
+
+/**
+ * v1.0.82 — install a CurseForge world/map into an instance's saves folder.
+ * Downloads the world archive (resolved for the profile's MC version) and
+ * extracts it under saves/<title>/. A safe folder name is derived from the
+ * project title so it can never escape saves/.
+ */
+export async function installWorld(profileId: string, projectId: string): Promise<{ folder: string; title: string }> {
+  const root = await instanceRoot(profileId)
+  if (!root) throw new Error('Instance folder not found.')
+  const profile = await profileManager.get(profileId)
+  if (!profile) throw new Error('Profile not found.')
+  const { curseforge } = await import('../mods/curseforge')
+  const file = await curseforge.latestFile(projectId, profile.minecraftVersion, 'vanilla')
+  if (!file) throw new Error(`No version of this world supports Minecraft ${profile.minecraftVersion}.`)
+  const detail = await curseforge.getProjectFull(projectId, 'world').catch(() => null)
+  const title = detail?.title ?? file.filename.replace(/\.zip$/i, '')
+  // Safe single-folder name (never empty, never a traversal).
+  const safeTitle = (title || 'world').replace(/[\\/:*?"<>|]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 80) || 'world'
+
+  const savesDir = path.join(root, 'saves')
+  mkdirp(savesDir)
+  const tmpZip = path.join(savesDir, `.world-dl-${Date.now()}.zip`)
+  try {
+    const { runDownloadBatch } = await import('../minecraft/downloader')
+    await runDownloadBatch([{ url: file.url, dest: tmpZip, expectedSize: file.size }], {
+      kind: 'mods',
+      label: title
+    })
+    const { zipExtractAll } = await import('../utils/zip')
+    const buf = await fsp.readFile(tmpZip)
+    // Never overwrite an existing world silently — move it aside with a
+    // unique "(imported)" suffix (incremented until a free name is found).
+    const dest = path.join(savesDir, safeTitle)
+    if (exists(dest)) {
+      let n = 2
+      let moved = `${dest} (imported)`
+      while (exists(moved)) {
+        moved = `${dest} (imported ${n})`
+        n++
+      }
+      await fsp.rename(dest, moved)
+    }
+    mkdirp(dest)
+    zipExtractAll(buf, dest)
+    eventBus.emit('mods:changed', { profileId, action: 'world-installed', title })
+    return { folder: safeTitle, title }
+  } finally {
+    await fsp.rm(tmpZip, { force: true }).catch(() => {})
+  }
 }
 
 export async function listPacks(profileId: string, kind: 'resourcepacks' | 'shaders'): Promise<PackEntry[]> {

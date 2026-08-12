@@ -25,7 +25,7 @@ import {
 import type { ProfileMod, ProjectDetail as ProjectDetailData, ProjectVersionInfo, ShaderCrashRecord, ShaderSupport } from '@shared/types'
 import { shaderFitFor, shaderFitClass } from '../lib/shaderFit'
 
-type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader' | 'modpack'
+type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader' | 'modpack' | 'world'
 type DetailTab = 'overview' | 'changelog' | 'gallery' | 'versions' | 'includes'
 
 interface PackFile {
@@ -39,7 +39,8 @@ const CONTENT_LABEL: Record<ContentType, string> = {
   resourcepack: 'Resource Pack',
   datapack: 'Data Pack',
   shader: 'Shader Pack',
-  modpack: 'Modpack'
+  modpack: 'Modpack',
+  world: 'World'
 }
 
 /** Minimal, safe markdown renderer — v1.0.52 (Bug 7).
@@ -461,12 +462,13 @@ export function ProjectDetail({
   }
 
   const installLatest = (e?: React.MouseEvent) => {
-    if (!activeProfile) return
-    // Modpack path — page-driven install (new profile is created by the page).
+    // v1.0.82 — page-driven install (global browse / modpacks) must work even
+    // without an active profile; check onInstallVersion BEFORE the guard.
     if (onInstallVersion) {
       if (latest) installPackVersion(latest.id)
       return
     }
+    if (!activeProfile) return
     // CurseForge first — its shift-click fast path is the same install (the
     // proxy exposes no dependency tree for CF), so the Modrinth-only
     // installWithDeps is never called with a CurseForge project id.
@@ -517,8 +519,8 @@ export function ProjectDetail({
   }
 
   const installVersion = (v: ProjectVersionInfo, e?: React.MouseEvent) => {
-    if (!activeProfile) return
-    // Modpack path — page-driven install.
+    // v1.0.82 — page-driven install (global browse / modpacks) works without
+    // an active profile; check onInstallVersion BEFORE the guard.
     if (onInstallVersion) {
       setBusy('v:' + v.id)
       void onInstallVersion(v.id)
@@ -526,6 +528,7 @@ export function ProjectDetail({
         .finally(() => setBusy(null))
       return
     }
+    if (!activeProfile) return
     // CurseForge first — the same install handles plain and shift-click (no
     // dependency tree is available for CF through the proxy).
     if (provider === 'curseforge') {
@@ -758,9 +761,9 @@ export function ProjectDetail({
                 variant="primary"
                 onClick={(e) => installLatest(e)}
                 disabled={busy !== null}
-                title={provider === 'curseforge' ? 'Install from CurseForge' : 'Install (hold Shift to install immediately with dependencies)'}
+                title={projectType === 'world' ? 'Download this world into an instance' : provider === 'curseforge' ? 'Install from CurseForge' : 'Install (hold Shift to install immediately with dependencies)'}
               >
-                {busy === 'latest' ? <><Spinner /> Installing…</> : 'Install'}
+                {busy === 'latest' ? <><Spinner /> {projectType === 'world' ? 'Downloading…' : 'Installing…'}</> : projectType === 'world' ? 'Download' : 'Install'}
               </Button>
             ) : isCurrent ? (
               <Button variant="ghost" disabled>
@@ -976,7 +979,11 @@ export function ProjectDetail({
                           {v.loaders.slice(0, 4).map((l) => <span key={l} className="badge" style={{ marginLeft: 6 }}>{l}</span>)}
                         </div>
                       </div>
-                      {isThisCurrent ? (
+                      {projectType === 'world' ? (
+                        /* v1.0.82 — worlds install through the instance picker as
+                           a whole (latest file → saves/), not per-version. */
+                        <Button variant="ghost" size="sm" disabled title="Worlds install as a full download">Download</Button>
+                      ) : isThisCurrent ? (
                         <Button variant="ghost" size="sm" disabled>Current</Button>
                       ) : compatible ? (
                         <Button

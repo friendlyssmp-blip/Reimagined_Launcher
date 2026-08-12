@@ -52,6 +52,12 @@ export const IPC = {
   modsUpdate: 'mods:update',
   modsSearchCurseforge: 'mods:search-curseforge',
   modsInstallCurseforge: 'mods:install-curseforge',
+  /** v1.0.82 — global browse (Games → Mods): any MC version + loader. */
+  modsSearchAny: 'mods:search-any',
+  modsSearchCurseforgeAny: 'mods:search-curseforge-any',
+  /** v1.0.82 — resolve the exact version a given instance would install. */
+  modsPreviewVersion: 'mods:preview-version',
+  worldsInstall: 'worlds:install',
   modsCategories: 'mods:categories',
   modsLocalFiles: 'mods:local-files',
   modsRemoveLocalFile: 'mods:remove-local-file',

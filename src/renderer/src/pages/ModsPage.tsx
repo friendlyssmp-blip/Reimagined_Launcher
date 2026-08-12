@@ -9,7 +9,7 @@ import { ProjectDetail } from '../components/ProjectDetail'
 import { InstallConfirmModal, type InstallTarget } from '../components/InstallConfirmModal'
 import { UpdateAllModal, type UpdateAllProgress } from '../components/UpdateAllModal'
 import { ModIcon } from '../components/ModIcon'
-import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash } from '../components/icons'
+import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash, IconPlay, IconStop, IconDots, IconShare, IconPencil, IconCopy } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo, ShaderCrashRecord, ShaderSupport } from '@shared/types'
 import { shaderFitFor } from '../lib/shaderFit'
 
@@ -82,7 +82,26 @@ const typeForInst: Record<InstTab, ContentType | null> = {
 const PAGE_SIZE = 24
 
 export function ModsPage() {
-  const { activeProfile, notify, runGuarded, setModals } = useApp()
+  const { activeProfile, notify, runGuarded, setModals, launchProfile, stopLaunch, runningProfiles } = useApp()
+  /* v1.0.82 — instance header actions: Play/Stop, Edit, Share and a 3-dot
+     overflow (open folder / repair / duplicate / delete) so you never have
+     to leave the mods screen to control the instance. */
+  const [instanceMenu, setInstanceMenu] = useState(false)
+
+  // Close the instance overflow menu on outside click / Escape.
+  useEffect(() => {
+    if (!instanceMenu) return
+    const close = (): void => setInstanceMenu(false)
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setInstanceMenu(false)
+    }
+    window.addEventListener('mousedown', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [instanceMenu])
   const [tab, setTab] = useState<SourceTab>('installed')
   const [contentType, setContentType] = useState<ContentType>('mod')
   /* v1.0.56 — per-shader hardware-fit badge: the real Shader Guard assessment
@@ -686,6 +705,32 @@ export function ModsPage() {
     )
   }
 
+  /* v1.0.82 — REAL-TIME Installed list: while the Installed panel is open,
+     every window focus re-verifies against the actual filesystem, so a mod
+     deleted externally (or a file dropped into the folder) shows up/clears
+     immediately — no launcher restart, no stale cache. list() is a local
+     disk reconcile (no network), so this is cheap. */
+  useEffect(() => {
+    if (tab !== 'installed' || !activeProfile) return
+    const onFocus = () => {
+      void api.mods.list(activeProfile.id).then(setInstalled).catch(() => {})
+      const type = typeForInst[instTab] ?? 'mod'
+      api.mods
+        .localFiles(activeProfile.id, type)
+        .then((files) => setManualFiles((prev) => ({ ...prev, [type]: files })))
+        .catch(() => {})
+      // Worlds are live filesystem data too — keep the Worlds sub-tab honest.
+      if (instTab === 'worlds') {
+        api.content
+          .worlds(activeProfile.id)
+          .then((w) => setWorlds(w))
+          .catch(() => {})
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [tab, instTab, activeProfile])
+
   /* Worlds are live filesystem data — load them when the Worlds sub-tab opens. */
   useEffect(() => {
     if (tab !== 'installed' || instTab !== 'worlds' || !activeProfile) return
@@ -1176,10 +1221,103 @@ export function ModsPage() {
         <Fragment>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Mods</h2>
+          <h2 className="page-title">{activeProfile.name}</h2>
           <p className="page-sub">
-            {activeProfile.name} - {activeProfile.loader.type} / {activeProfile.minecraftVersion}
+            {activeProfile.loader.type} / {activeProfile.minecraftVersion}
           </p>
+        </div>
+        {/* v1.0.82 — instance controls right in the mods screen: Play/Stop,
+            Edit, Share and the 3-dot menu (folder / repair / duplicate / delete). */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button
+            variant={runningProfiles[activeProfile.id] ? 'danger' : 'play'}
+            onClick={() => {
+              if (runningProfiles[activeProfile.id]) void stopLaunch(activeProfile.id)
+              else void launchProfile(activeProfile.id)
+            }}
+          >
+            {runningProfiles[activeProfile.id] ? <><IconStop style={{ width: 14, height: 14 }} /> Stop</> : <><IconPlay style={{ width: 14, height: 14 }} /> Play</>}
+          </Button>
+          <Button variant="ghost" onClick={() => setModals({ profile: { mode: 'edit', profile: activeProfile } })} title="Edit this instance">
+            <IconPencil style={{ width: 14, height: 14 }} /> Edit
+          </Button>
+          <Button variant="ghost" onClick={() => setModals({ share: { profile: activeProfile } })} title="Share this instance">
+            <IconShare style={{ width: 14, height: 14 }} /> Share
+          </Button>
+          <div className="overflow-menu" style={{ position: 'relative' }}>
+            <Button variant="ghost" size="sm" onClick={() => setInstanceMenu((v) => !v)} title="More actions">
+              <IconDots style={{ width: 15, height: 15 }} />
+            </Button>
+            {instanceMenu && (
+              <div
+                className="overflow-menu-pop"
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 80, minWidth: 190 }}
+              >
+                <button onClick={() => { setInstanceMenu(false); void openInstTabFolder() }}>
+                  <IconFolder style={{ width: 14, height: 14 }} /> Open Folder
+                </button>
+                {activeProfile.loader.type === 'fabric' && (
+                  <button
+                    onClick={() => {
+                      setInstanceMenu(false)
+                      setModals({
+                        confirm: {
+                          title: 'Repair Fabric instance?',
+                          message: `Repair “${activeProfile.name}” re-checks the Fabric loader for ${activeProfile.minecraftVersion}, moves incompatible mods to mods.incompatible/ and clears the stale remap cache. Worlds, screenshots and config are untouched.`,
+                          confirmLabel: 'Repair',
+                          onConfirm: async () => {
+                            try {
+                              const res = await api.profiles.repair(activeProfile.id)
+                              notify('success', 'Instance repaired', [...res.fixed, ...(res.moved.length > 0 ? [`Moved ${res.moved.length} incompatible mod(s) to mods.incompatible/`] : [])].join(' · ') || 'The Fabric environment is healthy.')
+                            } catch (err) {
+                              notify('error', 'Repair failed', friendlyError(err))
+                            }
+                          }
+                        }
+                      })
+                    }}
+                  >
+                    <IconRefresh style={{ width: 14, height: 14 }} /> Repair Fabric
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setInstanceMenu(false)
+                    setModals({ duplicate: { profile: activeProfile } })
+                  }}
+                >
+                  <IconCopy style={{ width: 14, height: 14 }} /> Duplicate
+                </button>
+                <div className="ctx-sep" />
+                <button
+                  className="danger"
+                  onClick={() => {
+                    setInstanceMenu(false)
+                    setModals({
+                      confirm: {
+                        title: 'Delete profile',
+                        message: `Delete “${activeProfile.name}”? This cannot be undone.`,
+                        confirmLabel: 'Delete',
+                        danger: true,
+                        option: { label: 'Also delete game files (mods, saves, config)', defaultChecked: true },
+                        onConfirm: async ({ optionChecked }) => {
+                          try {
+                            await api.profiles.delete(activeProfile.id, optionChecked)
+                            notify('success', 'Profile deleted', `“${activeProfile.name}” was removed.`)
+                          } catch (err) {
+                            notify('error', 'Could not delete profile', friendlyError(err))
+                          }
+                        }
+                      }
+                    })
+                  }}
+                >
+                  <IconTrash style={{ width: 14, height: 14 }} /> Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

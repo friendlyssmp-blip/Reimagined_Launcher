@@ -9,6 +9,7 @@ import {
   IconSettings,
   IconUser,
   IconLog,
+  IconPuzzle,
   IconChevronLeft,
   IconChevronRight
 } from './icons'
@@ -29,15 +30,20 @@ const navSections: NavSection[] = [
   {
     label: 'Games',
     items: [
-      /* Mods is intentionally NOT here — mods belong to a profile (loader),
-       * so the only way in is clicking a profile/instance card. */
-      { id: 'modpacks', label: 'Modpacks', icon: IconArchive },
-      { id: 'profiles', label: 'Instances', icon: IconGrid }
+      /* v1.0.82 — the global content browser lives here: browse Modrinth +
+       * CurseForge for ANY Minecraft version/loader (mods, packs, shaders,
+       * worlds) and install into any instance. The per-profile mod manager is
+       * still reached by clicking an instance card (Library → Instances). */
+      { id: 'browse', label: 'Mods', icon: IconPuzzle },
+      { id: 'modpacks', label: 'Modpacks', icon: IconArchive }
     ]
   },
   {
     label: 'Library',
     items: [
+      /* v1.0.82 — Instances moved here from Games: Library is where your
+       * owned content lives (instances + downloads). */
+      { id: 'profiles', label: 'Instances', icon: IconGrid },
       { id: 'downloads', label: 'Downloads', icon: IconDownload }
     ]
   },
