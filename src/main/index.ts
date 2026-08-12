@@ -334,6 +334,127 @@ async function runSmokeTest(): Promise<void> {
     logger.info('Share flow OK (prepare → code → resolve → zip → import → expiry)')
   })
 
+  // v1.0.81 — .zip exports can bundle REAL instance folders (worlds, configs,
+  // mods…). Export → read → import must restore the files into the fresh
+  // instance and register bundled content as installed.
+  await ok('share zip folders: export with files → import restores worlds/config/mods', async () => {
+    const { shareService } = await import('./share/share')
+    const { mkdirp } = await import('./utils/fs')
+    const { zipCreate } = await import('./utils/zip')
+    const fsp = await import('node:fs/promises')
+    const pathMod = await import('node:path')
+
+    const source = await profileManager.create({
+      name: 'Share Zip Smoke',
+      minecraftVersion: '1.21.4',
+      loader: { type: 'vanilla', version: null }
+    })
+    try {
+      const dir = pathMod.join(paths.games, source.gameDir)
+      // A world, a config file and a manually-placed mod jar.
+      mkdirp(pathMod.join(dir, 'saves', 'World1'))
+      await fsp.writeFile(pathMod.join(dir, 'saves', 'World1', 'level.dat'), Buffer.from('fake-world-bytes'))
+      mkdirp(pathMod.join(dir, 'config'))
+      await fsp.writeFile(pathMod.join(dir, 'config', 'example.toml'), 'enabled = true\n')
+      mkdirp(pathMod.join(dir, 'mods'))
+      const fakeJar = zipCreate([
+        { name: 'fabric.mod.json', data: JSON.stringify({ id: 'smoke-mod', name: 'Smoke Mod', version: '1.0.0' }) }
+      ])
+      await fsp.writeFile(pathMod.join(dir, 'mods', 'smoke-mod.jar'), fakeJar)
+
+      const zipPath = pathMod.join(process.env.TEMP ?? '/tmp', `smoke-share-folders-${Date.now()}.zip`)
+      await shareService.exportZip(source.id, zipPath, ['saves', 'config', 'mods'])
+
+      // v1.0.81 — the export must be a UNIVERSAL .mrpack (Modrinth / Lunar…).
+      const { zipReadEntry } = await import('./utils/zip')
+      const exported = await fsp.readFile(zipPath)
+      const idxRaw = zipReadEntry(exported, 'modrinth.index.json')
+      if (!idxRaw) throw new Error('export is not a valid .mrpack (missing modrinth.index.json)')
+      const idx = JSON.parse(idxRaw.toString('utf-8'))
+      if (idx.formatVersion !== 1 || idx.game !== 'minecraft') throw new Error('mrpack index invalid')
+      if (!idx.dependencies?.minecraft) throw new Error('mrpack dependencies incomplete')
+      if (!zipReadEntry(exported, 'reimagined-manifest.json')) throw new Error('embedded Reimagined manifest missing')
+
+      const snap = await shareService.readZip(zipPath)
+      if (!snap.folders || !snap.folders.includes('saves')) throw new Error('folders missing from manifest')
+
+      const imported = await shareService.importZip(zipPath)
+      const importedProfile = await profileManager.get(imported.profileId)
+      if (!importedProfile) throw new Error('import did not create the profile')
+      const idir = pathMod.join(paths.games, importedProfile.gameDir)
+      const world = await fsp.readFile(pathMod.join(idir, 'saves', 'World1', 'level.dat'), 'utf-8').catch(() => '')
+      if (!world.includes('fake-world-bytes')) throw new Error('world file was not restored')
+      const cfg = await fsp.readFile(pathMod.join(idir, 'config', 'example.toml'), 'utf-8').catch(() => '')
+      if (!cfg.includes('enabled')) throw new Error('config was not restored')
+      const mod = (importedProfile.mods ?? []).find((m) => m.filename === 'smoke-mod.jar')
+      if (!mod) throw new Error('bundled mod was not registered as installed')
+
+      await fsp.rm(zipPath, { force: true }).catch(() => {})
+      await profileManager.delete(imported.profileId)
+      logger.info('Share zip folders OK (worlds + config + mods restored from archive)')
+    } finally {
+      await profileManager.delete(source.id).catch(() => {})
+    }
+  })
+
+  // v1.0.81 — import a pure Modrinth .mrpack (the format Modrinth App and
+  // Lunar Client produce): files[] client-env filter, overrides/ and real
+  // identity registration must all work offline.
+  await ok('mrpack import (Modrinth/Lunar format): deps + client files + overrides', async () => {
+    const { shareService } = await import('./share/share')
+    const { zipCreate } = await import('./utils/zip')
+    const fsp = await import('node:fs/promises')
+    const pathMod = await import('node:path')
+    const index = JSON.stringify(
+      {
+        formatVersion: 1,
+        game: 'minecraft',
+        versionId: '1.0.0',
+        name: 'Lunar Style Pack',
+        summary: 'smoke test',
+        files: [
+          { path: 'mods/bundled-mod.jar', downloads: [], hashes: {}, env: { client: 'required', server: 'optional' } },
+          { path: 'mods/server-only.jar', downloads: [], hashes: {}, env: { client: 'unsupported', server: 'required' } }
+        ],
+        dependencies: { minecraft: '1.21.4', 'fabric-loader': '0.16.9' }
+      },
+      null,
+      2
+    )
+    const fakeJar = zipCreate([
+      { name: 'fabric.mod.json', data: JSON.stringify({ id: 'bundled-mod', name: 'Bundled Mod', version: '1.0.0' }) }
+    ])
+    const pack = zipCreate([
+      { name: 'modrinth.index.json', data: index },
+      { name: 'overrides/mods/bundled-mod.jar', data: fakeJar },
+      { name: 'overrides/config/example.toml', data: 'enabled = true\n' }
+    ])
+    const tmp = await fsp.mkdtemp(pathMod.join(process.env.TEMP ?? '/tmp', 'smoke-mrpack-'))
+    const packPath = pathMod.join(tmp, 'pack.mrpack')
+    await fsp.writeFile(packPath, pack)
+    try {
+      const imported = await shareService.importZip(packPath)
+      const profile = await profileManager.get(imported.profileId)
+      if (!profile) throw new Error('mrpack import created no profile')
+      if (profile.minecraftVersion !== '1.21.4' || profile.loader.type !== 'fabric') {
+        throw new Error('mrpack dependencies not mapped to the profile')
+      }
+      const mod = (profile.mods ?? []).find((m) => m.filename === 'bundled-mod.jar')
+      if (!mod) throw new Error('bundled client mod was not registered')
+      if ((profile.mods ?? []).some((m) => m.filename === 'server-only.jar')) {
+        throw new Error('server-only file must not install on a client')
+      }
+      const cfg = await fsp
+        .readFile(pathMod.join(paths.games, profile.gameDir, 'config', 'example.toml'), 'utf-8')
+        .catch(() => '')
+      if (!cfg.includes('enabled')) throw new Error('mrpack overrides were not applied')
+      await profileManager.delete(imported.profileId)
+      logger.info('mrpack import OK (deps mapped + client-only files + overrides applied)')
+    } finally {
+      await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
   await ok('curseforge zip: manifest parse + overrides extraction', async () => {
     const { shareService } = await import('./share/share')
     const { zipCreate, zipExtractPrefix } = await import('./utils/zip')

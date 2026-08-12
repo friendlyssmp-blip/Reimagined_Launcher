@@ -150,10 +150,11 @@ const api = {
     importCode: (code: string, exclude?: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.shareImport, code, exclude),
     cancelImport: (): Promise<unknown> => ipcRenderer.invoke(IPC.shareCancel),
     pendingCode: (): Promise<unknown> => ipcRenderer.invoke(IPC.sharePendingCode),
-    exportZip: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareExportZip, profileId),
+    exportZip: (profileId: string, folders?: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.shareExportZip, profileId, folders),
     readZip: (zipPath: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareReadZip, zipPath),
     importZip: (zipPath: string, exclude?: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.shareImportZip, zipPath, exclude),
-    pickZip: (): Promise<unknown> => ipcRenderer.invoke(IPC.sharePickZip)
+    pickZip: (): Promise<unknown> => ipcRenderer.invoke(IPC.sharePickZip),
+    folderSizes: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareFolderSizes, profileId)
   },
 
 

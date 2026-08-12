@@ -133,6 +133,7 @@ export const IPC = {
   shareReadZip: 'share:read-zip',
   shareImportZip: 'share:import-zip',
   sharePickZip: 'share:pick-zip',
+  shareFolderSizes: 'share:folder-sizes',
 
   // Performance Engine (RPE)
   perfStatus: 'perf:status',

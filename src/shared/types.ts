@@ -255,6 +255,13 @@ export interface ShareSnapshot {
   resolution: { width: number; height: number; fullscreen: boolean }
   items: ShareItem[]
   createdAt: string
+  /**
+   * v1.0.81 — instance folders bundled as REAL FILES in a .zip export
+   * (mods, resourcepacks, shaderpacks, datapacks, saves, config, …). Codes
+   * never set this — they re-resolve from source. Import restores these
+   * folders from the archive instead of re-downloading.
+   */
+  folders?: string[]
   /** Present only for online codes. */
   code?: string
   expiresAt?: string

@@ -1,3 +1,43 @@
+## v1.0.81 — Share codes now REALLY work (server-backed) + .zip exports with your worlds, mods and configs
+
+### Share codes work across launchers
+- Codes were previously stored only on the generating machine — a code sent to a
+  friend could never resolve on their launcher. Now every code is published to the
+  Reimagined share server (the same backend as the CurseForge proxy) with the usual
+  7-day expiry, so it imports on ANY launcher. The generating device keeps a local
+  mirror, so codes still resolve instantly and offline on the same machine.
+- If the share server is unreachable, the launcher falls back to a local-only code
+  and says so (toast: “Share code generated (offline)”). Resolving a code from
+  another machine shows a clean “could not reach the share server” message when the
+  network is the problem — never a confusing “invalid code”.
+- The backend (backend/cf-proxy/server.js) gained `POST /api/share` (publish a
+  snapshot → code) and `GET /api/share/:code` (resolve), with per-IP rate limits,
+  payload caps, sanitization and 7-day expiry pruning. Codes generated on one
+  machine resolve on any other once this backend is deployed (one Render redeploy).
+
+### Universal modpack format: import from ANY launcher, export for EVERY launcher
+- **Import auto-detects the format** — one Import button handles them all:
+  Modrinth App / Lunar Client / Prism exports (**Modrinth .mrpack**,
+  `modrinth.index.json`), CurseForge modpacks (`manifest.json` + overrides) and
+  Reimagined exports (`reimagined-manifest.json`). No format picker, no separate
+  buttons.
+- **Export is now a standard Modrinth .mrpack** — the format the Modrinth App,
+  Lunar Client, Prism and ATLauncher all import. “Export .zip” became “Export
+  .mrpack”. The picker still lets you choose the folders that travel as real
+  files (mods, resource packs, shaders, data packs, worlds pre-checked; config,
+  game settings, screenshots, logs available). Everything ships under
+  `overrides/`, which every mrpack importer restores straight into the instance —
+  fully offline, no remote-download dependency. The Reimagined manifest is
+  embedded too, so Reimagined↔Reimagined keeps exact version pinning.
+- mrpack import downloads every client-compatible `files[]` entry to its exact
+  path (server-only files are skipped), applies `overrides/` and registers the
+  result by its real metadata. Downloads show live progress and are cancellable.
+- The zip writer now compresses (DEFLATE), so packages carrying worlds stay small.
+  Exports cap at ~1 GB with a clear “uncheck some folders” message; the import cap
+  grew to match. Import preview shows which folders the package carries
+  (“Restored from this package: saves · config …”).
+- The share manifest format is now v2 (`folders` field, whitelisted on import).
+
 ## v1.0.80 — THE REAL Fabric 1.21.x fix: the launcher was missing the intermediary mappings jar
 
 ### The actual root cause (found with real evidence)

@@ -672,13 +672,18 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.shareImport, (code: string, exclude?: string[]) => shareService.importCode(code, exclude ?? []))
   on(IPC.shareCancel, () => shareService.cancelImport())
   on(IPC.sharePendingCode, () => shareService.takePendingDeepLink())
-  on(IPC.shareExportZip, (profileId) => shareService.exportZipWithDialog(profileId))
+  on(IPC.shareExportZip, (profileId, folders?: string[]) => shareService.exportZipWithDialog(profileId, folders ?? []))
   on(IPC.shareReadZip, (zipPath) => shareService.readZip(zipPath))
   on(IPC.shareImportZip, (zipPath: string, exclude?: string[]) => shareService.importZip(zipPath, exclude ?? []))
+  // v1.0.81 — per-folder byte sizes for the export picker UI.
+  on(IPC.shareFolderSizes, (profileId) => shareService.folderSizes(profileId))
   on(IPC.sharePickZip, async () => {
     const res = await dialog.showOpenDialog(win, {
-      title: 'Select a Reimagined profile export (.zip)',
-      filters: [{ name: 'Reimagined profile export', extensions: ['zip'] }],
+      title: 'Select a modpack (.mrpack / .zip)',
+      filters: [
+        { name: 'Modpack (Modrinth .mrpack / CurseForge / Reimagined)', extensions: ['mrpack', 'zip'] },
+        { name: 'All files', extensions: ['*'] }
+      ],
       properties: ['openFile']
     })
     return res.canceled ? null : res.filePaths[0]

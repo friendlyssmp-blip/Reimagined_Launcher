@@ -227,15 +227,15 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
         {stage === 'choose' && (
           <>
             <p style={{ color: 'var(--text-2)', fontSize: 13.5, lineHeight: 1.55 }}>
-              Import a shared profile setup into a brand-new local profile. Everything is downloaded
-              fresh from its original source — version, loader and content.
+              Import a modpack into a brand-new local profile. The format is detected automatically —
+              Modrinth (.mrpack), CurseForge, Lunar Client or a Reimagined export.
             </p>
             <div className="share-actions">
               <button className="share-action clickable" onClick={pickZip}>
                 <div className="share-action-icon"><IconArchive style={{ width: 20, height: 20 }} /></div>
                 <div style={{ textAlign: 'left' }}>
-                  <div className="share-action-title">Import from .zip</div>
-                  <div className="share-action-sub">Pick a Reimagined export package saved on your PC.</div>
+                  <div className="share-action-title">Import modpack (.mrpack / .zip)</div>
+                  <div className="share-action-sub">Auto-detects Modrinth, CurseForge, Lunar Client and Reimagined exports.</div>
                 </div>
                 {busy ? <Spinner /> : <span className="share-action-arrow">→</span>}
               </button>
@@ -285,7 +285,7 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
                 <IconChevronLeft style={{ width: 14, height: 14 }} /> Back
               </Button>
               <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                {zipPath ? `From .zip: ${zipPath.split(/[\\/]/).pop()}` : `Code: ${code.trim().toUpperCase()}`}
+                {zipPath ? `From pack: ${zipPath.split(/[\\/]/).pop()}` : `Code: ${code.trim().toUpperCase()}`}
               </span>
             </div>
 
@@ -363,9 +363,25 @@ export function ImportModal({ initialCode }: { initialCode?: string | null }) {
                 )}
               </div>
 
+              {(preview.folders ?? []).length > 0 && (
+                <>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Restored from this package:</span>
+                    {(preview.folders ?? []).map((f) => (
+                      <Badge key={f} variant="accent">{f}</Badge>
+                    ))}
+                  </div>
+                  <p style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5 }}>
+                    Whole folders are restored as-is. Removing an item above only applies to content
+                    that would be re-downloaded — files already inside a bundled folder stay.
+                  </p>
+                </>
+              )}
               <p style={{ color: 'var(--text-3)', fontSize: 12.5, lineHeight: 1.5 }}>
-                This will download Minecraft {preview.minecraftVersion} with the {preview.loader.type} loader
-                and re-resolve every item from its original source. No worlds or account data are transferred.
+                {(preview.folders ?? []).length > 0
+                  ? 'The bundled folders above are restored from the archive. Everything else is downloaded fresh from its original source. No account data is transferred.'
+                  : `This will download Minecraft ${preview.minecraftVersion} with the ${preview.loader.type} loader
+                  and re-resolve every item from its original source. No worlds or account data are transferred.`}
               </p>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -6,7 +6,7 @@
  * `zipReadEntry` parses the central directory and supports STORE and DEFLATE
  * methods, so it can also read archives produced by other tools.
  */
-import { crc32, inflateRawSync } from 'node:zlib'
+import { crc32, deflateRawSync, inflateRawSync } from 'node:zlib'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -18,6 +18,13 @@ interface Entry {
   name: string
   data: Buffer
 }
+
+/** Entries at/above this size are DEFLATE-compressed; tiny ones stay STORE. */
+const DEFLATE_THRESHOLD = 4096
+/* v1.0.81 — hard ceiling for a single decompressed entry. Our own exports
+ * never include files above 256 MB, so anything trying to inflate past this
+ * is a hostile/broken archive and fails cleanly instead of OOM-ing. */
+const MAX_INFLATE_BYTES = 512 * 1024 * 1024
 
 /** Build a ZIP archive buffer from a list of named entries. */
 export function zipCreate(files: { name: string; data: Buffer | string }[]): Buffer {
@@ -35,21 +42,29 @@ export function zipCreate(files: { name: string; data: Buffer | string }[]): Buf
     const nameBuf = Buffer.from(e.name, 'utf-8')
     const crc = crc32(e.data) >>> 0
     const size = e.data.length
+    // v1.0.81 — real compression for larger entries (worlds, saves, mods):
+    // DEFLATE keeps the export package dramatically smaller than the raw
+    // STORE method. The reader has always supported method 8, so every
+    // consumer (launcher import, other unzip tools) reads these fine.
+    const useDeflate = size >= DEFLATE_THRESHOLD
+    const payload = useDeflate ? deflateRawSync(e.data, { level: 6 }) : e.data
+    const method = useDeflate ? 8 : 0
+    const csize = payload.length
 
     // Local file header
     const local = Buffer.alloc(30)
     local.writeUInt32LE(SIG_LOCAL, 0)
     local.writeUInt16LE(20, 4) // version needed to extract
     local.writeUInt16LE(0x0800, 6) // general purpose flag: UTF-8 names
-    local.writeUInt16LE(0, 8) // method: store
+    local.writeUInt16LE(method, 8)
     local.writeUInt16LE(0, 10) // mod time
     local.writeUInt16LE(0, 12) // mod date
     local.writeUInt32LE(crc, 14)
-    local.writeUInt32LE(size, 18) // compressed size
+    local.writeUInt32LE(csize, 18) // compressed size
     local.writeUInt32LE(size, 22) // uncompressed size
     local.writeUInt16LE(nameBuf.length, 26)
     local.writeUInt16LE(0, 28) // extra len
-    chunks.push(local, nameBuf, e.data)
+    chunks.push(local, nameBuf, payload)
 
     // Central directory entry
     const cd = Buffer.alloc(46)
@@ -57,11 +72,11 @@ export function zipCreate(files: { name: string; data: Buffer | string }[]): Buf
     cd.writeUInt16LE(20, 4) // version made by
     cd.writeUInt16LE(20, 6) // version needed
     cd.writeUInt16LE(0x0800, 8)
-    cd.writeUInt16LE(0, 10) // method: store
+    cd.writeUInt16LE(method, 10)
     cd.writeUInt16LE(0, 12)
     cd.writeUInt16LE(0, 14)
     cd.writeUInt32LE(crc, 16)
-    cd.writeUInt32LE(size, 20)
+    cd.writeUInt32LE(csize, 20)
     cd.writeUInt32LE(size, 24)
     cd.writeUInt16LE(nameBuf.length, 28)
     cd.writeUInt16LE(0, 30) // extra len
@@ -73,7 +88,7 @@ export function zipCreate(files: { name: string; data: Buffer | string }[]): Buf
     central.push(cd, nameBuf)
     centralSizes.push(46 + nameBuf.length)
 
-    offset += 30 + nameBuf.length + size
+    offset += 30 + nameBuf.length + csize
   }
 
   const cdSize = centralSizes.reduce((a, b) => a + b, 0)
@@ -162,7 +177,7 @@ export function zipReadEntry(archive: Buffer, wanted: string): Buffer | null {
       if (method === 0) return Buffer.from(data)
       if (method === 8) {
         try {
-          return inflateRawSync(data, { maxOutputLength: Math.max(usize, 1_048_576) })
+          return inflateRawSync(data, { maxOutputLength: Math.min(Math.max(usize, 1_048_576), MAX_INFLATE_BYTES) })
         } catch {
           return null
         }
@@ -231,7 +246,7 @@ export function zipExtractAll(archive: Buffer, destDir: string): string[] {
       try {
         // The whole archive is already in memory, so cap at the declared
         // uncompressed size (no silent drops of large assets).
-        out = inflateRawSync(data, { maxOutputLength: Math.max(usize, 64 * 1024) })
+        out = inflateRawSync(data, { maxOutputLength: Math.min(Math.max(usize, 64 * 1024), MAX_INFLATE_BYTES) })
       } catch {
         out = null
       }
@@ -306,7 +321,7 @@ export function zipExtractPrefix(archive: Buffer, prefix: string, destDir: strin
     if (method === 0) out = Buffer.from(data)
     else if (method === 8) {
       try {
-        out = inflateRawSync(data, { maxOutputLength: Math.max(usize, 64 * 1024) })
+        out = inflateRawSync(data, { maxOutputLength: Math.min(Math.max(usize, 64 * 1024), MAX_INFLATE_BYTES) })
       } catch {
         out = null
       }

@@ -17,7 +17,7 @@ function fmtDownloads(n: number): string {
 const PAGE_SIZE = 24
 
 export function ModpacksPage() {
-  const { profiles, setModals, notify, runGuarded, refreshProfiles, setActiveProfile } = useApp()
+  const { profiles, setModals, notify, refreshProfiles, setActiveProfile } = useApp()
   const [tab, setTab] = useState<'browse-modrinth' | 'browse-curseforge' | 'share'>('browse-modrinth')
   const provider: 'modrinth' | 'curseforge' = tab === 'browse-curseforge' ? 'curseforge' : 'modrinth'
   const [cfSetup, setCfSetup] = useState(false)
@@ -213,12 +213,7 @@ export function ModpacksPage() {
     }
   }
 
-  const exportZip = (p: { id: string }) =>
-    void runGuarded('Export modpack', async () => {
-      const res = await api.share.exportZip(p.id)
-      if ('canceled' in res && res.canceled) return
-      notify('success', 'Modpack exported', `"${res.name}" saved to ${res.path}`)
-    })
+  // v1.0.81 — exporting goes through the folder picker (worlds/mods/config…).
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -384,8 +379,8 @@ export function ModpacksPage() {
               <button className="share-action" onClick={() => setModals({ importShare: true })}>
                 <span className="share-action-icon"><IconDownload /></span>
                 <span style={{ flex: 1 }}>
-                  <span className="share-action-title">Import from .zip <Badge variant="accent">file</Badge></span>
-                  <span className="share-action-sub">Pick a Reimagined profile export and install it</span>
+                  <span className="share-action-title">Import modpack <Badge variant="accent">.mrpack / .zip</Badge></span>
+                  <span className="share-action-sub">Auto-detects Modrinth, CurseForge, Lunar Client and Reimagined exports</span>
                 </span>
               </button>
               <button className="share-action" onClick={() => setModals({ importShare: true })}>
@@ -400,7 +395,7 @@ export function ModpacksPage() {
 
           <div className="panel">
             <div className="panel-title">Your modpacks</div>
-            <p className="panel-sub">Each instance can be exported as a portable package. Worlds are never included — only the setup.</p>
+            <p className="panel-sub">Each instance can be exported as a portable package. Choose which folders to include — worlds, mods, configs — or just the setup.</p>
             <div className="share-list">
               {profiles.length === 0 && (
                 <span className="muted" style={{ fontSize: 12, padding: '8px 0' }}>No instances yet — create one to start sharing.</span>
@@ -416,8 +411,8 @@ export function ModpacksPage() {
                       {p.minecraftVersion} · {p.loader.type} · {p.mods.length} mods
                     </div>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => exportZip(p)}>
-                    <IconArchive style={{ width: 13, height: 13 }} /> Export .zip
+                  <Button size="sm" variant="ghost" onClick={() => setModals({ exportZip: { profile: p } })}>
+                    <IconArchive style={{ width: 13, height: 13 }} /> Export .mrpack
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setModals({ share: { profile: p } })}>
                     <IconShare style={{ width: 13, height: 13 }} /> Share

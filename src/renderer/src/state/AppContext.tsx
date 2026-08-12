@@ -45,6 +45,8 @@ export interface ModalState {
   profile: { mode: 'create' | 'edit'; profile?: Profile } | null
   duplicate: { profile: Profile } | null
   share: { profile: Profile } | null
+  /** v1.0.81 — folder-picker for .zip exports (worlds/mods/config…). */
+  exportZip: { profile: Profile } | null
   importShare: boolean
   /** v1.0.34 — the 3-option update prompt (no silent auto-update anymore). */
   update: boolean
@@ -137,6 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     profile: null,
     duplicate: null,
     share: null,
+    exportZip: null,
     importShare: false,
     update: false,
     checkUpdates: false,

@@ -264,20 +264,24 @@ export const api = {
   share: {
     prepare: (profileId: string) => unwrap<ShareSnapshot>(window.reimagined.share.prepare(profileId)),
     create: (profileId: string) =>
-      unwrap<{ code: string; expiresAt: string; snapshot: ShareSnapshot }>(window.reimagined.share.create(profileId)),
+      unwrap<{ code: string; expiresAt: string; snapshot: ShareSnapshot; serverPublished?: boolean }>(
+        window.reimagined.share.create(profileId)
+      ),
     resolve: (code: string) => unwrap<ShareSnapshot>(window.reimagined.share.resolve(code)),
     importCode: (code: string, exclude?: string[]) =>
       unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importCode(code, exclude)),
-    exportZip: (profileId: string) =>
+    exportZip: (profileId: string, folders?: string[]) =>
       unwrap<{ canceled: true } | { canceled: false; path: string; name: string }>(
-        window.reimagined.share.exportZip(profileId)
+        window.reimagined.share.exportZip(profileId, folders)
       ),
     readZip: (zipPath: string) => unwrap<ShareSnapshot>(window.reimagined.share.readZip(zipPath)),
     importZip: (zipPath: string, exclude?: string[]) =>
       unwrap<{ profileId: string; name: string; skipped: string[] }>(window.reimagined.share.importZip(zipPath, exclude)),
     cancelImport: () => unwrap<void>(window.reimagined.share.cancelImport()),
     pendingCode: () => unwrap<string | null>(window.reimagined.share.pendingCode()),
-    pickZip: () => unwrap<string | null>(window.reimagined.share.pickZip())
+    pickZip: () => unwrap<string | null>(window.reimagined.share.pickZip()),
+    folderSizes: (profileId: string) =>
+      unwrap<Record<string, number>>(window.reimagined.share.folderSizes(profileId))
   },
   onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),
   onMaximized: (cb: (v: boolean) => void) => window.reimagined.onMaximized(cb)

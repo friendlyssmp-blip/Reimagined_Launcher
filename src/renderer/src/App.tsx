@@ -9,6 +9,7 @@ import { LoginModal } from './components/LoginModal'
 import { ProfileModal } from './components/ProfileModal'
 import { DuplicateModal } from './components/DuplicateModal'
 import { ShareModal } from './components/ShareModal'
+import { ExportZipModal } from './components/ExportZipModal'
 import { ImportModal } from './components/ImportModal'
 import { UpdateModal } from './components/UpdateModal'
 import { CheckUpdatesModal } from './components/CheckUpdatesModal'
@@ -290,6 +291,7 @@ function Shell() {
       {modals.profile && <ProfileModal mode={modals.profile.mode} profile={modals.profile.profile} />}
       {modals.duplicate && <DuplicateModal profile={modals.duplicate.profile} />}
       {modals.share && <ShareModal profile={modals.share.profile} />}
+      {modals.exportZip && <ExportZipModal profile={modals.exportZip.profile} />}
       {modals.importShare && <ImportModal initialCode={importCode} />}
       {modals.update && <UpdateModal />}
       {modals.checkUpdates && <CheckUpdatesModal />}

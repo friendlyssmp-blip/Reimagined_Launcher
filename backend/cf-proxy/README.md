@@ -17,6 +17,20 @@ server-side environment variable.
 3. In the launcher: Settings -> Advanced -> "CurseForge proxy URL" -> paste
    the proxy base URL, e.g. `https://my-cf-proxy.onrender.com`.
 
+## Share codes (v1.0.81+)
+The same service hosts the launcher's online share codes, so a code generated
+on one machine resolves on any other:
+
+- `POST /api/share` — body `{ "snapshot": … }` → `{ code, expiresAt }`
+  (snapshot stored for exactly 7 days, payload capped at 2 MB).
+- `GET /api/share/:code` — `{ snapshot, expiresAt }` or 404/410.
+
+Snapshots are sanitized on the way in; lookups and creations are rate-limited
+per IP. Storage persists in `share-store.json` on the instance (a redeploy
+starts empty — fine, codes are short-lived). No `CF_API_KEY` needed for share
+routes. The launcher reuses the "CurseForge proxy URL" setting as the backend
+base, so updating this service is the only deploy step.
+
 ## Security notes
 - The key is never logged, never returned, and never embedded in responses.
 - Only whitelisted read-only GET paths are forwarded (search, project, files,
