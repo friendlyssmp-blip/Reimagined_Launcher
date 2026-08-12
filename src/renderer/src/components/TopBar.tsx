@@ -2,14 +2,28 @@ import { useApp } from '../state/AppContext'
 import { SkinHeadPreview } from './SkinHead'
 import { Badge, ProfileGlyph } from './ui'
 import { api } from '../lib/api'
-import { IconSearch, IconTerminal, IconSettings, IconBell } from './icons'
+import { IconSearch, IconTerminal, IconSettings, IconBell, IconArrowLeft } from './icons'
 import type { Page } from '../App'
 
-export function TopBar({ onNavigate, hideSearch = false }: { onNavigate: (p: Page) => void; hideSearch?: boolean }) {
+export function TopBar({
+  onNavigate,
+  hideSearch = false,
+  onBack
+}: {
+  onNavigate: (p: Page) => void
+  hideSearch?: boolean
+  /** v1.0.86 — universal back arrow (reverses the real navigation path). */
+  onBack?: () => void
+}) {
   const { account, activeProfile, running, setModals, notify } = useApp()
 
   return (
     <div className="topbar">
+      {onBack && (
+        <button className="btn-icon topbar-back" title="Back" aria-label="Back" onClick={onBack}>
+          <IconArrowLeft style={{ width: 15, height: 15 }} />
+        </button>
+      )}
       <div className="topbar-profile">
         {activeProfile ? (
           <>

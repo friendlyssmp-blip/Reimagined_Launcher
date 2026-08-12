@@ -747,6 +747,36 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return res.canceled ? null : res.filePaths[0]
   })
 
+
+  /* ------------------------------ authors (v1.0.86) ------------------------------ */
+
+  on(IPC.authorGet, async (payload: { provider: 'modrinth' | 'curseforge'; username: string }) => {
+    const { getAuthor } = await import('./mods/authors')
+    return getAuthor(payload.provider, payload.username)
+  })
+
+  on(IPC.authorProjects, async (payload: { provider: 'modrinth' | 'curseforge'; username: string; projectType?: string }) => {
+    const { getAuthorProjects } = await import('./mods/authors')
+    return getAuthorProjects(payload.provider, payload.username, payload.projectType)
+  })
+
+  /* ------------------------------ youtube avatar (v1.0.86) ------------------------------ */
+
+  on(IPC.ytAvatar, async (channelUrl: string) => {
+    try {
+      const res = await fetch(channelUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36' },
+        signal: AbortSignal.timeout(12_000)
+      })
+      if (!res.ok) return null
+      const html = await res.text()
+      const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+      return m ? m[1] : null
+    } catch {
+      return null
+    }
+  })
   /* -------------------------------- system -------------------------------- */
 
   on('system:getMemory', async () => {

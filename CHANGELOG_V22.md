@@ -1,3 +1,39 @@
+## v1.0.86 — Creator profiles, browser-like navigation & a new startup sound
+
+### Clickable creators everywhere
+- Every author name on any project (mods, modpacks, resource packs, data
+  packs, shaders, worlds, maps) is now clickable and opens a native in-app
+  creator profile — no external browser.
+- New premium profile page: real avatar, bio, role, project counts, dynamic
+  category tabs (only the types the creator actually has), instant project
+  search, and clean project cards with type / MC versions / loaders /
+  downloads. Loading uses skeletons; failures show a friendly retry state.
+
+### Browser-like navigation (back arrow everywhere)
+- A universal back arrow now lives in the top bar and reverses the REAL
+  navigation path — project -> author -> another project -> back returns
+  exactly where you came from, at arbitrary depth.
+- Pages under the stack stay mounted, so scroll position, filters and search
+  survive going back. Top-level pages also restore their scroll position.
+- Modpacks and Mods already share the same version-browsing preview, so the
+  version menus behave identically in both sections.
+
+### No more duplicate installs
+- The duplicate-install flow is gone: an item already present in an instance
+  simply cannot be installed again — no Shift-click re-arm, no "install
+  duplicate?" confirmation, install buttons are disabled.
+
+### Credits use real YouTube avatars
+- The creator and contributor cards now load the actual YouTube channel
+  profile pictures (with the letter badge as fallback).
+
+### New startup sound
+- The startup audio is one continuous ~4.5s cinematic piece mapped to the
+  splash animation: the system wakes, components activate, the ring draws,
+  the logo lands its own short sonic signature, and everything resolves into
+  a warm chord — then settles. Fixed a bug where a duplicated phase shadowed
+  the finale.
+
 ## v1.0.85 — Portable share codes, tray keep-alive, Music & Spotify, UI rebuilds
 
 ### Share codes now work on ANY PC (no server needed)

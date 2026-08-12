@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
+import { ContentOverlay } from './components/ContentOverlay'
 import { Sidebar } from './components/Sidebar'
 import { DownloadFlyover } from './components/DownloadFlyover'
 import { TitleBar } from './components/TitleBar'
@@ -47,13 +48,32 @@ export type Page =
   | 'logs'
 
 function Shell() {
-  const { ready, modals, theme, settings, setModals, account } = useApp()
+  const { ready, modals, theme, settings, setModals, account, closeContent, popContent, contentStack } = useApp()
   const [page, setPage] = useState<Page>('home')
   /* v1.0.53 — a quick, purposeful breath between pages: the current content
    * dips for ~120ms, the new page mounts and rises in (page-enter), landing
    * well under the 450ms target. Removes the hard cut without heavy work. */
   const [switching, setSwitching] = useState(false)
   const switchTimer = useRef(0)
+  /* v1.0.86 — universal page history: the back arrow reverses the real
+   * navigation path (never a hardcoded Home). */
+  const [pageHistory, setPageHistory] = useState<Page[]>([])
+  /* v1.0.86 — per-page scroll snapshots so Back lands where the user was
+   * (spec: restore scroll position when returning to a previous page). */
+  const pageScroll = useRef<Partial<Record<Page, number>>>({})
+  const snapshotScroll = (): void => {
+    if (!page) return
+    const el = document.querySelector<HTMLElement>('.content')
+    if (el) pageScroll.current[page] = el.scrollTop
+  }
+  const restoreScroll = (target: Page): void => {
+    const saved = pageScroll.current[target]
+    if (saved == null) return
+    window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>('.content')
+      if (el) el.scrollTop = saved
+    }, 60)
+  }
   /* v1.0.41 — login gate: without a signed-in account the launcher only shows
    * Home (login), Settings and Account. Play, Instances, Modpacks, Downloads
    * and Logs require a session — navigating to them redirects home. */
@@ -64,6 +84,7 @@ function Shell() {
   const loggedInRef = useRef(loggedIn)
   loggedInRef.current = loggedIn
   const navigate = (p: Page): void => {
+    closeContent()
     const locked = p === 'play' || p === 'profiles' || p === 'mods' || p === 'browse' || p === 'modpacks' || p === 'downloads' || p === 'logs'
     const next = locked && !loggedIn ? 'home' : p
     if (next === page) return
@@ -72,11 +93,32 @@ function Shell() {
     switchTimer.current = window.setTimeout(() => {
       /* v1.0.53 — re-check the login gate at fire time (logout during the
        * 120ms window must never land on a locked page). */
-      setPage(locked && !loggedInRef.current ? 'home' : next)
+      const target = locked && !loggedInRef.current ? 'home' : next
+      snapshotScroll()
+      setPage(target)
+      setPageHistory((h) => (h[h.length - 1] === target ? h : [...h, target]))
+      restoreScroll(target)
       window.setTimeout(() => setSwitching(false), 300)
     }, 120)
   }
   useEffect(() => () => window.clearTimeout(switchTimer.current), [])
+
+  /* v1.0.86 — Back reverses the real navigation path. */
+  const goBackPage = (): void => {
+    setPageHistory((h) => {
+      if (h.length <= 1) return h
+      const prev = h[h.length - 2]
+      snapshotScroll()
+      setSwitching(true)
+      window.clearTimeout(switchTimer.current)
+      switchTimer.current = window.setTimeout(() => {
+        setPage(prev)
+        restoreScroll(prev)
+        setSwitching(false)
+      }, 110)
+      return h.slice(0, -1)
+    })
+  }
   /* If the account signs out while a locked page is open, drop back home. */
   useEffect(() => {
     if (!loggedIn && page !== 'home' && page !== 'settings' && page !== 'account') {
@@ -265,7 +307,11 @@ function Shell() {
         {/* v1.0.54 — the global top-bar search is redundant on screens that
             have their own page-level search directly below it (Mods browse,
             Modpacks) — hide it there, keep it everywhere else. */}
-        <TopBar onNavigate={navigate} hideSearch={page === 'mods' || page === 'modpacks' || page === 'browse'} />
+        <TopBar
+          onNavigate={navigate}
+          hideSearch={page === 'mods' || page === 'modpacks' || page === 'browse'}
+          onBack={pageHistory.length > 1 ? goBackPage : undefined}
+        />
         {/* The scroll surface is NOT keyed (scroll position survives nav); the
            keyed ErrorBoundary remounts the page subtree, so .page-enter inside
            replays the page-level entrance animation on every section switch. */}
@@ -300,6 +346,7 @@ function Shell() {
       {modals.checkUpdates && <CheckUpdatesModal />}
       {modals.crash && <CrashModal />}
       {modals.confirm && <ConfirmDialog {...modals.confirm} />}
+      <ContentOverlay />
       <Toasts />
       {splash && settings.startupAnimation !== false && (
         <SplashScreen onStart={startSplashSound} onDone={finishSplash} />

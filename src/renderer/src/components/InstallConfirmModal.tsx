@@ -29,8 +29,6 @@ export type InstallTarget = {
   projectType: 'mod' | 'resourcepack' | 'datapack' | 'shader'
   /** Specific version (detail page Versions tab); empty = newest compatible. */
   versionId?: string
-  /** v1.0.83 — intentional duplicate install (already present in the profile). */
-  allowDuplicate?: boolean
 }
 
 export function InstallConfirmModal({
@@ -126,7 +124,6 @@ export function InstallConfirmModal({
           target.projectId,
           info.version.id,
           target.projectType,
-          target.allowDuplicate ? { allowDuplicate: true } : undefined
         )
         onInstalled(res.mod, res)
         notify(
@@ -143,8 +140,7 @@ export function InstallConfirmModal({
           target.projectId,
           info.version!.id,
           target.projectType,
-          info.detail?.title,
-          target.allowDuplicate ? { allowDuplicate: true } : undefined
+          info.detail?.title
         )
         onInstalled(mod)
         // v1.0.35 — install-complete payoff with the success checkmark.
@@ -261,8 +257,7 @@ export function InstallConfirmModal({
           <div className="modal-foot">
             {alreadyInstalled ? (
               <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text-2)' }}>
-                This item is already installed in this profile (
-                {alreadyInstalled.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}) — installing it again would create a duplicate.
+                Already installed in this profile via {alreadyInstalled.source === 'curseforge' ? 'CurseForge' : 'Modrinth'}. Each item can only be installed once.
               </div>
             ) : (
               <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--text-3)' }}>
@@ -280,26 +275,27 @@ export function InstallConfirmModal({
             <Button variant="ghost" onClick={onClose}>{alreadyInstalled ? 'Close' : 'Cancel'}</Button>
             {allDeps.length === 0 ? (
               /* No dependencies at all — one clean Install action. */
-              <Button variant="primary" onClick={() => void doInstall(false)}>
+              <Button variant="primary" disabled={!!alreadyInstalled} onClick={() => void doInstall(false)}>
                 Install
               </Button>
             ) : missing.length > 0 ? (
               <>
                 <Button
                   variant="ghost"
+                  disabled={!!alreadyInstalled}
                   onClick={() => void doInstall(false)}
                   title={missingRequired.length > 0 ? 'Install the item alone — it may not work without its required dependencies' : 'Install only the item'}
                 >
                   Install Only
                 </Button>
-                <Button variant="primary" onClick={() => void doInstall(true)}>
+                <Button variant="primary" disabled={!!alreadyInstalled} onClick={() => void doInstall(true)}>
                   Install with Dependencies ({missing.length})
                 </Button>
               </>
             ) : (
               /* Every dependency is already installed — Install Only is the
                  only action; the list above still shows what it depends on. */
-              <Button variant="primary" onClick={() => void doInstall(false)}>
+              <Button variant="primary" disabled={!!alreadyInstalled} onClick={() => void doInstall(false)}>
                 Install Only
               </Button>
             )}

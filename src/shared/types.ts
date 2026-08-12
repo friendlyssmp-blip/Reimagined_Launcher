@@ -603,3 +603,34 @@ export interface AppInfo {
   isDev: boolean
   dataRoot: string
 }
+
+/* ---------------------------------- Authors (v1.0.86) --------------------------------- */
+
+export interface AuthorProfile {
+  provider: 'modrinth' | 'curseforge'
+  id: string
+  username: string
+  name: string
+  avatarUrl: string | null
+  bio: string | null
+  role: string | null
+  createdAt: string | null
+  /** CurseForge v1 exposes no author profile — the page shows what we have. */
+  limited?: boolean
+}
+
+export interface AuthorProject {
+  provider: 'modrinth' | 'curseforge'
+  projectId: string
+  slug: string
+  title: string
+  author: string
+  iconUrl: string | null
+  description: string
+  downloads: number
+  followers: number
+  categories: string[]
+  gameVersions: string[]
+  projectType: string
+  updatedAt: string
+}

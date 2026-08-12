@@ -307,7 +307,7 @@ export function ProjectDetail({
   /* Modpacks: resolve what the pack actually contains (Includes tab). */
   modpackIncludes?: (versionId: string) => Promise<PackFile[]>
 }) {
-  const { activeProfile, notify, setModals } = useApp()
+  const { activeProfile, notify, setModals, pushContent } = useApp()
   const [detail, setDetail] = useState<ProjectDetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -743,7 +743,20 @@ export function ProjectDetail({
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 26, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
             {detail.title}
-            <span style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500 }}>by {detail.author}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-3)', fontWeight: 500 }}>
+              by{' '}
+              {/* v1.0.86 — author names open the creator's native profile page. */}
+              <button
+                className="author-link"
+                title={`Open ${detail.author}'s creator profile`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  pushContent({ kind: 'author', provider: detail.provider, username: detail.author })
+                }}
+              >
+                {detail.author}
+              </button>
+            </span>
           </h2>
           <div style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 2, lineHeight: 1.5 }}>
             {detail.description.split('\n')[0].slice(0, 140)}

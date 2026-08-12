@@ -14,6 +14,37 @@ const IconBolt = ({ size = 16 }: { size?: number }) => (
   </svg>
 )
 
+/** v1.0.86 — Credits avatar that resolves the creator's real YouTube channel
+ *  profile picture (og:image of the channel page) with the letter badge as a
+ *  graceful fallback when the fetch fails or the channel has no image. */
+function CreditsAvatar({ channelUrl, fallback }: { channelUrl: string; fallback: string }) {
+  const [src, setSrc] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    api.yt
+      .avatar(channelUrl)
+      .then((url) => {
+        if (!cancelled && url) setSrc(url)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [channelUrl])
+  if (src) {
+    return (
+      <img
+        className="credits-avatar"
+        src={src}
+        alt=""
+        onError={() => setSrc(null)}
+        style={{ objectFit: 'cover', display: 'block' }}
+      />
+    )
+  }
+  return <div className="credits-avatar">{fallback}</div>
+}
+
 /** Custom tier icon — Potato / Balanced / High / Turbo (no OS emoji rendering). */
 function PerfTierIcon({ tier, size = 14 }: { tier: string; size?: number }) {
   const Icon = tier === 'potato' ? IconPotato : tier === 'high' ? IconRocket : tier === 'turbo' ? IconBolt : IconGauge
@@ -504,7 +535,7 @@ export function SettingsPage() {
               </div>
               <div className="credits-grid">
                 <div className="panel credits-card">
-                  <div className="credits-avatar creator">MP</div>
+                  <CreditsAvatar channelUrl="https://www.youtube.com/@MoustachePetit" fallback="MP" />
                   <div>
                     <div className="credits-role">Creator</div>
                     <div className="credits-name">@MoustachePetit</div>
@@ -515,7 +546,7 @@ export function SettingsPage() {
                   </Button>
                 </div>
                 <div className="panel credits-card">
-                  <div className="credits-avatar contributor">FC</div>
+                  <CreditsAvatar channelUrl="https://www.youtube.com/@FireRedzzmc" fallback="FC" />
                   <div>
                     <div className="credits-role">Contributor</div>
                     <div className="credits-name">@Fasticraft_MC</div>

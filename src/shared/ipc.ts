@@ -157,6 +157,9 @@ export const IPC = {
   fpsBoostStatus: 'fpsboost:status',
   fpsBoostInstall: 'fpsboost:install',
   fpsBoostRemove: 'fpsboost:remove',
+  authorGet: 'author:get',
+  authorProjects: 'author:projects',
+  ytAvatar: 'yt:avatar',
 
   // Reliable image proxy (V2 fix) — main-process fetch → data URL
   contentImage: 'content:image',

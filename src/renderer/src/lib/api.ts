@@ -24,7 +24,9 @@ import type {
   PerfStatus,
   PerfRecommendation,
   PerfModOption,
-  ShaderSupport
+  ShaderSupport,
+  AuthorProfile,
+  AuthorProject
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -154,20 +156,20 @@ export const api = {
       unwrap<void>(window.reimagined.mods.removeLocalFile(profileId, filename, projectType ?? 'mod')),
     searchCurseforge: (profileId: string, query: string, sort?: 'downloads' | 'newest' | 'recent' | 'name', projectType?: string, category?: string, opts?: { offset?: number; limit?: number }) =>
       unwrap<ModrinthSearchResult[]>(window.reimagined.mods.searchCurseforge(profileId, query, sort, projectType, category, opts)),
-    installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string, opts?: { allowDuplicate?: boolean }) =>
-      unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType, opts)),
+    installCurseforge: (profileId: string, projectId: string, meta?: { title?: string; iconUrl?: string; downloads?: number }, projectType?: string) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installCurseforge(profileId, projectId, meta, projectType)),
     changeVersion: (profileId: string, slug: string, versionId: string) =>
       unwrap<ProfileMod>(window.reimagined.mods.changeVersion(profileId, slug, versionId)),
     setEnabled: (profileId: string, slug: string, enabled: boolean) =>
       unwrap<ProfileMod>(window.reimagined.mods.setEnabled(profileId, slug, enabled)),
     availableVersions: (profileId: string, slug: string) =>
       unwrap<ProjectVersionInfo[]>(window.reimagined.mods.availableVersions(profileId, slug)),
-    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string, title?: string, opts?: { allowDuplicate?: boolean }) =>
-      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType, title, opts)),
+    installVersion: (profileId: string, provider: 'modrinth' | 'curseforge', projectId: string, versionId: string, projectType?: string, title?: string) =>
+      unwrap<ProfileMod>(window.reimagined.mods.installVersion(profileId, provider, projectId, versionId, projectType, title)),
     dependencies: (profileId: string, projectId: string, versionId: string, projectType?: string) =>
       unwrap<InstallDepInfo[]>(window.reimagined.mods.dependencies(profileId, projectId, versionId, projectType)),
-    installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string, opts?: { allowDuplicate?: boolean }) =>
-      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType, opts)),
+    installWithDeps: (profileId: string, projectId: string, versionId?: string, projectType?: string) =>
+      unwrap<InstallWithDepsResult>(window.reimagined.mods.installWithDeps(profileId, projectId, versionId ?? '', projectType)),
     /** v1.0.82 — global browse (Games → Mods), any MC version + loader. */
     searchAny: (query: string, index?: string, opts?: { mcVersion?: string; loader?: string; projectType?: string; offset?: number; limit?: number }) =>
       unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.mods.searchAny(query, index, opts)),
@@ -301,6 +303,16 @@ export const api = {
     remove: (id: string) => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.remove(id))
   },
 
+
+  authors: {
+    get: (provider: 'modrinth' | 'curseforge', username: string) =>
+      unwrap<AuthorProfile>(window.reimagined.authors.get(provider, username)),
+    projects: (provider: 'modrinth' | 'curseforge', username: string, projectType?: string) =>
+      unwrap<AuthorProject[]>(window.reimagined.authors.projects(provider, username, projectType))
+  },
+  yt: {
+    avatar: (channelUrl: string) => unwrap<string | null>(window.reimagined.yt.avatar(channelUrl))
+  },
   spotify: {
     status: () => unwrap<{ connected: boolean; displayName?: string }>(window.reimagined.spotify.status()),
     begin: (clientId: string) => unwrap<{ ok: boolean; error?: string }>(window.reimagined.spotify.begin(clientId)),

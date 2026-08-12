@@ -73,6 +73,10 @@ export interface ProfileOp {
   percent: number | null
 }
 
+export type ContentView =
+  | { kind: 'author'; provider: 'modrinth' | 'curseforge'; username: string; displayName?: string }
+  | { kind: 'project'; provider: 'modrinth' | 'curseforge'; projectId: string; projectType?: string }
+
 interface AppContextValue {
   ready: boolean
   info: AppInfo | null
@@ -102,6 +106,11 @@ interface AppContextValue {
    */
   notify: (kind: Toast['kind'], title: string, desc?: string, opts?: { silent?: boolean }) => void
   setModals: (patch: Partial<ModalState>) => void
+  /** v1.0.86 — browser-like content stack (projects/authors as overlay pages). */
+  contentStack: ContentView[]
+  pushContent: (view: ContentView) => void
+  popContent: () => void
+  closeContent: () => void
   runGuarded: (label: string, fn: () => Promise<unknown>) => Promise<void>
   updateInfo: UpdateInfo | null
   /** silent = no toast on failure; force = bypass the 30-min cache. */
@@ -160,6 +169,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setModals = useCallback((patch: Partial<ModalState>) => {
     setModalsState((prev) => ({ ...prev, ...patch }))
+  }, [])
+
+  /* v1.0.86 — browser-like content stack. pushContent opens an overlay page
+   * (project detail / author profile); popContent returns to whatever was
+   * underneath — arbitrary depth, no artificial limit. */
+  const [contentStack, setContentStack] = useState<ContentView[]>([])
+  const pushContent = useCallback((view: ContentView) => {
+    setContentStack((prev) => [...prev, view])
+  }, [])
+  const popContent = useCallback(() => {
+    setContentStack((prev) => (prev.length > 0 ? prev.slice(0, -1) : prev))
+  }, [])
+  const closeContent = useCallback(() => {
+    setContentStack([])
   }, [])
 
   const notify = useCallback((kind: Toast['kind'], title: string, desc?: string, opts?: { silent?: boolean }) => {
@@ -613,6 +636,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     stopLaunch,
     notify,
     setModals,
+    contentStack,
+    pushContent,
+    popContent,
+    closeContent,
     runGuarded,
     updateInfo,
     checkForUpdates,

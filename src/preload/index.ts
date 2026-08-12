@@ -172,6 +172,14 @@ const api = {
     remove: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.musicRemove, id)
   },
 
+
+  authors: {
+    get: (provider: 'modrinth' | 'curseforge', username: string): Promise<unknown> => ipcRenderer.invoke(IPC.authorGet, { provider, username }),
+    projects: (provider: 'modrinth' | 'curseforge', username: string, projectType?: string): Promise<unknown> => ipcRenderer.invoke(IPC.authorProjects, { provider, username, projectType })
+  },
+  yt: {
+    avatar: (channelUrl: string): Promise<unknown> => ipcRenderer.invoke(IPC.ytAvatar, channelUrl)
+  },
   spotify: {
     status: (): Promise<unknown> => ipcRenderer.invoke(IPC.spotifyStatus),
     begin: (clientId: string): Promise<unknown> => ipcRenderer.invoke(IPC.spotifyBegin, clientId),
