@@ -1,8 +1,8 @@
 {
-  "version": "1.0.90",
-  "installer": "dist/Reimagined-Setup-1.0.90.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.90.exe",
-  "sha256": "0f03b1c927a62d99ec51ff9ca8153595ce3ff9b80e46f06e6f41715d3aa640a2",
+  "version": "1.0.91",
+  "installer": "dist/Reimagined-Setup-1.0.91.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.91.exe",
+  "sha256": "ddcdf90deb31f46aca46e703965e2c75f64656ce4da7c16c50e3947990cf4031",
   "notes": "v1.0.90 - CRITICAL: silent updates fixed for real. Two installer bugs made every update fail silently (the launcher closed but never updated): (1) the branded splash hung the installer, (2) the old custom uninstaller aborted the upgrade with a fake 'uninstall' dialog. The splash is removed, the uninstaller only refuses when uninstalling interactively, and the updater now clears a stale old uninstaller before applying, so this update installs cleanly and future updates work automatically.",
   "publishedAt": "2026-08-13T09:00:00+00:00"
 }

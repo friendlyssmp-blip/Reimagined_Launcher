@@ -28,7 +28,15 @@
 ; the installer on this NSIS build (both interactive and silent runs), which
 ; is exactly why silent updates never applied. The custom wizard pages below
 ; (options + finish) keep the branded installer experience.
+; v1.0.91 — to upgrade, electron-builder runs the OLD uninstaller first
+; (uninstallOldVersion). Uninstallers shipped by v1.0.88/v1.0.89 carried a
+; custom "app running?" check with no silent-mode guard, which made updates
+; from those versions fail/abort. Deleting the stale uninstaller HERE (in
+; onInit, before the install section) makes uninstallOldVersion skip it, so
+; ANY old version upgrades cleanly regardless of which launcher triggered it.
+; A fresh, fixed uninstaller is always written later by the install itself.
 !macro customInit
+  Delete "$INSTDIR\Uninstall Reimagined.exe"
 !macroend
 
 ; Options page - explained checkboxes shown after the install-location page.

@@ -1,3 +1,19 @@
+## v1.0.91 - the update bridge: any old version can now upgrade to the latest
+
+### Why this release exists
+The v1.0.90 fix made updates work **once you are on 1.0.90** — but users still
+on v1.0.88/v1.0.89 could not get there: their launcher (older updater) spawned
+the new installer, and the new installer had to run their OLD broken
+uninstaller first, which popped the fake "uninstall" dialog and aborted the
+update (the exact bug you hit).
+
+### The fix (works for EVERYONE, no launcher dependency)
+The installer itself now removes a stale old uninstaller **in its own startup
+routine** before it ever tries to run it. So clicking Update from v1.0.88,
+v1.0.89 or anything older now upgrades cleanly to v1.0.91 — the launcher that
+triggers it no longer matters. A fresh, fixed uninstaller is written by the
+install itself.
+
 ## v1.0.90 - CRITICAL: silent updates fixed for real (the "update wants to uninstall" bug)
 
 ### What was actually breaking every update
