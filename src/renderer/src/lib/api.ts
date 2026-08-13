@@ -30,7 +30,10 @@ import type {
   ServerStatus,
   RecentServer,
   DirectoryServer,
-  InstallServerResult
+  InstallServerResult,
+  StorageScanResult,
+  StorageCleanResult,
+  FpsTestStatus
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -78,6 +81,35 @@ export const api = {
   settings: {
     get: () => unwrap<LauncherSettings>(window.reimagined.settings.get()),
     set: (patch: Partial<LauncherSettings>) => unwrap<LauncherSettings>(window.reimagined.settings.set(patch as Record<string, unknown>))
+  },
+
+  /** v1.0.92 — Copy PC Specs / Clear Up Space. */
+  system: {
+    getMemory: () => unwrap<number>(window.reimagined.system.getMemory()),
+    cleanReset: () => unwrap<void>(window.reimagined.system.cleanReset()),
+    copySpecs: (opts: { minimal?: boolean; profileId?: string } = {}) =>
+      unwrap<string>(window.reimagined.system.copySpecs(opts)),
+    scanStorage: () => unwrap<StorageScanResult>(window.reimagined.system.scanStorage()),
+    cleanStorage: (ids: string[]) => unwrap<StorageCleanResult>(window.reimagined.system.cleanStorage(ids))
+  },
+  /** v1.0.92 — Run a FPS Test (Account). */
+  fpsTest: {
+    list: () =>
+      unwrap<{ id: string; name: string; minecraftVersion: string; loader: string; modCount: number; fpsBoost: boolean }[]>(
+        window.reimagined.fpsTest.list()
+      ),
+    start: (profileId: string) => unwrap<{ ok: boolean; error?: string }>(window.reimagined.fpsTest.start(profileId)),
+    status: () => unwrap<FpsTestStatus | null>(window.reimagined.fpsTest.status()),
+    cancel: () => unwrap<boolean>(window.reimagined.fpsTest.cancel()),
+    results: () =>
+      unwrap<{
+        reportPath: string | null
+        text: string
+        raw: Record<string, unknown> | null
+        profile: { name: string; minecraftVersion: string; loader: string; modCount: number } | null
+      }>(window.reimagined.fpsTest.results()),
+    reportPath: () => unwrap<string | null>(window.reimagined.fpsTest.reportPath()),
+    openReport: (path?: string) => unwrap<boolean>(window.reimagined.fpsTest.openReport(path))
   },
   dialog: {
     pickJava: () => unwrap<string | null>(window.reimagined.dialog.pickJava()),
@@ -214,12 +246,6 @@ export const api = {
     toggleMaximize: () => unwrap<void>(window.reimagined.console.toggleMaximize()),
     getState: () => unwrap<ConsoleState>(window.reimagined.console.getState())
   },
-
-  system: {
-    getMemory: () => unwrap<number>(window.reimagined.system.getMemory()),
-    cleanReset: () => unwrap<void>(window.reimagined.system.cleanReset())
-  },
-  
 
   skin: {
     /* Only the account face icon remains: loading a skin texture as a data URL. */

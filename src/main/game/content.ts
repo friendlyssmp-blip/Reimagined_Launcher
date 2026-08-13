@@ -8,6 +8,7 @@
  * Everything is real filesystem data — no placeholders.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fsp from 'node:fs/promises'
 import { paths } from '../paths'
 import { profileManager } from '../profiles/profile-manager'
@@ -54,7 +55,7 @@ function fmtSize(bytes: number): string {
 export async function instanceRoot(profileId: string): Promise<string | null> {
   const profile = await profileManager.get(profileId)
   if (!profile) return null
-  return path.join(paths.games, profile.gameDir)
+  return instancePath(profile)
 }
 
 export async function listWorlds(profileId: string): Promise<WorldEntry[]> {

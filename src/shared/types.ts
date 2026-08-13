@@ -152,6 +152,12 @@ export interface LauncherSettings {
   discordPresence: boolean
   /** Discord Application client id used for Rich Presence (empty = no status). */
   discordClientId: string
+  /**
+   * v1.0.92 — storage analyzer: whether the cleanup pass re-verifies every
+   * selected file (hash + still-present + not-referenced) immediately
+   * before deleting. Default ON — only OFF for expert users.
+   */
+  cleanupSafetyRecheck: boolean
   /** Accessibility: UI font scale factor (1 | 1.15 | 1.3). */
   accessFontScale: number
   /** Accessibility: high-contrast mode (v1.0.88). */
@@ -300,6 +306,13 @@ export interface Profile {
   extraGameArgs: string
   /** Instance directory (mods, saves, config) — relative to the games root. */
   gameDir: string
+  /**
+   * v1.0.92 — human-readable instance folder name (e.g. "My Survival"),
+   * sanitized for Windows. The physical instance lives at
+   * data/Instances/<folder>. Absent for legacy profiles until the safe
+   * startup migration moves them from data/games/<gameDir>.
+   */
+  folder?: string
   mods: ProfileMod[]
   favorite: boolean
   createdAt: string
@@ -663,6 +676,56 @@ export interface ShaderCrashRecord {
   /** Crash-classification: 'fence' = Sodium shadow-pass sync bug (shadow-safe recovery), 'other' = full disable. */
   signature?: 'fence' | 'other'
   at: string
+}
+
+/* ---------------------------- Storage cleanup (v1.0.92) ---------------------------- */
+
+export type StorageCategory = 'cache' | 'temporary' | 'duplicates' | 'updates' | 'orphaned' | 'backups'
+
+/** One item the Clear Up Space scanner classified as potentially removable. */
+export interface StorageItem {
+  id: string
+  path: string
+  sizeBytes: number
+  category: StorageCategory
+  /** 0-100. >=90 = auto-selected. */
+  confidence: number
+  label: string
+  detail: string
+  autoSelected: boolean
+}
+
+export interface StorageBreakdown {
+  label: string
+  bytes: number
+}
+
+export interface StorageScanResult {
+  items: StorageItem[]
+  recoverableBytes: number
+  breakdown: StorageBreakdown[]
+  scannedFiles: number
+  ranAt: string
+}
+
+export interface StorageCleanResult {
+  freedBytes: number
+  removed: number
+  skipped: { path: string; reason: string }[]
+}
+
+/** v1.0.92 — Run a FPS Test: live status of the benchmark run. */
+export interface FpsTestStatus {
+  profileId: string
+  profileName: string
+  startedAt: number
+  stage: 'world' | 'launching' | 'running' | 'finished' | 'failed'
+  message: string
+  currentTest: string
+  progress: number
+  lowestFps: number | null
+  resultPath: string | null
+  error: string | null
 }
 
 /* ---------------------------------- Misc --------------------------------- */

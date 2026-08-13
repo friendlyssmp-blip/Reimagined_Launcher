@@ -10,6 +10,7 @@
  * install never fails as a whole.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fs from 'node:fs'
 import { paths } from '../paths'
 import { logger } from '../logs/logger'
@@ -216,7 +217,7 @@ export async function installModpack(
   // v1.0.19 settings persistence: snapshot the config first so an override
   // that ever touches user settings (options.txt, config/) is recoverable.
   const overridesSrc = path.join(staging, 'overrides')
-  const gameDir = path.join(paths.games, profile.gameDir)
+  const gameDir = instancePath(profile)
   if (fs.existsSync(overridesSrc)) {
     try {
       const { configGuard } = await import('../minecraft/config-guard')
@@ -432,7 +433,7 @@ export async function installCurseforgeModpack(
         lower.endsWith('.zip') && lower.includes('shader') ? 'shader'
           : lower.endsWith('.zip') ? 'resourcepack'
             : 'mod'
-      const destDir = path.join(paths.games, profile.gameDir, cfFolderFor(projectType))
+      const destDir = path.join(instancePath(profile), cfFolderFor(projectType))
       const { mkdirp } = await import('../utils/fs')
       mkdirp(destDir)
       const dest = path.join(destDir, cfSafeBaseName(cfFile.filename))
@@ -496,7 +497,7 @@ export async function installCurseforgeModpack(
 
   // Copy overrides (config / resourcepacks / shaderpacks / …) into the instance.
   const overridesSrc = path.join(staging, manifest.overrides ?? 'overrides')
-  const gameDir = path.join(paths.games, profile.gameDir)
+  const gameDir = instancePath(profile)
   if (fs.existsSync(overridesSrc)) {
     try {
       const { configGuard } = await import('../minecraft/config-guard')

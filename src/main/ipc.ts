@@ -822,6 +822,62 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return true
   })
 
+  // v1.0.92 — Copy All / Minimal PC Specs to the clipboard.
+  on(IPC.systemCopySpecs, async (payload: { minimal?: boolean; profileId?: string } = {}) => {
+    const { copySpecsToClipboard } = await import('./system/specs')
+    let profile = null
+    if (payload.profileId) {
+      profile = await profileManager.get(payload.profileId).catch(() => null)
+    }
+    return copySpecsToClipboard({ minimal: payload.minimal ?? false, profile })
+  })
+
+  // v1.0.92 — Clear Up Space: scan storage, then clean a selection.
+  on(IPC.storageScan, async () => {
+    const { scanStorage } = await import('./system/cleaner')
+    return scanStorage()
+  })
+  on(IPC.storageClean, async (payload: { ids: string[] } = { ids: [] }) => {
+    const { cleanSelected } = await import('./system/cleaner')
+    return cleanSelected(payload.ids ?? [])
+  })
+
+  // v1.0.92 — Run a FPS Test (Account → Run a FPS Test).
+  on(IPC.fpsTestList, async () => {
+    const { listBenchmarkProfiles } = await import('./benchmark/fps-test')
+    return listBenchmarkProfiles()
+  })
+  on(IPC.fpsTestStart, async (payload: { profileId?: string } = {}) => {
+    if (!payload.profileId) throw new Error('No instance selected.')
+    const { startFpsTest } = await import('./benchmark/fps-test')
+    return startFpsTest(payload.profileId)
+  })
+  on(IPC.fpsTestStatus, async () => {
+    const { fpsTestStatus } = await import('./benchmark/fps-test')
+    return fpsTestStatus()
+  })
+  on(IPC.fpsTestCancel, async () => {
+    const { cancelFpsTest } = await import('./benchmark/fps-test')
+    await cancelFpsTest()
+    return true
+  })
+  on(IPC.fpsTestResults, async () => {
+    const { fpsTestResults } = await import('./benchmark/fps-test')
+    return fpsTestResults()
+  })
+  on(IPC.fpsTestReportPath, async () => {
+    const { fpsTestReportPath } = await import('./benchmark/fps-test')
+    return fpsTestReportPath()
+  })
+  on(IPC.fpsTestOpenReport, async (payload: { path?: string } = {}) => {
+    const { shell } = await import('electron')
+    const { fpsTestReportPath } = await import('./benchmark/fps-test')
+    const p = payload.path ?? fpsTestReportPath()
+    if (!p) throw new Error('No report available yet.')
+    shell.showItemInFolder(p)
+    return true
+  })
+
   /* ----------------------------------- java ----------------------------------- */
 
   ipcMain.handle('java:runtimes', async () => {

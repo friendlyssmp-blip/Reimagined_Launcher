@@ -7,6 +7,7 @@
  * available version for the profile's MC version + loader.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import { paths } from '../paths'
 import { exists, remove, rename } from '../utils/fs'
 import { zipReadEntry } from '../utils/zip'
@@ -300,7 +301,7 @@ async function enrichManualModsImpl(profileId: string): Promise<{ enriched: numb
   const processOne = async ({ m, idx }: { m: ProfileMod; idx: number }): Promise<void> => {
     try {
       const projectType: ProjectType = (m.projectType ?? 'mod') as ProjectType
-      const dir = path.join(paths.games, profile.gameDir, folderFor(projectType))
+      const dir = path.join(instancePath(profile), folderFor(projectType))
       const activeName = m.filename.endsWith('.disabled')
         ? m.filename.slice(0, -'.disabled'.length)
         : m.filename
@@ -456,7 +457,7 @@ function safeBaseName(name: string): string {
 
 class ModManager {
   private modsDir(profile: Profile, projectType: ProjectType = 'mod'): string {
-    return path.join(paths.games, profile.gameDir, folderFor(projectType))
+    return path.join(instancePath(profile), folderFor(projectType))
   }
 
   /**

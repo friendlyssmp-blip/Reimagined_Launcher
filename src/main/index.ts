@@ -13,6 +13,8 @@ import { settingsManager } from './settings/settings-manager'
 import { accountStore } from './auth/account-store'
 import { microsoftAuth } from './auth/microsoft-auth'
 import { profileManager } from './profiles/profile-manager'
+import { instancePath } from './instances/paths'
+import { ensureBenchWorld } from './benchmark/world'
 import { shareService } from './share/share'
 import { detectJavaRuntimes } from './minecraft/java'
 import { registerIpcHandlers } from './ipc'
@@ -136,7 +138,7 @@ if (!gotLock && !SMOKE && !BENCH) {
             }
             const profile = await profileManager.get(parts[1])
             if (!profile) return new Response('Not found', { status: 404 })
-            const root = path.resolve(path.join(paths.games, profile.gameDir, 'screenshots'))
+            const root = path.resolve(path.join(instancePath(profile), 'screenshots'))
             const p = path.resolve(root, path.basename(parts[2]))
             if (!p.startsWith(root + path.sep)) return new Response('Forbidden', { status: 403 })
             return net.fetch(pathToFileURL(p).toString())
@@ -151,6 +153,23 @@ if (!gotLock && !SMOKE && !BENCH) {
         // Silent background token refresh + log cleanup.
         void microsoftAuth.refreshIfNeeded().catch(() => {})
         void cleanupOldLogs(settings.keepLogDays).catch(() => {})
+
+        // v1.0.92: safe instance reorganization — move every instance from
+        // data/games/<slug>-<id8> to data/Instances/<Human Name>. Non-
+        // destructive: failures keep the original location and the central
+        // resolver keeps working. Runs before any profile is used (incl. smoke).
+        try {
+          const { migrateInstances } = await import('./instances/migrate')
+          const migration = await migrateInstances()
+          if (migration.migratedSomething) {
+            logger.info(`Instance reorganization: moved ${migration.moved.length} instance(s) to data/Instances/`)
+          }
+          if (migration.failed.length > 0) {
+            logger.warn(`Instance reorganization: ${migration.failed.length} instance(s) could not be moved — original data preserved.`)
+          }
+        } catch (err) {
+          logger.warn(`Instance reorganization could not run: ${(err as Error).message} — legacy layout keeps working.`)
+        }
 
         if (SMOKE) {
           await runSmokeTest()
@@ -437,7 +456,7 @@ async function runSmokeTest(): Promise<void> {
       loader: { type: 'vanilla', version: null }
     })
     try {
-      const dir = pathMod.join(paths.games, source.gameDir)
+      const dir = instancePath(source)
       // A world, a config file and a manually-placed mod jar.
       mkdirp(pathMod.join(dir, 'saves', 'World1'))
       await fsp.writeFile(pathMod.join(dir, 'saves', 'World1', 'level.dat'), Buffer.from('fake-world-bytes'))
@@ -468,7 +487,7 @@ async function runSmokeTest(): Promise<void> {
       const imported = await shareService.importZip(zipPath)
       const importedProfile = await profileManager.get(imported.profileId)
       if (!importedProfile) throw new Error('import did not create the profile')
-      const idir = pathMod.join(paths.games, importedProfile.gameDir)
+      const idir = instancePath(importedProfile)
       const world = await fsp.readFile(pathMod.join(idir, 'saves', 'World1', 'level.dat'), 'utf-8').catch(() => '')
       if (!world.includes('fake-world-bytes')) throw new Error('world file was not restored')
       const cfg = await fsp.readFile(pathMod.join(idir, 'config', 'example.toml'), 'utf-8').catch(() => '')
@@ -532,7 +551,7 @@ async function runSmokeTest(): Promise<void> {
         throw new Error('server-only file must not install on a client')
       }
       const cfg = await fsp
-        .readFile(pathMod.join(paths.games, profile.gameDir, 'config', 'example.toml'), 'utf-8')
+        .readFile(pathMod.join(instancePath(profile), 'config', 'example.toml'), 'utf-8')
         .catch(() => '')
       if (!cfg.includes('enabled')) throw new Error('mrpack overrides were not applied')
       await profileManager.delete(imported.profileId)
@@ -613,10 +632,10 @@ async function runSmokeTest(): Promise<void> {
         const sodium = profile.mods.find((m) => m.id === '394468')
         if (!sodium || sodium.source !== 'curseforge') throw new Error('real CF mod not installed')
         const { exists } = await import('./utils/fs')
-        const modFile = pathMod.join(await import('./paths').then((m) => m.paths.games), profile.gameDir, 'mods', sodium.filename)
+        const modFile = pathMod.join(instancePath(profile), 'mods', sodium.filename)
         if (!exists(modFile)) throw new Error('real CF mod file missing')
         const appliedCfg = await fsp
-          .readFile(pathMod.join(await import('./paths').then((m) => m.paths.games), profile.gameDir, 'config', 'example.toml'), 'utf-8')
+          .readFile(pathMod.join(instancePath(profile), 'config', 'example.toml'), 'utf-8')
           .catch(() => '')
         if (!appliedCfg.includes('enabled')) throw new Error('real CF overrides not applied')
         logger.info(`CurseForge real import OK (${sodium.title}, ${modFile})`)
@@ -636,7 +655,7 @@ async function runSmokeTest(): Promise<void> {
       loader: { type: 'vanilla', version: null }
     })
     try {
-      const dir = pathMod.join(paths.games, p.gameDir)
+      const dir = instancePath(p)
       fsMod.mkdirSync(dir, { recursive: true })
       fsMod.writeFileSync(pathMod.join(dir, 'options.txt'), 'maxFps:260\nrenderDistance:12\n')
       const { configGuard } = await import('./minecraft/config-guard')
@@ -667,7 +686,7 @@ async function runSmokeTest(): Promise<void> {
       loader: { type: 'vanilla', version: null }
     })
     try {
-      const modsDir = pathMod.join(paths.games, p.gameDir, 'mods')
+      const modsDir = pathMod.join(instancePath(p), 'mods')
       mkdirp(modsDir)
       // A jar whose file name says nothing about the mod — the REAL identity
       // lives inside fabric.mod.json. This is the core v1.0.22 bug fix.
@@ -704,18 +723,18 @@ async function runSmokeTest(): Promise<void> {
     })
     try {
       // A resource pack named only by its FILE — its real name lives in pack.mcmeta.
-      mkdirp(pathMod.join(paths.games, p.gameDir, 'resourcepacks'))
+      mkdirp(pathMod.join(instancePath(p), 'resourcepacks'))
       const rp = zipCreate([
         { name: 'pack.mcmeta', data: JSON.stringify({ pack: { pack_format: 34, description: 'My Fancy Texture Pack' } }) }
       ])
-      await fsp.writeFile(pathMod.join(paths.games, p.gameDir, 'resourcepacks', 'random-rp-name.zip'), rp)
+      await fsp.writeFile(pathMod.join(instancePath(p), 'resourcepacks', 'random-rp-name.zip'), rp)
       // A shader pack whose real name lives in shaders/shaders.json (Iris format).
-      mkdirp(pathMod.join(paths.games, p.gameDir, 'shaderpacks'))
+      mkdirp(pathMod.join(instancePath(p), 'shaderpacks'))
       const sh = zipCreate([
         { name: 'pack.mcmeta', data: JSON.stringify({ pack: { pack_format: 34, description: 'x' } }) },
         { name: 'shaders/shaders.json', data: JSON.stringify({ name: 'My Cinematic Shader' }) }
       ])
-      await fsp.writeFile(pathMod.join(paths.games, p.gameDir, 'shaderpacks', 'random-sh-name.zip'), sh)
+      await fsp.writeFile(pathMod.join(instancePath(p), 'shaderpacks', 'random-sh-name.zip'), sh)
 
       const res = await modManager.identifyManualMods(p.id)
       if (res.identified < 2) throw new Error(`expected 2 identified, got ${res.identified}`)
@@ -856,7 +875,7 @@ async function runBench(): Promise<void> {
       }
     }
 
-    const gameDir = pathMod.join(paths.games, profile.gameDir)
+    const gameDir = instancePath(profile)
     await ensureBenchWorld(profile, BENCH_WORLD, say)
 
     // `--quickPlaySingleplayer` takes the world name as its VALUE (the
@@ -1023,138 +1042,4 @@ async function collectPerfWindows(launcher: { isRunning(): boolean; stop(): Prom
     off()
   }
   return windows
-}
-
-/**
- * Generate (once) a deterministic single-player world for the benchmark
- * profile using the bundled dedicated server — fully headless, no GUI
- * interaction. The server writes DIRECTLY into `saves/<world>` (1.21.2+ world
- * format: `data/minecraft/world_gen_settings.dat` + chunks under
- * `dimensions/minecraft/overworld/region/`), so there is no copy step to race
- * with the server's writes. The client then quick-plays into that world like
- * any normal single-player session.
- */
-async function ensureBenchWorld(profile: Profile, worldName: string, say: (s: string) => void): Promise<void> {
-  const pathMod = await import('node:path')
-  const fsMod = await import('node:fs')
-  const gameDir = pathMod.join(paths.games, profile.gameDir)
-  const savesDir = pathMod.join(gameDir, 'saves')
-  const worldDir = pathMod.join(savesDir, worldName)
-
-  // A usable world has both the level data AND the world-gen settings the
-  // client needs to build its dimensions (missing settings = "Overworld
-  // settings missing" when the client tries to open the world).
-  const worldReady = (): boolean =>
-    fsMod.existsSync(pathMod.join(worldDir, 'level.dat')) &&
-    fsMod.existsSync(pathMod.join(worldDir, 'data', 'minecraft', 'world_gen_settings.dat'))
-
-  if (worldReady()) {
-    say(`  Reusing existing benchmark world "${worldName}"`)
-    return
-  }
-
-  say(`  Generating benchmark world "${worldName}" (headless dedicated server, one-time)…`)
-  const versionId = `${profile.minecraftVersion}-fabric-${profile.loader.version}`
-  const { versionManager } = await import('./minecraft/version-manager')
-  const { classpath } = await versionManager.ensureLibraries(versionId, () => undefined)
-  const clientJar = await versionManager.ensureClient(versionId)
-  const { pickJava } = await import('./minecraft/java')
-  const java = (await pickJava(25)) ?? (await pickJava(21)) ?? (await pickJava(17))
-  if (!java) throw new Error('no Java runtime found for world generation')
-
-  const sep = process.platform === 'win32' ? ';' : ':'
-  const cp = [...classpath, clientJar].join(sep)
-  const { spawn } = await import('node:child_process')
-
-  // Two attempts — a partial world from an interrupted run is wiped and retried.
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    fsMod.rmSync(worldDir, { recursive: true, force: true })
-    fsMod.mkdirSync(savesDir, { recursive: true })
-    fsMod.writeFileSync(pathMod.join(savesDir, 'eula.txt'), 'eula=true\n')
-    fsMod.writeFileSync(
-      pathMod.join(savesDir, 'server.properties'),
-      [
-        `level-name=${worldName}`,
-        'level-seed=42',
-        'online-mode=false',
-        'max-tick-time=-1',
-        'view-distance=8',
-        'simulation-distance=6',
-        'gamemode=creative',
-        'spawn-protection=0',
-        'sync-chunk-writes=false',
-        'server-port=25599'
-      ].join('\n') + '\n'
-    )
-
-    const child = spawn(java.path, ['-Xmx2G', '-cp', cp, 'net.minecraft.server.Main', '--nogui'], {
-      cwd: savesDir,
-      windowsHide: true,
-      env: { ...process.env }
-    })
-    try {
-      const done = await new Promise<boolean>((resolve) => {
-        let out = ''
-        const timer = setTimeout(() => resolve(false), 240_000)
-        const check = (): void => {
-          if (out.includes('Done')) {
-            clearTimeout(timer)
-            resolve(true)
-          }
-        }
-        child.stdout?.on('data', (d: Buffer) => {
-          out += d.toString('utf-8')
-          check()
-        })
-        child.stderr?.on('data', (d: Buffer) => {
-          out += d.toString('utf-8')
-          check()
-        })
-        child.on('close', () => {
-          clearTimeout(timer)
-          resolve(out.includes('Done'))
-        })
-      })
-      if (!done) {
-        if (attempt === 2) throw new Error('world generation did not complete ("Done" never appeared)')
-        continue
-      }
-
-      // Let the server flush its chunk/world writes before killing it — on
-      // Windows a process kill is forced (no shutdown hooks), so the settle
-      // window is what guarantees world_gen_settings.dat + spawn regions exist.
-      say(`  Attempt ${attempt}: spawn area generated — flushing chunks…`)
-      await new Promise((r) => setTimeout(r, 25_000))
-    } finally {
-      // Never leave a world-gen server running, whatever happened above.
-      if (child.exitCode === null) {
-        try {
-          child.kill('SIGTERM')
-        } catch {
-          /* already dead */
-        }
-      }
-    }
-
-    if (worldReady()) {
-      // Windows can briefly hold handles to the server's log files after the
-      // process dies — cleanup is best-effort and must never crash the bench.
-      await new Promise((r) => setTimeout(r, 2000))
-      const tryClean = (p: string): void => {
-        try {
-          fsMod.rmSync(p, { recursive: true, force: true })
-        } catch {
-          /* locked by the dying process — harmless */
-        }
-      }
-      tryClean(pathMod.join(savesDir, 'eula.txt'))
-      tryClean(pathMod.join(savesDir, 'server.properties'))
-      tryClean(pathMod.join(savesDir, 'logs'))
-      say(`  World ready at saves/${worldName}`)
-      return
-    }
-
-    say('  World incomplete — retrying generation…')
-  }
-  throw new Error(`world generation produced an incomplete world after 2 attempts (missing world_gen_settings.dat)`)
 }

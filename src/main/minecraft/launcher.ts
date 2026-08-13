@@ -10,6 +10,7 @@
  * spawn java → stream output → track session → record playtime.
  */
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
+import { instancePath } from '../instances/paths'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -278,7 +279,7 @@ class Launcher {
       mark('java')
       if (!java) throw Errors.missingJava(requiredMajor)
 
-      const gameDir = path.join(paths.games, profile.gameDir)
+      const gameDir = instancePath(profile)
       fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true })
       // FPS Boost is ON by default for EVERY profile, Vanilla included — the
       // Reimagined performance layer reads this config (the Fabric mod only
@@ -391,7 +392,7 @@ class Launcher {
     const mcProfile = account.profile!
     // assetIndex is verified to exist before buildArgs is called (launch() guards it).
     const assetIndexId = vj.assetIndex?.id ?? ''
-    const gameDir = path.join(paths.games, profile.gameDir)
+    const gameDir = instancePath(profile)
     const jvm: string[] = []
     const game: string[] = []
 
@@ -785,7 +786,7 @@ class Launcher {
    */
   private startLogTail(session: GameSession): void {
     try {
-      const file = path.join(paths.games, session.profile.gameDir, 'logs', 'latest.log')
+      const file = path.join(instancePath(session.profile), 'logs', 'latest.log')
       if (!fs.existsSync(file)) return
       const size = fs.statSync(file).size
       // Replay the last 150 lines for context (real game output).

@@ -20,6 +20,7 @@
  * what it may have affected.
  */
 import path from 'node:path'
+import { instancePath, resolveInstanceDir } from '../instances/paths'
 import fsp from 'node:fs/promises'
 import { paths } from '../paths'
 import { logger } from '../logs/logger'
@@ -44,7 +45,7 @@ function stamp(): string {
 
 /** The profile's instance directory (same layout as launcher/profile-manager). */
 function instanceDir(profile: Profile): string {
-  return path.join(paths.games, profile.gameDir)
+  return instancePath(profile)
 }
 
 /**
@@ -156,7 +157,7 @@ export async function backupOptionsTxt(gameDirPath: string, profileName = '?'): 
     const inst =
       gameDirPath.includes('/') || gameDirPath.includes('\\')
         ? gameDirPath
-        : path.join(paths.games, gameDirPath)
+        : resolveInstanceDir(gameDirPath)
     const gameDir = path.basename(inst)
     const src = path.join(inst, 'options.txt')
     if (!exists(src)) return

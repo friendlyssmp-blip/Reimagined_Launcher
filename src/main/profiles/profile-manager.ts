@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import { paths } from '../paths'
 import { exists, readJson, writeJson, remove, mkdirp } from '../utils/fs'
 import { uuid, slugify, iso } from '../utils/format'
+import { instancePath, instancePathFromFolder, sanitizeInstanceName } from '../instances/paths'
 import { logger } from '../logs/logger'
 import { eventBus } from '../core/event-bus'
 import { LauncherError } from '../core/errors'
@@ -35,8 +36,9 @@ class ProfileManager {
     return path.join(paths.profiles, `${id}.json`)
   }
 
-  private instanceDir(gameDir: string): string {
-    return path.join(paths.games, gameDir)
+  /** Canonical instance location — always through the central resolver. */
+  private instanceDir(profile: Profile): string {
+    return instancePath(profile)
   }
 
   async list(): Promise<Profile[]> {
@@ -68,6 +70,10 @@ class ProfileManager {
 
     const id = uuid()
     const gameDir = `${slugify(name)}-${id.slice(0, 8)}`
+    // v1.0.92 — the human-readable folder name (collision-safe).
+    const { uniqueFolderName } = await import('../instances/migrate')
+    const folder = await uniqueFolderName(name, await this.list())
+    const instanceRoot = instancePathFromFolder(folder)
 
     const progress = (phase: string, percent: number | null) =>
       eventBus.emit('profile:progress', { action: 'create', profileId: id, name, phase, percent, done: false })
@@ -78,7 +84,7 @@ class ProfileManager {
       progress('Setting up folders…', 5)
       const dirs = ['mods', 'saves', 'logs', 'resourcepacks', 'shaderpacks', 'datapacks']
       for (let i = 0; i < dirs.length; i++) {
-        mkdirp(path.join(this.instanceDir(gameDir), dirs[i]))
+        mkdirp(path.join(instanceRoot, dirs[i]))
         progress('Setting up folders…', 5 + Math.round(((i + 1) / dirs.length) * 30))
       }
 
@@ -92,6 +98,7 @@ class ProfileManager {
         extraJvmArgs: input.extraJvmArgs ?? '',
         extraGameArgs: input.extraGameArgs ?? '',
         gameDir,
+        folder,
         mods: [],
         favorite: input.favorite ?? false,
         icon: input.icon ?? null,
@@ -134,7 +141,39 @@ class ProfileManager {
   async update(id: string, patch: Partial<Profile>): Promise<Profile> {
     const current = await this.get(id)
     if (!current) throw new LauncherError('PROFILE_MISSING', 'Profile not found.')
-    const updated: Profile = { ...current, ...patch, id: current.id, gameDir: current.gameDir }
+
+    // v1.0.92 — when the display name changes, safely rename the physical
+    // instance folder too (never delete/recreate). The internal gameDir id
+    // stays untouched. If the rename fails, the folder keeps its old name
+    // and everything keeps working through the central resolver.
+    let folder = current.folder
+    if (patch.name && patch.name.trim() !== current.name) {
+      const { uniqueFolderName } = await import('../instances/migrate')
+      folder = await uniqueFolderName(patch.name.trim(), await this.list(), id)
+      if (folder !== current.folder) {
+        const src = current.folder ? instancePathFromFolder(current.folder) : path.join(paths.games, current.gameDir)
+        const dst = instancePathFromFolder(folder)
+        if (exists(src)) {
+          try {
+            const { rename, copyDir, remove, countEntries } = await import('../utils/fs')
+            try {
+              await rename(src, dst)
+            } catch {
+              await copyDir(src, dst)
+              const [a, b] = await Promise.all([countEntries(src), countEntries(dst)])
+              if (b < a) throw new Error('folder copy verification failed')
+              await remove(src)
+            }
+            logger.info(`Profile renamed: "${current.name}" → "${patch.name.trim()}" — instance folder moved to Instances/${folder}`)
+          } catch (err) {
+            logger.warn(`Profile renamed but the instance folder could not be renamed (${(err as Error).message}) — the profile keeps its existing folder.`)
+            folder = current.folder
+          }
+        }
+      }
+    }
+
+    const updated: Profile = { ...current, ...patch, id: current.id, gameDir: current.gameDir, ...(folder ? { folder } : {}) }
     await writeJson(this.file(id), updated)
     this.cache.set(id, updated)
 
@@ -209,7 +248,7 @@ class ProfileManager {
       if (deleteFiles) {
         progress('Counting game files…', 25)
         const { countEntries, removeWithProgress } = await import('../utils/fs')
-        const instance = this.instanceDir(profile.gameDir)
+        const instance = this.instanceDir(profile)
         const total = await countEntries(instance)
         if (total > 0) {
           progress('Deleting game files…', 35)
@@ -239,11 +278,15 @@ class ProfileManager {
     const newId = uuid()
     const copyName = (opts.name ?? `${source.name} (Copy)`).trim()
     const newGameDir = `${slugify(copyName)}-${newId.slice(0, 8)}`
+    // v1.0.92 — duplicate gets its own human-readable folder (collision-safe).
+    const { uniqueFolderName } = await import('../instances/migrate')
+    const newFolder = await uniqueFolderName(copyName, await this.list())
     const copy: Profile = {
       ...source,
       id: newId,
       name: copyName || `${source.name} (Copy)`,
       gameDir: newGameDir,
+      folder: newFolder,
       favorite: false,
       createdAt: iso(),
       lastLaunched: null,
@@ -259,8 +302,8 @@ class ProfileManager {
       // Copy the instance so mods/resource packs/config come along. Saves
       // (worlds) are NOT copied by default — a duplicate is a variant to
       // experiment with, not a backup. copyWorlds opts in to include them.
-      const srcDir = this.instanceDir(source.gameDir)
-      const dstDir = this.instanceDir(newGameDir)
+      const srcDir = this.instanceDir(source)
+      const dstDir = this.instanceDir(copy)
       const { copyDirExcluding } = await import('../utils/fs')
       if (exists(srcDir)) {
         progress('Copying setup files…', 20)

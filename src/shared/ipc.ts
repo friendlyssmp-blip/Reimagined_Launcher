@@ -122,6 +122,11 @@ export const IPC = {
 
   // System
   systemCleanReset: 'system:clean-reset',
+  // v1.0.92 — Copy PC Specs (Settings → Performance → Your Hardware)
+  systemCopySpecs: 'system:copy-specs',
+  // v1.0.92 — Clear Up Space (Settings → Storage)
+  storageScan: 'storage:scan',
+  storageClean: 'storage:clean',
   
   // Future systems (placeholders)
   modpackExport: 'modpack:export',
@@ -183,7 +188,15 @@ export const IPC = {
   // v1.0.88 — instance screenshots
   screenshotList: 'screenshots:list',
   screenshotExport: 'screenshots:export',
-  screenshotDelete: 'screenshots:delete'
+  screenshotDelete: 'screenshots:delete',
+  // v1.0.92 — Run a FPS Test (Account)
+  fpsTestList: 'fpstest:list',
+  fpsTestStart: 'fpstest:start',
+  fpsTestStatus: 'fpstest:status',
+  fpsTestCancel: 'fpstest:cancel',
+  fpsTestResults: 'fpstest:results',
+  fpsTestReportPath: 'fpstest:report-path',
+  fpsTestOpenReport: 'fpstest:open-report'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

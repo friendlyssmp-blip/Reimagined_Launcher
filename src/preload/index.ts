@@ -201,7 +201,22 @@ const api = {
   },
   system: {
     getMemory: (): Promise<unknown> => ipcRenderer.invoke('system:getMemory'),
-    cleanReset: (): Promise<unknown> => ipcRenderer.invoke(IPC.systemCleanReset)
+    cleanReset: (): Promise<unknown> => ipcRenderer.invoke(IPC.systemCleanReset),
+    // v1.0.92 — Copy PC Specs + Clear Up Space
+    copySpecs: (opts: { minimal?: boolean; profileId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.systemCopySpecs, opts),
+    scanStorage: (): Promise<unknown> => ipcRenderer.invoke(IPC.storageScan),
+    cleanStorage: (ids: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.storageClean, { ids })
+  },
+  // v1.0.92 — Run a FPS Test (Account)
+  fpsTest: {
+    list: (): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestList),
+    start: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestStart, { profileId }),
+    status: (): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestStatus),
+    cancel: (): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestCancel),
+    results: (): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestResults),
+    reportPath: (): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestReportPath),
+    openReport: (path?: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestOpenReport, { path })
   },
   
 

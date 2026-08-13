@@ -12,6 +12,7 @@
  * CurseForge browsing — the launcher remains Modrinth-only for discovery.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fsp from 'node:fs/promises'
 import { paths } from '../paths'
 import { exists, remove, mkdirp } from '../utils/fs'
@@ -105,7 +106,7 @@ export async function installCurseforgeFile(
   }
 
   const safeName = info.fileName.replace(/[\/:*?"<>|]/g, '_')
-  const destDir = path.join(paths.games, profile.gameDir, folderFor(projectType))
+  const destDir = path.join(instancePath(profile), folderFor(projectType))
   mkdirp(destDir)
   const dest = path.join(destDir, safeName)
   if (exists(dest)) await remove(dest)

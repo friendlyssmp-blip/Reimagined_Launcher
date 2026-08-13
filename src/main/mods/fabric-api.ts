@@ -8,6 +8,7 @@
  * Fabric profile is immediately playable without manual setup.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import { paths } from '../paths'
 import { getJson } from '../utils/http'
 import { runDownloadBatch } from '../minecraft/downloader'
@@ -117,7 +118,7 @@ export async function ensureFabricApi(profile: Profile): Promise<void> {
   }
 
   const file = latest.files[0]
-  const modsDir = path.join(paths.games, profile.gameDir, 'mods')
+  const modsDir = path.join(instancePath(profile), 'mods')
   const dest = path.join(modsDir, file.filename)
 
   // Real Modrinth identity — the entry is keyed by the REAL project id so

@@ -42,6 +42,8 @@ export async function cleanReleaseReset(): Promise<void> {
     paths.profiles,
     paths.logs,
     paths.games,
+    // v1.0.92 — instances moved to their own top-level folder.
+    paths.instances,
     paths.updates,
     path.join(paths.data, 'skins'),
     path.join(paths.data, 'tmp'), // modpack staging etc.

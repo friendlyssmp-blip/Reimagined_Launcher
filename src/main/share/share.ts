@@ -15,6 +15,7 @@
  * whole. Account data, worlds, saves and screenshots are never shared.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fsp from 'node:fs/promises'
 import zlib from 'node:zlib'
 import { randomBytes } from 'node:crypto'
@@ -578,7 +579,7 @@ async function collectFolderEntries(
   profile: { gameDir: string },
   folders: string[]
 ): Promise<{ entries: { name: string; data: Buffer }[]; total: number; nonEmpty: string[] }> {
-  const gameDir = path.join(paths.games, profile.gameDir)
+  const gameDir = instancePath(profile)
   const entries: { name: string; data: Buffer }[] = []
   const nonEmpty: string[] = []
   let total = 0
@@ -722,7 +723,7 @@ export async function exportZipWithDialog(
 export async function folderSizes(profileId: string): Promise<Record<string, number>> {
   const profile = await profileManager.get(profileId)
   if (!profile) throw new LauncherError('PROFILE_MISSING', 'Profile not found.')
-  const gameDir = path.join(paths.games, profile.gameDir)
+  const gameDir = instancePath(profile)
   const out: Record<string, number> = {}
   for (const f of SHARE_FOLDERS) {
     if (f.id === 'settings') {
@@ -982,7 +983,7 @@ export async function importSnapshot(snapshot: ShareSnapshot, opts: ImportOption
     const { mkdirp } = await import('../utils/fs')
     const pathMod = await import('node:path')
     for (const d of ['mods', 'saves', 'logs', 'resourcepacks', 'shaderpacks', 'datapacks']) {
-      mkdirp(pathMod.join(paths.games, profile.gameDir, d))
+      mkdirp(pathMod.join(instancePath(profile), d))
     }
 
     /* v1.0.81 — restore the real files bundled in the archive (worlds,
@@ -991,7 +992,7 @@ export async function importSnapshot(snapshot: ShareSnapshot, opts: ImportOption
      * source machine are treated as restored-by-file. */
     const extractedFolders = new Set<string>()
     if (localZip && localFolders.length > 0) {
-      const gameDir = pathMod.join(paths.games, profile.gameDir)
+      const gameDir = instancePath(profile)
       for (const folder of localFolders) {
         // v1.0.81 — the universal .mrpack layout keeps everything under
         // overrides/, so extraction strips that prefix from each path.
@@ -1157,7 +1158,7 @@ async function importMrpack(buf: Buffer, snapshot: ShareSnapshot, exclude: strin
   try {
     const { mkdirp } = await import('../utils/fs')
     const pathMod = await import('node:path')
-    const gameDir = pathMod.join(paths.games, profile.gameDir)
+    const gameDir = instancePath(profile)
     for (const d of ['mods', 'saves', 'logs', 'resourcepacks', 'shaderpacks', 'datapacks']) {
       mkdirp(pathMod.join(gameDir, d))
     }
@@ -1263,7 +1264,7 @@ export async function importZipBuffer(buf: Buffer, exclude: string[] = []): Prom
   if (isCurseforge) {
     const profile = await profileManager.get(result.profileId)
     if (profile) {
-      const applied = zipExtractPrefix(buf, 'overrides', path.join(paths.games, profile.gameDir))
+      const applied = zipExtractPrefix(buf, 'overrides', instancePath(profile))
       if (applied.length > 0) {
         logger.info(`CurseForge import: applied ${applied.length} override file(s) to "${profile.name}"`)
       }

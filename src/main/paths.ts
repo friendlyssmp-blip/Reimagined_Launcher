@@ -20,6 +20,8 @@ export const paths = {
   profiles: join(DATA_ROOT, 'profiles'),
   logs: join(DATA_ROOT, 'logs'),
   games: join(DATA_ROOT, 'games'),
+  /** v1.0.92 — human-readable instance folders (data/Instances/<Name>). */
+  instances: join(DATA_ROOT, 'Instances'),
   versions: join(DATA_ROOT, 'games', 'versions'),
   libraries: join(DATA_ROOT, 'games', 'libraries'),
   assets: join(DATA_ROOT, 'games', 'assets'),

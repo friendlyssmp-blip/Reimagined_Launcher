@@ -19,6 +19,7 @@
  * debugged later.
  */
 import fs from 'node:fs'
+import { instancePath } from '../instances/paths'
 import path from 'node:path'
 import { paths } from '../paths'
 import { logger } from '../logs/logger'
@@ -53,7 +54,7 @@ function driverAtLeast(current: string | null | undefined, min: string): boolean
 
 /** The instance folder for a profile (shader packs live in `shaderpacks/`). */
 function instanceDir(profile: Profile): string {
-  return path.join(paths.games, profile.gameDir)
+  return instancePath(profile)
 }
 
 /**

@@ -7,6 +7,7 @@
  * reports offline — never blocks the UI (IPC is async).
  */
 import net from 'node:net'
+import { instancePath } from '../instances/paths'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import zlib from 'node:zlib'
@@ -465,7 +466,7 @@ export async function installToInstance(profileId: string, address: string, name
   if (!profile) throw new Error('Profile not found.')
   const clean = String(address ?? '').trim()
   if (!clean) throw new Error('Enter a server address, e.g. play.example.com:25565.')
-  const serversDat = path.join(paths.games, profile.gameDir, 'servers.dat')
+  const serversDat = path.join(instancePath(profile), 'servers.dat')
   let servers: InstalledServerEntry[] = []
   try {
     if (fs.existsSync(serversDat)) servers = readServersDat(fs.readFileSync(serversDat))

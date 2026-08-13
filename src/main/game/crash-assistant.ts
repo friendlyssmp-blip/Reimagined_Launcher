@@ -9,6 +9,7 @@
  * It is strictly read-only and never fails a launch.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import { paths } from '../paths'
@@ -86,7 +87,7 @@ function extractResponsibleMods(raw: string): string[] {
 /** Tail of the instance's latest.log — what happened right before the crash. */
 async function extractLogTail(profile: Profile): Promise<string[]> {
   try {
-    const logPath = path.join(paths.games, profile.gameDir, 'logs', 'latest.log')
+    const logPath = path.join(instancePath(profile), 'logs', 'latest.log')
     if (!fs.existsSync(logPath)) return []
     const st = await fsp.stat(logPath)
     // Only fresh logs (written around the crash) — never stale context.
@@ -163,7 +164,7 @@ function suggestFor(text: string): string[] {
  * that as a normal non-zero exit, not a crash.
  */
 export async function detectCrashReport(profile: Profile): Promise<CrashReport | null> {
-  const crashDir = path.join(paths.games, profile.gameDir, 'crash-reports')
+  const crashDir = path.join(instancePath(profile), 'crash-reports')
   if (!fs.existsSync(crashDir)) return null
   let entries: string[]
   try {

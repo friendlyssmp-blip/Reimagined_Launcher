@@ -74,7 +74,9 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // Re-check GitHub every 15 s while the launcher is open (15 s – 15 min).
   updateCheckIntervalSec: 15,
   // V2 download queue: 1 = strict queue (default), 3 / 5 = parallel installs.
-  downloadConcurrency: 1
+  downloadConcurrency: 1,
+  // v1.0.92 — Clear Up Space: re-verify every selected file before deleting.
+  cleanupSafetyRecheck: true
 }
 
 class SettingsManager {

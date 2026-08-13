@@ -15,6 +15,7 @@
  * FpsBoost-source/README — they ship as soon as their build target is added.
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fs from 'node:fs'
 import { paths } from '../paths'
 import { logger } from '../logs/logger'
@@ -80,7 +81,7 @@ export async function installFpsBoost(profileId: string): Promise<{ installed: b
     return { installed: true, version: FPS_BOOST_VERSION, message: 'Already installed.' }
   }
 
-  const modsDir = path.join(paths.games, profile.gameDir, 'mods')
+  const modsDir = path.join(instancePath(profile), 'mods')
   const dest = path.join(modsDir, filename)
   const { mkdirp } = await import('../utils/fs')
   mkdirp(modsDir)
@@ -117,7 +118,7 @@ export async function removeFpsBoost(profileId: string): Promise<{ removed: bool
   }
   const mod = profile.mods.find((m) => m.id === FPS_BOOST_ID)
   if (mod) {
-    const dir = path.join(paths.games, profile.gameDir, 'mods')
+    const dir = path.join(instancePath(profile), 'mods')
     await fs.promises.rm(path.join(dir, mod.filename), { force: true }).catch(() => {})
     if (mod.filename.endsWith('.jar')) {
       await fs.promises.rm(path.join(dir, `${mod.filename}.disabled`), { force: true }).catch(() => {})
@@ -167,7 +168,7 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
     return
   }
 
-  const modsDir = path.join(paths.games, profile.gameDir, 'mods')
+  const modsDir = path.join(instancePath(profile), 'mods')
   const dest = path.join(modsDir, filename)
 
   try {
@@ -200,7 +201,25 @@ export async function ensureFpsBoost(profile: Profile): Promise<void> {
     // jar (filenames encode the Minecraft branch: -mc26.1 / -mc26.2). A version
     // match alone is not enough: if the profile's Minecraft version changed
     // between branches the old jar must be swapped for this branch's jar.
-    if (existing && existing.versionNumber === FPS_BOOST_VERSION && existing.filename === filename) return
+    // v1.0.92 — also compare the actual file: the bundled jar can be rebuilt
+    // (same version number) to add new capabilities (e.g. the FPS Test
+    // BenchmarkDriver). A stale copy on disk would silently miss them, so a
+    // hash mismatch re-copies the up-to-date bundle.
+    if (existing && existing.versionNumber === FPS_BOOST_VERSION && existing.filename === filename) {
+      let identical = true
+      try {
+        if (fs.existsSync(dest) && fs.existsSync(source)) {
+          const a = fs.readFileSync(dest)
+          const b = fs.readFileSync(source)
+          identical = a.length === b.length && a.equals(b)
+        } else {
+          identical = false
+        }
+      } catch {
+        identical = false
+      }
+      if (identical) return
+    }
 
     const { mkdirp } = await import('../utils/fs')
     mkdirp(modsDir)

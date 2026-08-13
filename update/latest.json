@@ -1,8 +1,8 @@
 {
-  "version": "1.0.91",
-  "installer": "dist/Reimagined-Setup-1.0.91.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.91.exe",
-  "sha256": "ddcdf90deb31f46aca46e703965e2c75f64656ce4da7c16c50e3947990cf4031",
-  "notes": "v1.0.90 - CRITICAL: silent updates fixed for real. Two installer bugs made every update fail silently (the launcher closed but never updated): (1) the branded splash hung the installer, (2) the old custom uninstaller aborted the upgrade with a fake 'uninstall' dialog. The splash is removed, the uninstaller only refuses when uninstalling interactively, and the updater now clears a stale old uninstaller before applying, so this update installs cleanly and future updates work automatically.",
-  "publishedAt": "2026-08-13T09:00:00+00:00"
+  "version": "1.0.92",
+  "installer": "dist/Reimagined-Setup-1.0.92.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.92.exe",
+  "sha256": "de0550beb1c4d665e7c7eb837a84275ef3bef0b8d3a182f852a4241985429764",
+  "notes": "v1.0.92 - Instances reorganized into readable folders (data/Instances/<Name>/, safe non-destructive migration on first start, no data loss), new Clear Up Space storage analyzer (Settings > Storage), Copy All PC Specs button (Settings > Performance > Your Hardware), and Run a FPS Test (Account): real measured benchmark on any Fabric instance with FPS Boost - lowest-FPS-per-test report in a plain-text .txt with your PC specs. FPS Boost bundled jars rebuilt with the benchmark driver for 26.1 + 26.2; existing instances pick it up automatically.",
+  "publishedAt": "2026-08-13T10:50:00+00:00"
 }

@@ -1,3 +1,29 @@
+## v1.0.92 — Instances reorganized, Clear Up Space, Copy PC Specs & Run a FPS Test
+
+### 1. Instance directory reorganization (safe migration)
+- Instances now live in readable folders: `data/Instances/<Instance Name>/` (e.g. `Instances/Survival 1.21.11/`) instead of cryptic `data/games/<slug>-<id8>/` folders.
+- A central `instancePath()` resolver is the single source of truth for every system (launching, mods, packs, worlds, screenshots, sharing, backups, logs).
+- **Safe, non-destructive migration on first start:** every instance is moved with its `mods`, `config`, `saves`, `resourcepacks`, `shaderpacks`, `screenshots` and `logs` intact. Internal IDs never change; duplicate names get a `(2)` suffix; a manifest records every move; verification runs before the old folder is released. If anything fails, the original data is left untouched and the instance keeps working from its legacy location.
+- Renaming an instance now safely renames its physical folder too.
+
+### 2. Clear Up Space (Settings → Storage)
+- A safe storage analyzer: it proves data is unnecessary BEFORE offering deletion. Scans launcher caches, temporary/`*.part` files, obsolete update packages, failed-install leftovers, and SHA-256-confirmed duplicate downloads.
+- Every item has a confidence score; only ≥90% confidence is auto-selected. Instance folders (`mods/`, `config/`, `saves/`, `resourcepacks/`, `shaderpacks/`, `screenshots/`) are NEVER touched. Deletion re-verifies every file immediately before removing it.
+- Visual storage breakdown + progress during scanning; cleanup report after.
+
+### 3. Copy PC Specs (Settings → Performance → Your Hardware)
+- `[ Copy All PC Specs ]` copies a clean, privacy-safe plain-text block (CPU/GPU/RAM/display/storage/Java/OS/launcher) to the clipboard — no usernames, emails, tokens, IP/MAC, serials or product keys. Button shows `✓ Copied!` for 2s.
+- `[ Copy Minimal Specs ]` copies just CPU/GPU/RAM/OS/Java/Minecraft version/loader.
+
+### 4. Run a FPS Test (Account)
+- Pick any Fabric instance with FPS Boost → the launcher generates a dedicated `reimagined-bench` world (never touches your real worlds), launches straight into it, and the FPS Boost mod's new BenchmarkDriver runs the full real-measurement suite.
+- **Every FPS is REAL** — sampled once per second, and the reported value is always the LOWEST FPS recorded during that test. Anything not measured reports `N/A`; nothing is invented. The client thread never blocks (tick-driven).
+- Tests: Normal Walking, Fast Flying, New World First FPS, New World Load Time, Ocean Chunk Loading, 27/125 TNT Explosions, Old Chunk Loading, Maximum Entities Before Lag, Respawn Time, Fast Block Breaking, 2-Minute Survival, Fast Entity Loading, Creeper Explosion, AFK, New World Camera Loading, Inventory Opening, Fast F5, RTP Chunk Loading, Minecraft Main Menu, Minecraft Startup Time + Miniature Shader when active.
+- Live UI while running (current test, progress bar, lowest FPS so far) + `Reimagined_FPS_Test_<date>.txt` report in the exact plain-text template (with your PC specs) → Open Report / Copy Results / Open Folder / Run Again.
+- FPS Boost bundled jars rebuilt with the driver (26.1 + 26.2); existing instances pick up the new jar automatically (hash-verified on launch).
+
+---
+
 ## v1.0.91 - the update bridge: any old version can now upgrade to the latest
 
 ### Why this release exists

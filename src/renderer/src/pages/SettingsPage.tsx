@@ -51,7 +51,7 @@ function PerfTierIcon({ tier, size = 14 }: { tier: string; size?: number }) {
   return <Icon style={{ width: size, height: size, flex: '0 0 auto' }} />
 }
 
-import type { ThemeId, LauncherSettings, PerfStatus, PerfRecommendation, PerfModOption } from '@shared/types'
+import type { ThemeId, LauncherSettings, PerfStatus, PerfRecommendation, PerfModOption, StorageScanResult, StorageCleanResult } from '@shared/types'
 import { useT } from '../lib/i18n'
 
 const themes: { id: ThemeId; label: string; colors: string[] }[] = [
@@ -71,6 +71,8 @@ const getSections = (t: (k: string) => string) => [
   { id: 'performance', label: t('settings.performance'), icon: IconBolt },
   { id: 'downloads', label: t('settings.downloads'), icon: IconDownload },
   { id: 'updates', label: t('settings.updates'), icon: IconRefresh },
+  // v1.0.92 — Clear Up Space (Settings → Storage)
+  { id: 'storage', label: t('settings.storage'), icon: IconDownload },
   { id: 'credits', label: t('settings.credits'), icon: IconSparkle }
 ] as const
 
@@ -571,6 +573,10 @@ export function SettingsPage() {
             </>
           )}
 
+          {section === 'storage' && (
+            <StorageSection />
+          )}
+
           {section === 'credits' && (
             <>
               {/* v1.0.85 — Credits, rebuilt: animated team cards + links */}
@@ -683,6 +689,24 @@ function PerformanceSection() {
   const [selectedProfile, setSelectedProfile] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
+  /* v1.0.92 — Copy PC Specs button feedback (✓ Copied! for ~2s). */
+  const [copiedAll, setCopiedAll] = useState(false)
+  const [copiedMin, setCopiedMin] = useState(false)
+  const copySpecs = async (minimal: boolean): Promise<void> => {
+    try {
+      await api.system.copySpecs({ minimal, profileId: profileId || undefined })
+      if (minimal) {
+        setCopiedMin(true)
+        setTimeout(() => setCopiedMin(false), 2000)
+      } else {
+        setCopiedAll(true)
+        setTimeout(() => setCopiedAll(false), 2000)
+      }
+      notify('success', 'Copied', (minimal ? 'Minimal' : 'All') + ' PC specs copied to the clipboard.')
+    } catch (err) {
+      notify('error', 'Could not copy', friendlyError(err))
+    }
+  }
 
   const profileId = selectedProfile || profiles[0]?.id || ''
 
@@ -943,6 +967,29 @@ function PerformanceSection() {
             </div>
           ))}
         </div>
+        {/* v1.0.92 — Copy All / Minimal PC Specs to the clipboard */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!hw}
+            onClick={() => void copySpecs(false)}
+            style={{ transition: 'transform 0.15s ease' }}
+          >
+            {copiedAll ? '✓ Copied!' : 'Copy All PC Specs'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!hw}
+            onClick={() => void copySpecs(true)}
+          >
+            {copiedMin ? '✓ Copied!' : 'Copy Minimal Specs'}
+          </Button>
+          <span style={{ fontSize: 11.5, color: 'var(--text-3)', alignSelf: 'center' }}>
+            Paste into bug reports or Discord — technical specs only, no personal data.
+          </span>
+        </div>
       </div>
 
       <div className="panel">
@@ -1165,6 +1212,213 @@ function StabilitySection() {
           </div>
         </div>
       </div>
+    </>
+  )
+}
+
+
+/* ------------------------------- Clear Up Space (v1.0.92) ------------------------------- */
+
+const CATEGORY_LABEL: Record<string, string> = {
+  updates: 'Old updates',
+  temporary: 'Temporary',
+  cache: 'Cache',
+  backups: 'Old backups',
+  orphaned: 'Orphans',
+  duplicates: 'Duplicates'
+}
+
+function fmtSize(b: number): string {
+  if (b >= 1024 * 1024 * 1024) return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB'
+  if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB'
+  if (b >= 1024) return (b / 1024).toFixed(0) + ' KB'
+  return b + ' B'
+}
+
+/** Settings → Storage → Clear Up Space — a safe storage analyzer. */
+function StorageSection() {
+  const { notify } = useApp()
+  const [scan, setScan] = useState<StorageScanResult | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [cleaning, setCleaning] = useState(false)
+  const [result, setResult] = useState<StorageCleanResult | null>(null)
+
+  const runScan = async (): Promise<void> => {
+    setScanning(true)
+    setResult(null)
+    try {
+      const s = await api.system.scanStorage()
+      setScan(s)
+      // Auto-select only items with confidence >= 90.
+      setSelected(new Set(s.items.filter((i) => i.autoSelected).map((i) => i.id)))
+    } catch (err) {
+      notify('error', 'Scan failed', friendlyError(err))
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  useEffect(() => {
+    void runScan()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const toggle = (id: string): void => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedBytes = scan
+    ? scan.items.filter((i) => selected.has(i.id)).reduce((s, i) => s + i.sizeBytes, 0)
+    : 0
+
+  const doClean = async (): Promise<void> => {
+    setCleaning(true)
+    try {
+      const r = await api.system.cleanStorage([...selected])
+      setResult(r)
+      notify('success', 'Cleanup complete', r.removed + ' item(s) removed — ' + fmtSize(r.freedBytes) + ' recovered.')
+      await runScan()
+    } catch (err) {
+      notify('error', 'Cleanup failed', friendlyError(err))
+    } finally {
+      setCleaning(false)
+    }
+  }
+
+  const totalBytes = scan?.breakdown.reduce((s, b) => s + b.bytes, 0) ?? 0
+
+  return (
+    <>
+      <div className="panel">
+        <div className="panel-title">Clear Up Space</div>
+        <p className="panel-sub">
+          Reimagined finds genuinely unnecessary duplicated, temporary, obsolete or regeneratable data.
+          Nothing is ever deleted without your confirmation — instances, worlds, mods, packs and configs are always protected.
+        </p>
+
+        {/* Storage breakdown (visual) */}
+        {scan && scan.breakdown.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              Reimagined storage · {fmtSize(totalBytes)} total
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {scan.breakdown
+                .filter((b) => b.bytes > 0)
+                .sort((a, b) => b.bytes - a.bytes)
+                .map((b) => (
+                  <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 110, fontSize: 11.5, color: 'var(--text-2)', flexShrink: 0 }}>{b.label}</div>
+                    <div className="stat-bar" style={{ flex: 1 }}>
+                      <div className="stat-bar-fill" style={{ width: `${Math.max(2, (b.bytes / Math.max(1, totalBytes)) * 100)}%` }} />
+                    </div>
+                    <div style={{ width: 70, fontSize: 11.5, color: 'var(--text-3)', textAlign: 'right', flexShrink: 0 }}>{fmtSize(b.bytes)}</div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <Button variant="primary" size="sm" onClick={() => void runScan()} disabled={scanning}>
+            {scanning ? 'Scanning…' : 'Scan again'}
+          </Button>
+        </div>
+      </div>
+
+      {scanning && (
+        <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-2)' }}>
+          <Spinner /> Scanning Reimagined storage… ({scan?.scannedFiles ?? 0} files)
+        </div>
+      )}
+
+      {!scanning && scan && (
+        <div className="panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div className="panel-title">Found {scan.items.length} item(s)</div>
+              <p className="panel-sub">
+                <b style={{ color: 'var(--accent-3)' }}>{fmtSize(scan.recoverableBytes)}</b> safely recoverable ·{' '}
+                {scan.items.filter((i) => i.confidence < 90).length} item(s) below 90% confidence require manual review
+              </p>
+            </div>
+            {selectedBytes > 0 && (
+              <Button variant="primary" size="sm" disabled={cleaning} onClick={() => void doClean()}>
+                {cleaning ? 'Cleaning…' : 'Clean ' + fmtSize(selectedBytes)}
+              </Button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
+            {scan.items.length === 0 && (
+              <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>Nothing to clean — your storage looks tidy.</p>
+            )}
+            {scan.items.map((item) => {
+              const checked = selected.has(item.id)
+              const lowConf = item.confidence < 90
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => toggle(item.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: 'var(--bg-2)',
+                    border: '1px solid ' + (checked ? 'var(--accent-3)' : 'var(--border)'),
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    opacity: item.sizeBytes === 0 ? 0.55 : 1,
+                    transition: 'border-color 0.15s ease'
+                  }}
+                >
+                  <span style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                    background: checked ? 'var(--accent-3)' : 'transparent',
+                    border: '1px solid ' + (checked ? 'var(--accent-3)' : 'var(--border)'),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: 11, fontWeight: 700
+                  }}>
+                    {checked ? '✓' : ''}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12.5, color: 'var(--text-1)', fontWeight: 600 }}>{item.label}</span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.4 }}>{item.detail}</span>
+                  </span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, flexShrink: 0,
+                    background: lowConf ? 'rgba(234,179,8,0.12)' : 'rgba(139,92,246,0.14)',
+                    color: lowConf ? '#eab308' : 'var(--accent-3)',
+                    textTransform: 'uppercase', letterSpacing: '0.04em'
+                  }}>
+                    {CATEGORY_LABEL[item.category] ?? item.category} · {item.confidence}%
+                  </span>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-2)', flexShrink: 0, minWidth: 58, textAlign: 'right' }}>
+                    {fmtSize(item.sizeBytes)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {result && result.skipped.length > 0 && (
+            <div className="banner banner-warn" style={{ marginTop: 14 }}>
+              <b>Protected — not removed:</b> {result.skipped.length} item(s) failed their safety re-check and were left untouched.
+              <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4 }}>
+                {result.skipped.map((s) => s.reason).filter((r, i, a) => a.indexOf(r) === i).slice(0, 3).join(' · ')}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </>
   )
 }

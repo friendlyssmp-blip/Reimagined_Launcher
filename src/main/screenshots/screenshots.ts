@@ -6,6 +6,7 @@
  * down reimagined-shot:// protocol (same pattern as the music library).
  */
 import path from 'node:path'
+import { instancePath } from '../instances/paths'
 import fsp from 'node:fs/promises'
 import { dialog } from 'electron'
 import { paths } from '../paths'
@@ -25,7 +26,7 @@ export interface ScreenshotEntry {
 export async function shotsDirFor(profileId: string): Promise<string | null> {
   const profile = await profileManager.get(profileId)
   if (!profile) return null
-  return path.join(paths.games, profile.gameDir, 'screenshots')
+  return path.join(instancePath(profile), 'screenshots')
 }
 
 export async function listScreenshots(profileId: string): Promise<ScreenshotEntry[]> {
