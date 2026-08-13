@@ -176,6 +176,10 @@ export const IPC = {
   serverJoin: 'servers:join',
   serverAddFavorite: 'servers:add',
   serverRemoveFavorite: 'servers:remove',
+  // v1.0.89 — server directory + install into instances
+  serverDiscover: 'servers:discover',
+  serverRecommended: 'servers:recommended',
+  serverInstall: 'servers:install',
   // v1.0.88 — instance screenshots
   screenshotList: 'screenshots:list',
   screenshotExport: 'screenshots:export',

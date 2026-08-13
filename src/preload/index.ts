@@ -189,7 +189,10 @@ const api = {
     ping: (address: string): Promise<unknown> => ipcRenderer.invoke(IPC.serverPing, address),
     join: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.serverJoin, payload),
     addFavorite: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.serverAddFavorite, payload),
-    removeFavorite: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.serverRemoveFavorite, id)
+    removeFavorite: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.serverRemoveFavorite, id),
+    discover: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.serverDiscover, payload),
+    recommended: (profileId: string | null): Promise<unknown> => ipcRenderer.invoke(IPC.serverRecommended, profileId),
+    install: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.serverInstall, payload)
   },
   screenshots: {
     list: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.screenshotList, profileId),

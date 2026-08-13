@@ -17,6 +17,33 @@ export interface ServerFavorite {
   addedAt: string
 }
 
+/** Server directory category (v1.0.89). */
+export type ServerCategory =
+  | 'Minigames'
+  | 'Survival'
+  | 'Skyblock'
+  | 'Anarchy'
+  | 'MMORPG'
+  | 'Creative'
+  | 'Prison'
+
+/** A server in the curated directory (v1.0.89). */
+export interface DirectoryServer {
+  id: string
+  name: string
+  address: string
+  category: ServerCategory
+  description: string
+  tags: string[]
+}
+
+/** Result of installing a server into an instance's servers.dat (v1.0.89). */
+export interface InstallServerResult {
+  installed: number
+  total: number
+  gameDir: string
+}
+
 /** A server the user joined recently (v1.0.88). */
 export interface RecentServer {
   address: string

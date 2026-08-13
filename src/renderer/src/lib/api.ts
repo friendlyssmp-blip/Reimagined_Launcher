@@ -28,7 +28,9 @@ import type {
   AuthorProfile,
   AuthorProject,
   ServerStatus,
-  RecentServer
+  RecentServer,
+  DirectoryServer,
+  InstallServerResult
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -338,7 +340,13 @@ export const api = {
     addFavorite: (payload: { name: string; address: string }) =>
       unwrap<{ id: string; name: string; address: string; addedAt: string }[]>(window.reimagined.servers.addFavorite(payload)),
     removeFavorite: (id: string) =>
-      unwrap<{ id: string; name: string; address: string; addedAt: string }[]>(window.reimagined.servers.removeFavorite(id))
+      unwrap<{ id: string; name: string; address: string; addedAt: string }[]>(window.reimagined.servers.removeFavorite(id)),
+    discover: (payload: { query?: string; category?: string }) =>
+      unwrap<DirectoryServer[]>(window.reimagined.servers.discover(payload)),
+    recommended: (profileId: string | null) =>
+      unwrap<DirectoryServer[]>(window.reimagined.servers.recommended(profileId)),
+    install: (payload: { profileId: string; address: string; name?: string }) =>
+      unwrap<InstallServerResult>(window.reimagined.servers.install(payload))
   },
   onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),
   onMaximized: (cb: (v: boolean) => void) => window.reimagined.onMaximized(cb)

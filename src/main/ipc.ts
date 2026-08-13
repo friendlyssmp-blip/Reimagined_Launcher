@@ -752,6 +752,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.serverJoin, (p) => serversService.joinServer(String(p?.profileId ?? ''), String(p?.address ?? ''), p?.name))
   on(IPC.serverAddFavorite, (p) => serversService.addFavorite(String(p?.name ?? ''), String(p?.address ?? '')))
   on(IPC.serverRemoveFavorite, (id: string) => serversService.removeFavorite(String(id ?? '')))
+  on(IPC.serverDiscover, (q) => serversService.discoverServers(q?.query, q?.category))
+  on(IPC.serverRecommended, async (profileId: string) => {
+    const id = String(profileId ?? '')
+    const profile = id ? await profileManager.get(id) : null
+    return serversService.recommendServers(profile)
+  })
+  on(IPC.serverInstall, (p) =>
+    serversService.installToInstance(String(p?.profileId ?? ''), String(p?.address ?? ''), p?.name)
+  )
 
   /* ------------------------- Screenshots (v1.0.88) ------------------------- */
 

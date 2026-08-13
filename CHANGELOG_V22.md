@@ -1,3 +1,18 @@
+## v1.0.89 - Real server browser + Reimagined "R" nametag in-game
+
+### Real server browser (Games > Servers) - not just "add a server"
+- Discover: a curated directory of 15 real public Java servers (Hypixel, CubeCraft, Wynncraft, 2b2t, ManaCube, StoneHollow and more), searchable by name/address/tag and filterable by category (Minigames, Skyblock, Survival, Anarchy, MMORPG, Creative).
+- Previews: click any server to open a detail panel with live MOTD, player count, version and latency (real ping over the Minecraft protocol - no blocking, manual refresh button too).
+- Recommended for you: ranks the directory by what your active profile actually has installed (Skyblock mods suggest Skyblock servers, etc).
+- INSTALL INTO INSTANCES: pick any directory server and install it into one of your instances (searchable picker with clean UI) - the launcher writes it into that instance's servers.dat (hand-rolled NBT), so when you enter Minecraft and open Multiplayer, the server is right there.
+- Join launches the active profile directly into the server; favorites and recently-played history kept.
+
+### Reimagined "R" nametag branding (FPS Boost 1.0.33, 26.2)
+- The official fragmented Reimagined "R" now renders right next to player nametags in-game, drawn at texture resolution with a soft glow on hover, smooth fade in/out on appear/disappear - same brand identity as the launcher logo and startup animation.
+- Toggle in the FPS Boost screen: Nametag R (on by default).
+- Built only for 26.2 (the version whose render API supports it); 26.1 keeps the previous build - no behavior change for other targets.
+- Rendered through the official render pipeline with a dedicated texture, negligible performance cost, and no conflict with Sodium/Iris/Xaero's/Essential/Mod Menu - it layers under nametag rendering.
+
 ## v1.0.88 - Big update: Discord status, Servers, i18n, Screenshots, custom installer & more
 
 ### Discord Rich Presence (Settings > Show Discord Status, ON by default)
