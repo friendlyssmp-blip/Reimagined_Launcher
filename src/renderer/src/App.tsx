@@ -204,17 +204,20 @@ function Shell() {
       download: settings?.audioDownload ?? true,
       success: settings?.audioSuccess ?? true,
       error: settings?.audioError ?? true,
-      // Menu music is opt-in (off by default) — the Settings toggle controls
-      // it live; the first pointerdown gesture unlocks the audio context.
-      music: settings?.audioMusic ?? false
+      // v1.0.94 — "Menu music" removed from Settings: the bundled menu loop
+      // is always off. Only user-imported tracks (title bar / Settings
+      // player) produce music, and they play regardless of this flag.
+      music: false
     })
     sound.setMusicVolume(settings?.audioVolume ?? 0.7)
     /* v1.0.87 — keep the shared music controller's play-mode in sync so
        auto-advance honors shuffle/repeat even from the title-bar mini player. */
     setMusicMode(settings?.audioMusicShuffle ?? false, settings?.audioMusicRepeat ?? 'all')
-    if (!(settings?.audioEnabled ?? true) || !(settings?.audioMusic ?? false)) {
+    if (!(settings?.audioEnabled ?? true)) {
       sound.musicStop()
     } else {
+      /* v1.0.94 — musicStart() is a no-op without a loaded track (menu loop
+         off); it only starts custom library tracks. */
       sound.musicStart()
     }
   }, [settings])
@@ -256,12 +259,13 @@ function Shell() {
   /* v1.0.87 — starting a local track from anywhere (title bar / Settings)
      enables the music setting live so playback always works first try. */
   useEffect(() => {
+    /* v1.0.94 — no music setting to enable anymore; just make sure the
+       audio engine itself is on before a custom track starts. */
     setMusicEnsureEnabled(() => {
-      sound.configure({ music: true })
-      void updateSettings({ audioMusic: true })
+      if (!sound.isEnabled()) sound.setEnabled(true)
     })
     return () => setMusicEnsureEnabled(null)
-  }, [updateSettings])
+  }, [])
 
   /* Global Minecraft-style UI sounds — delegated at the document level so
    * every button / nav item in the app gets the hover tick + click blip

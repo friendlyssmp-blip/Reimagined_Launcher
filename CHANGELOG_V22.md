@@ -1,3 +1,26 @@
+## v1.0.94 — Music player fixed (imported songs actually play) + "Menu music" toggle removed
+
+### The music player finally works
+- **Root cause found**: the local-music protocol (`reimagined-music://`) served files
+  through Electron's `net.fetch(file://...)`, which cannot fetch `file://` URLs — so the
+  audio element never received any data. The song stayed silent and the progress bar
+  never moved. The protocol now serves files directly with a buffer + full **Range**
+  support (206/200/416, `Accept-Ranges`), which also makes seeking and the progress bar
+  work. The screenshots viewer (`reimagined-shot://`) had the exact same bug and is fixed
+  the same way.
+- **Second cause**: starting a track required the "Menu music" toggle to be ON. Custom
+  imported tracks now always play — the bundled menu loop is the only thing that stays
+  gated (and it is off, see below).
+
+### "Menu music" removed from Settings
+- The toggle is gone from Settings → Audio. The bundled menu loop is **always off**.
+- Imported tracks play through the music player (title bar mini-player and the Settings
+  music section), regardless of any toggle.
+- The app no longer kills the music when the old setting was off (that was the third bug:
+  every settings change silently stopped playback).
+
+**Validation**: typechecks 0 errors, build OK, smoke 14/14, Range-handling unit test 10/10.
+
 ## v1.0.93 — CRITICAL FIX: FPS Boost crash on 26.2 (unexpanded mixin compatibility level)
 
 ### The bug

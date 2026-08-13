@@ -1,8 +1,8 @@
 {
-  "version": "1.0.93",
+  "version": "1.0.94",
   "installer": "dist/Reimagined-Setup-1.0.93.exe",
   "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.93.exe",
-  "sha256": "f41f53143dd785a697d8ef818bc9bb8e11ec55d8e3324d3fd97bd6ea24864671",
-  "notes": "v1.0.93 - CRITICAL FIX: FPS Boost crashed on 26.2 instances with \"Mixin config fpsboost.mixins.26_2.json specifies compatibility level ${COMPAT_LEVEL} which is not recognised\". The mod build never expanded the compat_level placeholder in the 26.2-only mixins file (glob missed it). Fixed the glob, rebuilt both jars with the real JAVA_25 level, and the v1.0.92 hash-based auto-refresh swaps the fixed jar into every existing instance on its next launch automatically.",
+  "sha256": "1f43b3bfb6678902f3ad366edb10bde94bcae626453fd052aa90fbb7f09484b7",
+  "notes": "Music player fixed: imported songs now actually play with a moving progress bar (local-file protocol served correctly with Range support) and the \"Menu music\" toggle was removed from Settings — the bundled menu loop is always off, your own tracks always play.",
   "publishedAt": "2026-08-13T11:10:00+00:00"
 }

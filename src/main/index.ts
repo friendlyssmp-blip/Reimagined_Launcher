@@ -5,8 +5,8 @@
  * Supports `--smoke-test` for CI-style verification without a window.
  */
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { app, dialog, Menu, net, protocol } from 'electron'
+import { readFileSync } from 'node:fs'
+import { app, dialog, Menu, protocol } from 'electron'
 import { paths, ensureDataDirs, appVersion } from './paths'
 import { logger, configureLogger, cleanupOldLogs } from './logs/logger'
 import { settingsManager } from './settings/settings-manager'
@@ -115,13 +115,63 @@ if (!gotLock && !SMOKE && !BENCH) {
 
         // Serve the local music library over a locked-down custom protocol.
         const musicRoot = path.resolve(path.join(paths.data, 'music'))
+        /** v1.0.94 — serve a local file over a custom protocol with Range
+         * support (audio seeking + progress, image decoding). Buffer-based:
+         * Electron's net.fetch() cannot fetch file:// URLs, which previously
+         * left <audio> stalled forever (no sound, no progress bar). */
+        const serveLocalFile = (p: string, rangeHeader: string | null): Response => {
+          try {
+            const data = readFileSync(p)
+            const ext = path.extname(p).toLowerCase()
+            const mime =
+              ext === '.mp3' ? 'audio/mpeg' :
+              ext === '.ogg' ? 'audio/ogg' :
+              ext === '.flac' ? 'audio/flac' :
+              ext === '.wav' ? 'audio/wav' :
+              ext === '.m4a' ? 'audio/mp4' :
+              ext === '.png' ? 'image/png' :
+              ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+              ext === '.webp' ? 'image/webp' :
+              'application/octet-stream'
+            let start = 0
+            let end = data.length - 1
+            const m = rangeHeader ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader) : null
+            if (m) {
+              if (m[1] && !m[2]) {
+                // bytes=start- → open-ended
+                start = parseInt(m[1], 10)
+              } else if (!m[1] && m[2]) {
+                // bytes=-suffix → LAST N bytes (RFC 7233)
+                const n = parseInt(m[2], 10)
+                start = Math.max(data.length - n, 0)
+                end = data.length - 1
+              } else if (m[1] && m[2]) {
+                // bytes=a-b (start is NOT clamped — past-the-end start is a 416)
+                start = parseInt(m[1], 10)
+                end = Math.min(parseInt(m[2], 10), end)
+              }
+              if (start > end || start >= data.length) {
+                return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${data.length}` } })
+              }
+            }
+            const headers: Record<string, string> = {
+              'Content-Type': mime,
+              'Accept-Ranges': 'bytes',
+              'Content-Length': String(end - start + 1)
+            }
+            if (m) headers['Content-Range'] = `bytes ${start}-${end}/${data.length}`
+            return new Response(data.subarray(start, end + 1), { status: m ? 206 : 200, headers })
+          } catch {
+            return new Response('Not found', { status: 404 })
+          }
+        }
         protocol.handle('reimagined-music', (request) => {
           try {
             const url = new URL(request.url)
             const name = decodeURIComponent(url.pathname.replace(/^\//, ''))
             const p = path.resolve(musicRoot, path.basename(name))
             if (!p.startsWith(musicRoot + path.sep)) return new Response('Forbidden', { status: 403 })
-            return net.fetch(pathToFileURL(p).toString())
+            return serveLocalFile(p, request.headers.get('Range'))
           } catch {
             return new Response('Not found', { status: 404 })
           }
@@ -141,7 +191,7 @@ if (!gotLock && !SMOKE && !BENCH) {
             const root = path.resolve(path.join(instancePath(profile), 'screenshots'))
             const p = path.resolve(root, path.basename(parts[2]))
             if (!p.startsWith(root + path.sep)) return new Response('Forbidden', { status: 403 })
-            return net.fetch(pathToFileURL(p).toString())
+            return serveLocalFile(p, request.headers.get('Range'))
           }
           return serve().catch(() => new Response('Not found', { status: 404 }))
         })

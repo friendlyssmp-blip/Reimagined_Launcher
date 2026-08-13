@@ -515,9 +515,8 @@ export function SettingsPage() {
                 <p className="panel-sub">UI sounds follow the Reimagined premium sound library — soft, clean, never spammy.</p>
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <Toggle checked={settings.audioEnabled ?? true} onChange={(v) => updateSettings({ audioEnabled: v })} label="UI sounds" />
-                  <Toggle checked={settings.audioMusic ?? false} onChange={(v) => updateSettings({ audioMusic: v })} label="Menu music" />
                   <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: -6, lineHeight: 1.45 }}>
-                    Menu music is <b>off by default</b> — turn it on here to play the bundled menu track quietly in the background.
+                    Your imported tracks play through the music player (title bar and here). The bundled menu loop is always off.
                   </p>
                   <div>
                     <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>

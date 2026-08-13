@@ -515,7 +515,10 @@ export const sound = {
 
   /** Menu music loop — routed through the music bus so ducking applies. */
   musicStart(): void {
-    if (!cfg.enabled || !cfg.music || musicEl) return
+    if (!cfg.enabled || musicEl) return
+    /* v1.0.94 — the "Menu music" toggle is gone: the bundled menu loop only
+       plays when cfg.music is on, but custom library tracks always play. */
+    if (!musicUrl && !cfg.music) return
     musicPaused = false
     try {
       // v1.0.85 — a custom library track when one is set (loop off so the
@@ -544,7 +547,7 @@ export const sound = {
     const wasPlaying = !!musicEl
     if (musicEl) this.musicStop()
     musicUrl = url
-    if (wasPlaying && url && cfg.music && cfg.enabled) this.musicStart()
+    if (wasPlaying && url && cfg.enabled) this.musicStart()
   },
   /** v1.0.85 — callback fired when a custom track finishes (auto-advance). */
   onMusicEnded(cb: (() => void) | null): void {
@@ -568,7 +571,7 @@ export const sound = {
     if (musicEl) this.musicStop()
     musicUrl = url
     musicPaused = false
-    if (url && cfg.music && cfg.enabled) this.musicStart()
+    if (url && cfg.enabled) this.musicStart()
   },
   /** v1.0.87 — forget the custom source (back to the bundled menu loop). */
   clearMusicUrl(): void {
