@@ -1,3 +1,30 @@
+## v1.0.93 — CRITICAL FIX: FPS Boost crash on 26.2 (unexpanded mixin compatibility level)
+
+### The bug
+After the v1.0.92 rebuild of the FPS Boost mod, existing 26.2 instances crashed at launch with:
+```
+Mixin config fpsboost.mixins.26_2.json specifies compatibility level ${COMPAT_LEVEL} which is not recognised
+```
+### Root cause
+The mod build's resource expansion (`processResources`) matched mixins files with the glob
+`*.mixins.json` — which matches `fpsboost.mixins.json` but NOT `fpsboost.mixins.26_2.json`
+(that file ends in `.mixins.26_2.json`). The `${compat_level}` placeholder in the 26.2-only
+mixin config was therefore never replaced, and Fabric's Mixin bootstrap rejected the literal
+placeholder. The v1.0.92 hash-based jar refresh then copied that broken jar into existing
+instances, surfacing the crash everywhere.
+
+### The fix
+- `FpsBoost-source/build.gradle`: the resource glob now matches `*mixins*.json`, so every
+  mixins file (including `fpsboost.mixins.26_2.json`) gets `compat_level` expanded to the real
+  value (`JAVA_25`). Verified: both 26.1 and 26.2 jars now ship
+  `"compatibilityLevel": "JAVA_25"`.
+- The fixed jars were copied into the launcher bundle AND directly into the affected instance,
+  so it launches correctly right now — no reinstall needed.
+- The v1.0.92 hash-based auto-refresh means every existing instance picks up the fixed jar on
+  its next launch automatically.
+
+---
+
 ## v1.0.92 — Instances reorganized, Clear Up Space, Copy PC Specs & Run a FPS Test
 
 ### 1. Instance directory reorganization (safe migration)

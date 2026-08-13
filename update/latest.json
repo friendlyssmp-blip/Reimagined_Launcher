@@ -1,8 +1,8 @@
 {
-  "version": "1.0.92",
-  "installer": "dist/Reimagined-Setup-1.0.92.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.92.exe",
-  "sha256": "de0550beb1c4d665e7c7eb837a84275ef3bef0b8d3a182f852a4241985429764",
-  "notes": "v1.0.92 - Instances reorganized into readable folders (data/Instances/<Name>/, safe non-destructive migration on first start, no data loss), new Clear Up Space storage analyzer (Settings > Storage), Copy All PC Specs button (Settings > Performance > Your Hardware), and Run a FPS Test (Account): real measured benchmark on any Fabric instance with FPS Boost - lowest-FPS-per-test report in a plain-text .txt with your PC specs. FPS Boost bundled jars rebuilt with the benchmark driver for 26.1 + 26.2; existing instances pick it up automatically.",
-  "publishedAt": "2026-08-13T10:50:00+00:00"
+  "version": "1.0.93",
+  "installer": "dist/Reimagined-Setup-1.0.93.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.93.exe",
+  "sha256": "f41f53143dd785a697d8ef818bc9bb8e11ec55d8e3324d3fd97bd6ea24864671",
+  "notes": "v1.0.93 - CRITICAL FIX: FPS Boost crashed on 26.2 instances with \"Mixin config fpsboost.mixins.26_2.json specifies compatibility level ${COMPAT_LEVEL} which is not recognised\". The mod build never expanded the compat_level placeholder in the 26.2-only mixins file (glob missed it). Fixed the glob, rebuilt both jars with the real JAVA_25 level, and the v1.0.92 hash-based auto-refresh swaps the fixed jar into every existing instance on its next launch automatically.",
+  "publishedAt": "2026-08-13T11:10:00+00:00"
 }
