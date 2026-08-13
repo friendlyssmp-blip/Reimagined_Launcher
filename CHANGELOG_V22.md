@@ -1,3 +1,47 @@
+## v1.0.88 - Big update: Discord status, Servers, i18n, Screenshots, custom installer & more
+
+### Discord Rich Presence (Settings > Show Discord Status, ON by default)
+- Your Discord status now shows what you're doing in Reimagined: browsing the launcher, or
+  playing with a live playtime timer ("Playing Minecraft - <profile>, <version>") using the
+  Reimagined logo as the card image. If Discord isn't running it fails silently.
+
+### Servers (new Games > Servers section)
+- Favorite servers with name + address, live ping / player count / MOTD (async, never blocks
+  the UI), recently played history, and a Join action that launches the selected profile
+  straight into the server.
+
+### Screenshots (Instances > Screenshots, next to Worlds)
+- Thumbnail grid of that instance's F2 screenshots, fullscreen lightbox with scroll-wheel
+  zoom, export one or many at once, delete with confirmation.
+
+### Multi-language support (Account > Language)
+- Real i18n: English (default), Spanish and French across the whole launcher, applying
+  instantly and persisting. Missing translations fall back to English.
+
+### Account upgrades
+- Accessibility: UI font scale, high-contrast mode, colorblind-friendly status colors and
+  keyboard navigation.
+- Statistics: a real playtime chart (hours per day, most-played profiles, total) built from
+  the playtime data already tracked per profile.
+
+### Streaming & recording awareness
+- Detects OBS/recording while the game runs and automatically behaves: non-critical toasts
+  are suppressed and AFK throttling is paused while you're being watched. Toggle in Settings.
+
+### New startup sound
+- The launcher's opening sequence was completely redesigned from scratch: a soft, premium
+  "system coming online" sound that follows the logo animation, plays exactly once, and
+  respects the master volume.
+
+### Custom installer & uninstaller
+- The Windows setup is now a fully branded Reimagined wizard: animated splash intro,
+  explained step-by-step pages (install location, desktop shortcut / Start Menu / launch
+  options), real progress, and a completion screen with Launch.
+- The uninstaller asks "Remove application only" (keeps profiles, settings, skins, logs -
+  safe default) or "Remove everything" (extra confirmation, then a thorough cleanup of
+  files, caches, registry keys and scheduled tasks). It refuses to run while Reimagined
+  or a game launched from it is still open.
+
 ## v1.0.87 — Spotify removed, your MP3s everywhere & a mini player in the title bar
 
 ### Spotify is gone

@@ -365,80 +365,79 @@ export const sound = {
    * feels like it belongs to the motion, not bolted onto it.
    */
   /**
-   * v1.0.86 — the startup is ONE continuous sound-design piece, mapped to the
-   * splash animation beats (ring 0.55s, logo 1.46s, signature 3.16s,
-   * transition 3.76s; full cue resolves by ~4.5s). Every layer is scheduled
-   * slightly AFTER its visual moment (~40-70ms) and given smooth tails that
-   * overlap the next beat — nothing ever stops abruptly, no dry hand-offs.
-   *
-   * The feel: "Reimagined is powering on." A quiet ambient system bed wakes,
-   * tiny components activate, the energy ring draws, the logo gets its own
-   * short sonic signature, then everything resolves into a warm final chord
-   * and settles. Volume stays controlled everywhere — never a blast.
+   * v1.0.88 — the startup is ONE continuous sound-design piece, rebuilt from
+   * scratch (no Aurora material). New luminous D(add9) palette, longer and
+   * more developed: a broad warm bed wakes, activation pulses rise, the logo
+   * gets a brand-new three-note sonic signature, and everything resolves into
+   * a warm D(add9) landing that fades naturally into the launcher. Soft
+   * attacks, no piercing frequencies, controlled volume — pleasant on the
+   * hundredth launch too. Scheduled slightly after each visual beat so the
+   * sound feels welded to the animation. Plays exactly once per startup
+   * (SplashScreen guards against double-fire) and respects master volume.
    */
   startupPhase(phase: 'atmosphere' | 'ring' | 'logo' | 'word' | 'signature' | 'transition'): void {
     if (!cfg.enabled) return
     switch (phase) {
       case 'atmosphere':
-        /* 0.00s — the system wakes. A deep warm bed built in layers
-         * (sub -> fifth -> root -> third -> air) with a soft sub-bass and a
-         * faint high shimmer. Nothing piercing, everything swelling. */
-        tone(49, 3.2, 0.05, 0, 73.42, 520)
-        tone(73.42, 2.9, 0.042, 0.05, 110, 460)
-        tone(110, 2.6, 0.036, 0.12, 146.83, 420)
-        tone(164.81, 2.3, 0.028, 0.2, 220, 380)
-        tone(220, 2.0, 0.022, 0.3, 261.63, 340)
-        tone(329.63, 1.7, 0.014, 0.44, 392, 300)
-        tone(659.25, 1.3, 0.008, 0.62, 783.99, 280)
+        /* 0.00s — a wide, slow-swelling warm bed on D(add9): sub drone
+         * (D1 -> D2), fifth, root, third and air, all with long glides so the
+         * whole thing breathes open over the first beat. */
+        tone(36.71, 3.6, 0.05, 0, 73.42, 620)
+        tone(73.42, 3.2, 0.04, 0.06, 110, 540)
+        tone(110, 2.9, 0.034, 0.14, 146.83, 480)
+        tone(146.83, 2.6, 0.026, 0.24, 220, 420)
+        tone(220, 2.3, 0.02, 0.36, 261.63, 380)
+        tone(329.63, 1.9, 0.014, 0.5, 440, 340)
+        tone(587.33, 1.5, 0.008, 0.66, 739.99, 300)
         break
       case 'ring':
-        /* 0.55s — the energy ring draws. A soft rising arpeggio (E4-A4-C5-E5)
-         * with a tiny activation tick underneath; the bed from the atmosphere
-         * phase is still breathing under it. */
-        tone(329.63, 0.6, 0.03, 0.04, 440, 240)
-        tone(440, 0.62, 0.026, 0.16, 523.25, 240)
-        tone(523.25, 0.66, 0.022, 0.3, 659.25, 260)
-        tone(659.25, 0.82, 0.018, 0.46, 783.99, 280)
-        tone(164.81, 0.9, 0.014, 0.0, 220, 260)
+        /* 0.55s — the ring draws: a luminous rising arpeggio (A3-C#4-E4-A4)
+         * over a soft activation tick; the bed is still breathing below. */
+        tone(220, 0.9, 0.024, 0.0, 277.18, 300)
+        tone(277.18, 0.7, 0.02, 0.12, 329.63, 260)
+        tone(329.63, 0.72, 0.018, 0.26, 440, 260)
+        tone(440, 0.85, 0.016, 0.42, 554.37, 280)
+        tone(164.81, 0.5, 0.012, 0.0, 220, 220)
         break
       case 'logo':
-        /* 1.46s — the logo forms. A warm harmonic swell, then the logo's own
-         * short sonic signature: a clean three-note confirmation
-         * (A4-E5-G5) that lands right as the logo completes. */
-        tone(220, 1.6, 0.042, 0.04, 261.63, 420)
-        tone(329.63, 1.4, 0.032, 0.12, 440, 380)
-        tone(523.25, 1.25, 0.022, 0.24, 659.25, 360)
-        tone(659.25, 1.0, 0.016, 0.4, 880, 340)
-        tone(1046.5, 1.1, 0.008, 0.56, 1318.51, 320)
-        /* Logo signature — the identifiable moment. */
-        tone(440, 0.16, 0.03, 0.92, undefined, 190)
-        tone(659.25, 0.16, 0.026, 1.04, undefined, 190)
-        tone(783.99, 0.36, 0.022, 1.16, undefined, 260)
+        /* 1.46s — the logo forms: a warm harmonic swell, then the brand-new
+         * logo signature — a clean three-note confirmation (A4-C#5-E5) that
+         * lands exactly as the logo completes. Distinct, elegant, soft. */
+        tone(146.83, 1.8, 0.04, 0.04, 220, 460)
+        tone(220, 1.6, 0.03, 0.12, 329.63, 420)
+        tone(329.63, 1.4, 0.022, 0.22, 440, 380)
+        tone(440, 1.2, 0.016, 0.34, 554.37, 360)
+        tone(739.99, 1.2, 0.008, 0.5, 880, 340)
+        /* Logo signature — the identifiable Reimagined moment. */
+        tone(440, 0.17, 0.028, 0.94, undefined, 200)
+        tone(554.37, 0.17, 0.024, 1.06, undefined, 200)
+        tone(659.25, 0.42, 0.02, 1.18, 880, 300)
         break
       case 'word':
-        /* 3.0s — gentle shimmer while the wordmark settles; quiet. */
-        tone(392, 0.24, 0.026, 0.04, undefined, 180)
-        tone(523.25, 0.3, 0.018, 0.14, undefined, 220)
+        /* 3.0s — a quiet high shimmer while the wordmark settles. */
+        tone(587.33, 0.26, 0.016, 0.04, undefined, 200)
+        tone(739.99, 0.3, 0.012, 0.14, undefined, 240)
         break
       case 'signature':
-        /* 3.16s — the finale: the whole cue resolves into a warm Am->F
+        /* 3.16s — the finale: the whole cue resolves into a warm D(add9)
          * swell with a high sparkle. Longer and more developed than any UI
-         * tick, but still soft — never fatiguing even on every launch. */
-        tone(110, 2.2, 0.05, 0, 87.31, 500)
-        tone(220, 2.0, 0.042, 0.06, 174.61, 440)
-        tone(261.63, 1.8, 0.034, 0.14, 220, 400)
-        tone(329.63, 1.6, 0.026, 0.24, 261.63, 360)
-        tone(659.25, 1.0, 0.02, 0.32, 523.25, 320)
-        tone(880, 1.2, 0.014, 0.4, 1046.5, 400)
-        tone(1567.98, 1.5, 0.007, 0.56, 2093, 480)
+         * tick, but always soft. */
+        tone(36.71, 2.6, 0.045, 0, 73.42, 560)
+        tone(73.42, 2.4, 0.038, 0.06, 110, 500)
+        tone(146.83, 2.2, 0.03, 0.14, 220, 440)
+        tone(220, 2.0, 0.024, 0.22, 277.18, 400)
+        tone(329.63, 1.8, 0.018, 0.3, 440, 360)
+        tone(554.37, 1.2, 0.014, 0.38, 659.25, 340)
+        tone(880, 1.3, 0.01, 0.46, 1174.66, 420)
+        tone(1479.98, 1.5, 0.006, 0.6, 1975.53, 500)
         break
       case 'transition':
-        /* 3.76s — everything settles. A gentle falling tone into a quiet
-         * resolved root; the launcher fades in underneath. */
-        tone(440, 1.1, 0.03, 0.04, 329.63, 400)
-        tone(220, 1.3, 0.026, 0.1, 174.61, 420)
-        tone(659.25, 1.0, 0.012, 0.24, 523.25, 380)
-        tone(130.81, 1.6, 0.02, 0.18, 110, 460)
+        /* 3.76s — everything settles: a gentle falling fifth (A3 -> D3) into
+         * the resolved root; the launcher fades in underneath. */
+        tone(440, 1.2, 0.024, 0.04, 329.63, 420)
+        tone(220, 1.4, 0.02, 0.1, 146.83, 460)
+        tone(554.37, 1.0, 0.01, 0.22, 440, 380)
+        tone(73.42, 1.8, 0.018, 0.18, 73.42, 520)
         break
     }
   },

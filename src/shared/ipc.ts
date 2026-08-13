@@ -167,7 +167,19 @@ export const IPC = {
   // Music (v1.0.87) — local background library (Spotify removed)
   musicList: 'music:list',
   musicAdd: 'music:add',
-  musicRemove: 'music:remove'
+  musicRemove: 'music:remove',
+  // v1.0.88 — Discord Rich Presence
+  presenceSet: 'presence:set',
+  presenceClear: 'presence:clear',
+  // v1.0.88 — Servers
+  serverPing: 'servers:ping',
+  serverJoin: 'servers:join',
+  serverAddFavorite: 'servers:add',
+  serverRemoveFavorite: 'servers:remove',
+  // v1.0.88 — instance screenshots
+  screenshotList: 'screenshots:list',
+  screenshotExport: 'screenshots:export',
+  screenshotDelete: 'screenshots:delete'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -196,6 +208,7 @@ export type AppEventType =
   | 'launch:fabric-mismatch'
   | 'share:deep-link'
   | 'system:info'
+  | 'streaming:changed'
 
 export interface AppEvent {
   type: AppEventType

@@ -7,6 +7,7 @@ import { humanDuration } from '../lib/format'
 import { IconFolder, IconPlay, IconStop, IconDots, IconShare, IconPencil, IconCopy, IconTrash, IconArchive, IconRefresh } from '../components/icons'
 import type { Page } from '../App'
 import type { Profile } from '@shared/types'
+import { useT } from '../lib/i18n'
 
 interface CtxMenu {
   x: number
@@ -15,6 +16,7 @@ interface CtxMenu {
 }
 
 export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
+  const t = useT()
   const { profiles, setModals, launchProfile, stopLaunch, runningProfiles, notify, setActiveProfile } = useApp()
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
 
@@ -118,7 +120,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Profiles</h2>
+          <h2 className="page-title">{t('page.profiles')}</h2>
           <p className="page-sub">Manage your Minecraft instances — click a card to manage its mods</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

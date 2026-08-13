@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { Button, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import { IconSearch, IconCopy, IconFolder, IconTrash } from '../components/icons'
+import { useT } from '../lib/i18n'
 
 interface LogLine {
   at: string
@@ -33,6 +34,7 @@ const LEVEL_SHORT: Record<string, string> = {
 }
 
 export function LogsPage() {
+  const t = useT()
   const { notify, setModals } = useApp()
   const [lines, setLines] = useState<LogLine[]>([])
   const [files, setFiles] = useState<string[]>([])
@@ -104,7 +106,7 @@ export function LogsPage() {
     <div className="logs-page">
       <div className="section-head">
         <div>
-          <h2 className="page-title">Logs</h2>
+          <h2 className="page-title">{t('page.logs')}</h2>
           <p className="page-sub">Launcher diagnostics — never hidden, always useful</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

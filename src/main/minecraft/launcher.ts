@@ -130,7 +130,7 @@ class Launcher {
     return { startedAt: s.startedAt, windowOpenedAt: s.windowOpenedAt }
   }
 
-  async launch(profileId: string): Promise<LaunchHandle> {
+  async launch(profileId: string, opts?: { server?: { host: string; port?: number } }): Promise<LaunchHandle> {
     // v1.0.28 — launch-path instrumentation: every pipeline stage is timed and
     // logged as ONE line so a slow launch is diagnosable from REAL measured
     // data (never guesswork). The timing itself is ~free (Date.now deltas).
@@ -348,7 +348,8 @@ class Launcher {
         assetsDir,
         log4jConfig,
         profile,
-        account: acc
+        account: acc,
+        server: opts?.server
       })
       mark('build-args')
 
@@ -384,8 +385,9 @@ class Launcher {
     log4jConfig: string | null
     profile: Profile
     account: Account
+    server?: { host: string; port?: number }
   }): Promise<string[]> {
-    const { vj, versionId, classpath, nativesDir, assetsDir, log4jConfig, profile, account } = v
+    const { vj, versionId, classpath, nativesDir, assetsDir, log4jConfig, profile, account, server } = v
     const mcProfile = account.profile!
     // assetIndex is verified to exist before buildArgs is called (launch() guards it).
     const assetIndexId = vj.assetIndex?.id ?? ''
@@ -491,6 +493,12 @@ class Launcher {
       game.push('--width', String(profile.resolution.width), '--height', String(profile.resolution.height))
     }
     if (profile.extraGameArgs.trim()) game.push(...this.splitArgs(profile.extraGameArgs))
+
+    // v1.0.88 — Servers: joining from the Servers page directly into the game.
+    if (server?.host) {
+      if (!joined.includes('--server')) game.push('--server', server.host)
+      if (server.port && !joined.includes('--port')) game.push('--port', String(server.port))
+    }
 
     return [...jvm, vj.mainClass, ...game]
   }
@@ -1089,6 +1097,18 @@ class Launcher {
       // (warned in Settings) ALL mechanisms are off — including the mod config,
       // or the watchdog would silently re-cap the game anyway.
       merged.unlimitedFps = Boolean(s.unlimitedFps)
+      // v1.0.88 — streaming-aware: when a capture tool is recording the game,
+      // tell the mod not to trigger AFK's aggressive FPS/render-distance
+      // throttling even if the streamer is technically idle (never a jarring
+      // change mid-recording).
+      if (s.streamingAware) {
+        try {
+          const det = await import('../streaming/detect')
+          merged.streamingActive = det.isCapturing()
+        } catch {
+          merged.streamingActive = false
+        }
+      }
       // v1.0.69 — maxFps is EXCLUDED from the user-wins merge on purpose: no
       // user-facing control writes it (only the unlimitedFps toggle), and an
       // old config file from the v1.0.13-v1.0.44 era may persist a forced

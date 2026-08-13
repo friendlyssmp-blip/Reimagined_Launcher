@@ -2,6 +2,7 @@ import type { ReactNode, ButtonHTMLAttributes } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
+import { useStreaming } from '../lib/streaming'
 import { ProfileIcon, profileIconId } from './icons'
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: 'sm' | 'md' }
@@ -53,16 +54,17 @@ export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return <textarea className="textarea" {...props} />
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+export function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label?: string; desc?: string }) {
   return (
-    <label className="row" style={{ cursor: 'pointer' }}>
+    <label className="row" style={{ cursor: 'pointer', flexWrap: 'wrap', gap: 4 }}>
       {/* The `on` class mirrors the checkbox state so the CSS can animate the
        * track even though the native input is visually hidden. */}
       <span className={'switch' + (checked ? ' on' : '')}>
         <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
         <span className="track" />
       </span>
-      {label && <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>}
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+      {desc && <span style={{ fontSize: 11.5, color: 'var(--text-3)', width: '100%', paddingLeft: 44, lineHeight: 1.45 }}>{desc}</span>}
     </label>
   )
 }
@@ -210,6 +212,10 @@ export function EmptyState({ title, sub, action, icon }: { title: string; sub?: 
 
 export function Toasts() {
   const { toasts } = useApp()
+  /* v1.0.88 — streaming-aware: while a capture tool is recording the game,
+   * non-critical toasts (info/success) are suppressed so nothing pops up on
+   * the stream; errors and warnings still show. */
+  const streaming = useStreaming()
   const last = toasts[toasts.length - 1]
   /* Play one sound per new toast, keyed on its unique id — dismissing a toast
    * must not replay the previous toast's sound. A toast marked silent (v1.0.35)
@@ -223,7 +229,9 @@ export function Toasts() {
   }, [last?.id])
   return (
     <div className="toasts">
-      {toasts.map((t) => (
+      {toasts
+        .filter((t) => !(streaming.active && (t.kind === 'info' || t.kind === 'success')))
+        .map((t) => (
         <div key={t.id} className={`toast toast-${t.kind}`}>
           <div>
             <div className="toast-title">{t.title}</div>

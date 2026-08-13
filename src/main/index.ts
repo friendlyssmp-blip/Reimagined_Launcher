@@ -30,7 +30,9 @@ import type { Profile } from '@shared/types'
 // streams <audio> from reimagined-music://, which the main process serves
 // ONLY from data/music (no arbitrary file reads).
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'reimagined-music', privileges: { secure: true, supportFetchAPI: true, stream: true } }
+  { scheme: 'reimagined-music', privileges: { secure: true, supportFetchAPI: true, stream: true } },
+  // v1.0.88 — instance screenshots (served only from that instance's folder).
+  { scheme: 'reimagined-shot', privileges: { secure: true, supportFetchAPI: true, stream: true } }
 ])
 
 app.disableHardwareAcceleration()
@@ -99,6 +101,16 @@ if (!gotLock && !SMOKE && !BENCH) {
         configureLogger(settings)
         await accountStore.load()
 
+        // v1.0.88 — streaming/recording detection: emits streaming:changed
+        // events the renderer + FPS Boost config listen to (honors the
+        // streamingAware setting — off means no detection at all).
+        void import('./streaming/detect').then((m) => {
+          m.startDetection((state) => {
+            if (!settingsManager.get().streamingAware) return
+            eventBus.emit('streaming:changed', state)
+          })
+        })
+
         // Serve the local music library over a locked-down custom protocol.
         const musicRoot = path.resolve(path.join(paths.data, 'music'))
         protocol.handle('reimagined-music', (request) => {
@@ -111,6 +123,25 @@ if (!gotLock && !SMOKE && !BENCH) {
           } catch {
             return new Response('Not found', { status: 404 })
           }
+        })
+
+        // v1.0.88 — instance screenshots: reimagined-shot://shot/<profileId>/<file>
+        // serves ONLY from that instance's screenshots folder.
+        protocol.handle('reimagined-shot', (request) => {
+          const serve = async (): Promise<Response> => {
+            const url = new URL(request.url)
+            const parts = url.pathname.replace(/^\//, '').split('/').map((s) => decodeURIComponent(s))
+            if (parts.length !== 3 || parts[0] !== 'shot' || !parts[1] || !parts[2]) {
+              return new Response('Not found', { status: 404 })
+            }
+            const profile = await profileManager.get(parts[1])
+            if (!profile) return new Response('Not found', { status: 404 })
+            const root = path.resolve(path.join(paths.games, profile.gameDir, 'screenshots'))
+            const p = path.resolve(root, path.basename(parts[2]))
+            if (!p.startsWith(root + path.sep)) return new Response('Forbidden', { status: 403 })
+            return net.fetch(pathToFileURL(p).toString())
+          }
+          return serve().catch(() => new Response('Not found', { status: 404 }))
         })
 
         logger.info('Launcher started successfully')

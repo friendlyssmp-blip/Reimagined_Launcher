@@ -57,6 +57,16 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   audioMusicVolume: 0.35,
   audioMusicShuffle: false,
   audioMusicRepeat: 'all',
+  // v1.0.88 — language, Discord presence, accessibility and streaming.
+  language: 'en',
+  discordPresence: true,
+  discordClientId: '',
+  accessFontScale: 1,
+  accessHighContrast: false,
+  accessColorblind: false,
+  streamingAware: true,
+  servers: [],
+  recentServers: [],
   autoCheckUpdates: true,
   // v1.0.34: silent auto-update is gone — a detected release shows the
   // 3-option prompt (Update / Cancel / Remind Me Later); the launcher NEVER

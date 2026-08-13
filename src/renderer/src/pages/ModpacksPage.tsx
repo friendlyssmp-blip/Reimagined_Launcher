@@ -7,6 +7,7 @@ import { ModIcon } from '../components/ModIcon'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { IconArchive, IconShare, IconDownload, IconPuzzle } from '../components/icons'
 import type { ModrinthSearchResult, ProjectVersionInfo } from '@shared/types'
+import { useT } from '../lib/i18n'
 
 function fmtDownloads(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -17,6 +18,7 @@ function fmtDownloads(n: number): string {
 const PAGE_SIZE = 24
 
 export function ModpacksPage() {
+  const t = useT()
   const { profiles, setModals, notify, refreshProfiles, setActiveProfile } = useApp()
   const [tab, setTab] = useState<'browse-modrinth' | 'browse-curseforge' | 'share'>('browse-modrinth')
   const provider: 'modrinth' | 'curseforge' = tab === 'browse-curseforge' ? 'curseforge' : 'modrinth'
@@ -241,7 +243,7 @@ export function ModpacksPage() {
         <>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Modpacks</h2>
+          <h2 className="page-title">{t('page.modpacks')}</h2>
           <p className="page-sub">Browse and install Modrinth or CurseForge modpacks with one click, or share your own setup.</p>
         </div>
       </div>

@@ -21,6 +21,8 @@ import { ProgressOverlay } from './components/ProgressOverlay'
 import { api } from './lib/api'
 import { sound } from './lib/sound'
 import { setMusicMode, setMusicEnsureEnabled } from './lib/music'
+import { setLanguage } from './lib/i18n'
+import { setStreaming } from './lib/streaming'
 import { SplashScreen } from './components/SplashScreen'
 import { BrandLogo } from './components/BrandLogo'
 import { HomePage } from './pages/HomePage'
@@ -29,6 +31,7 @@ import { ProfilesPage } from './pages/ProfilesPage'
 import { ModsPage } from './pages/ModsPage'
 import { ModsBrowsePage } from './pages/ModsBrowsePage'
 import { ModpacksPage } from './pages/ModpacksPage'
+import { ServersPage } from './pages/ServersPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { DownloadsPage } from './pages/DownloadsPage'
 import { LogsPage } from './pages/LogsPage'
@@ -43,13 +46,14 @@ export type Page =
   | 'mods'
   | 'browse'
   | 'modpacks'
+  | 'servers'
   | 'downloads'
   | 'settings'
   | 'account'
   | 'logs'
 
 function Shell() {
-  const { ready, modals, theme, settings, setModals, account, closeContent, popContent, contentStack, updateSettings } = useApp()
+  const { ready, modals, theme, settings, setModals, account, closeContent, popContent, contentStack, updateSettings, activeProfile, running } = useApp()
   const [page, setPage] = useState<Page>('home')
   /* v1.0.53 — a quick, purposeful breath between pages: the current content
    * dips for ~120ms, the new page mounts and rises in (page-enter), landing
@@ -180,6 +184,10 @@ function Shell() {
         const code = (e.payload as { code?: string } | null)?.code
         if (code) openImport(code)
       }
+      /* v1.0.88 — streaming/recording detection → smart background behavior. */
+      if (e.type === 'streaming:changed') {
+        setStreaming((e.payload as { active?: boolean; tools?: string[] } | null) ?? { active: false, tools: [] })
+      }
     })
     return off
   }, [ready, setModals])
@@ -210,6 +218,40 @@ function Shell() {
       sound.musicStart()
     }
   }, [settings])
+
+  /* v1.0.88 — apply the saved language (and future re-applies when changed). */
+  useEffect(() => {
+    if (settings?.language) setLanguage(settings.language)
+  }, [settings?.language])
+
+  /* v1.0.88 — Discord Rich Presence: browsing the launcher vs playing.
+   * Fails silently when Discord is not running or no client id is set. */
+  const [presenceStarted, setPresenceStarted] = useState<number | null>(null)
+  useEffect(() => {
+    if (!settings?.discordPresence) {
+      void api.presence.clear()
+      return
+    }
+    if (running && activeProfile) {
+      const st = presenceStarted ?? Date.now()
+      if (presenceStarted === null) setPresenceStarted(st)
+      void api.presence.set({
+        details: 'Playing Minecraft',
+        state: `${activeProfile.name} · ${activeProfile.minecraftVersion}`,
+        largeImageKey: 'reimagined',
+        smallImageKey: activeProfile.loader.type !== 'vanilla' ? activeProfile.loader.type : undefined,
+        startTimestamp: st
+      })
+    } else {
+      if (presenceStarted !== null) setPresenceStarted(null)
+      void api.presence.set({
+        details: 'Managing profiles in Reimagined',
+        largeImageKey: 'reimagined',
+        startTimestamp: undefined
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, page, activeProfile, settings?.discordPresence])
 
   /* v1.0.87 — starting a local track from anywhere (title bar / Settings)
      enables the music setting live so playback always works first try. */
@@ -338,6 +380,7 @@ function Shell() {
               {page === 'mods' && <ModsPage />}
               {page === 'browse' && <ModsBrowsePage />}
               {page === 'modpacks' && <ModpacksPage />}
+              {page === 'servers' && <ServersPage />}
               {page === 'settings' && <SettingsPage />}
               {page === 'downloads' && <DownloadsPage />}
               {page === 'logs' && <LogsPage />}

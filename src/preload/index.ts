@@ -181,6 +181,21 @@ const api = {
     avatar: (channelUrl: string): Promise<unknown> => ipcRenderer.invoke(IPC.ytAvatar, channelUrl)
   },
 
+  presence: {
+    set: (status: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.presenceSet, status),
+    clear: (): Promise<unknown> => ipcRenderer.invoke(IPC.presenceClear)
+  },
+  servers: {
+    ping: (address: string): Promise<unknown> => ipcRenderer.invoke(IPC.serverPing, address),
+    join: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.serverJoin, payload),
+    addFavorite: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.serverAddFavorite, payload),
+    removeFavorite: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.serverRemoveFavorite, id)
+  },
+  screenshots: {
+    list: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.screenshotList, profileId),
+    export: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.screenshotExport, payload),
+    delete: (payload: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.screenshotDelete, payload)
+  },
   system: {
     getMemory: (): Promise<unknown> => ipcRenderer.invoke('system:getMemory'),
     cleanReset: (): Promise<unknown> => ipcRenderer.invoke(IPC.systemCleanReset)

@@ -36,7 +36,19 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  createDesktopShortcut: true
+  # v1.0.88 — shortcuts are created by the custom options page
+  # (build/installer/installer.nsh), so the default ones are disabled.
+  createDesktopShortcut: false
+  createStartMenuShortcut: false
   shortcutName: Reimagined
+  # v1.0.88 — fully custom branded wizard + uninstaller.
+  include: installer/installer.nsh
+  installerIcon: icon.ico
+  uninstallerIcon: icon.ico
+  installerHeaderIcon: icon.ico
+  installerHeader: installer/header.bmp
+  installerSidebar: installer/sidebar.bmp
+  uninstallerSidebar: installer/un-sidebar.bmp
+  deleteAppDataOnUninstall: false
 
 publish: null

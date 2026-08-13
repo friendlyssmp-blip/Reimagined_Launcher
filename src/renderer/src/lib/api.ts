@@ -26,7 +26,9 @@ import type {
   PerfModOption,
   ShaderSupport,
   AuthorProfile,
-  AuthorProject
+  AuthorProject,
+  ServerStatus,
+  RecentServer
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -312,6 +314,31 @@ export const api = {
   },
   yt: {
     avatar: (channelUrl: string) => unwrap<string | null>(window.reimagined.yt.avatar(channelUrl))
+  },
+  /** v1.0.88 — Discord Rich Presence. */
+  presence: {
+    set: (status: { details?: string; state?: string; largeImageKey?: string; smallImageKey?: string; startTimestamp?: number | null; idle?: boolean }) =>
+      unwrap<void>(window.reimagined.presence.set(status)),
+    clear: () => unwrap<void>(window.reimagined.presence.clear())
+  },
+  /** v1.0.88 — instance screenshots (list / export / delete). */
+  screenshots: {
+    list: (profileId: string) =>
+      unwrap<{ id: string; name: string; size: number; at: string; url: string }[]>(window.reimagined.screenshots.list(profileId)),
+    export: (payload: { profileId: string; ids: string[] }) =>
+      unwrap<number>(window.reimagined.screenshots.export(payload)),
+    delete: (payload: { profileId: string; id: string }) =>
+      unwrap<void>(window.reimagined.screenshots.delete(payload))
+  },
+  /** v1.0.88 — Servers (ping / join / favorites). */
+  servers: {
+    ping: (address: string) => unwrap<ServerStatus>(window.reimagined.servers.ping(address)),
+    join: (payload: { profileId: string; address: string; name?: string }) =>
+      unwrap<RecentServer[]>(window.reimagined.servers.join(payload)),
+    addFavorite: (payload: { name: string; address: string }) =>
+      unwrap<{ id: string; name: string; address: string; addedAt: string }[]>(window.reimagined.servers.addFavorite(payload)),
+    removeFavorite: (id: string) =>
+      unwrap<{ id: string; name: string; address: string; addedAt: string }[]>(window.reimagined.servers.removeFavorite(id))
   },
   onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),
   onMaximized: (cb: (v: boolean) => void) => window.reimagined.onMaximized(cb)

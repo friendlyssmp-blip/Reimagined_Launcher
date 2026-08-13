@@ -26,6 +26,9 @@ import { launcher } from './minecraft/launcher'
 import { futureSystems } from './mods/placeholders'
 import { shareService } from './share/share'
 import { musicStore } from './music/music-store'
+import { presence } from './discord/presence'
+import { serversService } from './servers/servers'
+import { screenshotsService } from './screenshots/screenshots'
 import {
   openConsoleWindow,
   hideConsoleWindow,
@@ -730,6 +733,31 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.musicList, () => musicStore.listTracks())
   on(IPC.musicAdd, () => musicStore.addTracks())
   on(IPC.musicRemove, (id: string) => musicStore.removeTrack(id))
+
+  /* ------------------------- Discord Rich Presence (v1.0.88) ------------------------- */
+
+  on(IPC.presenceSet, async (status) => {
+    const s = settingsManager.get()
+    if (!s.discordPresence) return
+    await presence.configure(s.discordClientId, true)
+    await presence.setPresence((status ?? {}) as Parameters<typeof presence.setPresence>[0])
+  })
+  on(IPC.presenceClear, async () => {
+    await presence.clearPresence()
+  })
+
+  /* ------------------------- Servers (v1.0.88) ------------------------- */
+
+  on(IPC.serverPing, (address: string) => serversService.pingServer(String(address ?? '')))
+  on(IPC.serverJoin, (p) => serversService.joinServer(String(p?.profileId ?? ''), String(p?.address ?? ''), p?.name))
+  on(IPC.serverAddFavorite, (p) => serversService.addFavorite(String(p?.name ?? ''), String(p?.address ?? '')))
+  on(IPC.serverRemoveFavorite, (id: string) => serversService.removeFavorite(String(id ?? '')))
+
+  /* ------------------------- Screenshots (v1.0.88) ------------------------- */
+
+  on(IPC.screenshotList, (profileId: string) => screenshotsService.listScreenshots(String(profileId ?? '')))
+  on(IPC.screenshotExport, (p) => screenshotsService.exportScreenshots(String(p?.profileId ?? ''), Array.isArray(p?.ids) ? p.ids : []))
+  on(IPC.screenshotDelete, (p) => screenshotsService.deleteScreenshot(String(p?.profileId ?? ''), String(p?.id ?? '')))
   on(IPC.sharePickZip, async () => {
     const res = await dialog.showOpenDialog(win, {
       title: 'Select a modpack (.mrpack / .zip)',

@@ -3,11 +3,14 @@ import { useApp } from '../state/AppContext'
 import { Button, Badge, Spinner } from '../components/ui'
 import { SkinHeadPreview } from '../components/SkinHead'
 import { IconUser, IconLog, IconCopy, IconRefresh, IconExternal, IconShield } from '../components/icons'
+import { AccountSections } from '../components/AccountSections'
 import type { Page } from '../App'
+import { useT } from '../lib/i18n'
 
 /** Account — v1.0.85 rebuild. Same sign-in flow, plus real actions:
  *  manual session refresh, copy UUID, open the Microsoft account page. */
 export function AccountPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
+  const t = useT()
   const { account, setModals, logout, notify, refreshAccount } = useApp()
   const [refreshing, setRefreshing] = useState(false)
   const signedIn = account.status !== 'offline' && !!account.profile
@@ -74,7 +77,7 @@ export function AccountPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 860 }}>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Account</h2>
+          <h2 className="page-title">{t('page.account')}</h2>
           <p className="page-sub">Your Microsoft account and Minecraft profile</p>
         </div>
       </div>
@@ -137,6 +140,9 @@ export function AccountPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
           If the game ever asks you to sign in again, press <b>Refresh session</b> here first.
         </p>
       </div>
+
+      {/* v1.0.88 — Language, Accessibility and Statistics (account-level settings). */}
+      <AccountSections />
     </div>
   )
 }

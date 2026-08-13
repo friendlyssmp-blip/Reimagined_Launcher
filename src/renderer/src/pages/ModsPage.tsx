@@ -12,19 +12,21 @@ import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconFolder, IconChevronDown, IconRefresh, IconArchive, IconGlobe, IconTrash, IconPlay, IconStop, IconDots, IconShare, IconPencil, IconCopy } from '../components/icons'
 import type { ModrinthSearchResult, ProfileMod, ProjectVersionInfo, ShaderCrashRecord, ShaderSupport } from '@shared/types'
 import { shaderFitFor } from '../lib/shaderFit'
+import { ScreenshotsPanel } from '../components/ScreenshotsPanel'
 
 type SourceTab = 'installed' | 'modrinth' | 'curseforge'
 type SortKey = 'relevance' | 'downloads' | 'newest' | 'updated' | 'name'
 type ContentType = 'mod' | 'resourcepack' | 'datapack' | 'shader'
 /** Installed panel sub-tabs — organized per content type (instance menu). */
-type InstTab = 'mods' | 'resourcepacks' | 'datapacks' | 'shaders' | 'worlds'
+type InstTab = 'mods' | 'resourcepacks' | 'datapacks' | 'shaders' | 'worlds' | 'screenshots'
 
 const INST_TABS: { id: InstTab; label: string }[] = [
   { id: 'mods', label: 'Mods' },
   { id: 'resourcepacks', label: 'Resource Packs' },
   { id: 'datapacks', label: 'Data Packs' },
   { id: 'shaders', label: 'Shaders' },
-  { id: 'worlds', label: 'Worlds' }
+  { id: 'worlds', label: 'Worlds' },
+  { id: 'screenshots', label: 'Screenshots' }
 ]
 
 const CONTENT_TYPES: { id: ContentType; label: string }[] = [
@@ -66,7 +68,8 @@ const FOLDER_FOR_INST: Record<InstTab, string | null> = {
   resourcepacks: 'resourcepacks',
   datapacks: 'datapacks',
   shaders: 'shaderpacks',
-  worlds: 'saves'
+  worlds: 'saves',
+  screenshots: 'screenshots'
 }
 
 /** Project type each Installed sub-tab filters (worlds has no project type). */
@@ -75,7 +78,8 @@ const typeForInst: Record<InstTab, ContentType | null> = {
   resourcepacks: 'resourcepack',
   datapacks: 'datapack',
   shaders: 'shader',
-  worlds: null
+  worlds: null,
+  screenshots: null
 }
 
 /** Modrinth page size — results append as the user scrolls (infinite scroll). */
@@ -895,24 +899,24 @@ export function ModsPage() {
         <Button
           size="sm"
           variant={isInstalled(r) ? 'ghost' : 'primary'}
-          disabled={installingId === r.projectId || isInstalled(r)}
-          onClick={(e) => {
-            e.stopPropagation()
-            // v1.0.86 - never allow installing the same item twice.
-            if (isInstalled(r)) return
-            // Shift-click skips the confirmation and installs with deps.
-            if (e.shiftKey) void installFast(r)
-            else setInstallConfirm({ provider: r.source === 'curseforge' ? 'curseforge' : 'modrinth', projectId: r.projectId, projectType: contentType })
-          }}
-          title={isInstalled(r) ? 'Already installed in this instance' : 'Install (hold Shift to install immediately with dependencies)'}
-        >
-          {installingId === r.projectId ? (
-            <Spinner />
-          ) : isInstalled(r) ? (
-            'Installed'
-          ) : (
-            'Install'
-          )}
+          disabled={installingId === r.projectId || isInstalled(r)}
+          onClick={(e) => {
+            e.stopPropagation()
+            // v1.0.86 - never allow installing the same item twice.
+            if (isInstalled(r)) return
+            // Shift-click skips the confirmation and installs with deps.
+            if (e.shiftKey) void installFast(r)
+            else setInstallConfirm({ provider: r.source === 'curseforge' ? 'curseforge' : 'modrinth', projectId: r.projectId, projectType: contentType })
+          }}
+          title={isInstalled(r) ? 'Already installed in this instance' : 'Install (hold Shift to install immediately with dependencies)'}
+        >
+          {installingId === r.projectId ? (
+            <Spinner />
+          ) : isInstalled(r) ? (
+            'Installed'
+          ) : (
+            'Install'
+          )}
         </Button>
       </div>
     </div>
@@ -1470,7 +1474,9 @@ export function ModsPage() {
             />
           </div>
 
-          {instTab === 'worlds' ? (
+          {instTab === 'screenshots' ? (
+            <ScreenshotsPanel profileId={activeProfile.id} />
+          ) : instTab === 'worlds' ? (
             worldsLoading ? (
               <div className="row" style={{ justifyContent: 'center', padding: '28px 0' }}><Spinner /></div>
             ) : filteredWorlds.length === 0 ? (

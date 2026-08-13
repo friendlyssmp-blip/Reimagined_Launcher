@@ -61,7 +61,8 @@ class EventBus {
       'shaders:auto-disabled': true,
       'launch:fabric-mismatch': true,
       'share:deep-link': true,
-      'system:info': true
+      'system:info': true,
+      'streaming:changed': true
     }
   }
 }

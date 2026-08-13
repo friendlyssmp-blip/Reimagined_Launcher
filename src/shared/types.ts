@@ -7,6 +7,33 @@
 
 export type ThemeId = 'night' | 'amethyst' | 'obsidian'
 
+export type AppLanguage = 'en' | 'es' | 'fr'
+
+/** A saved Minecraft server favorite (v1.0.88). */
+export interface ServerFavorite {
+  id: string
+  name: string
+  address: string
+  addedAt: string
+}
+
+/** A server the user joined recently (v1.0.88). */
+export interface RecentServer {
+  address: string
+  name: string
+  at: string
+}
+
+/** Live status of a server (v1.0.88) — from the modern server-list protocol. */
+export interface ServerStatus {
+  address: string
+  online: boolean
+  latencyMs: number | null
+  motd?: string
+  players?: { online: number; max: number }
+  version?: string
+}
+
 export interface LauncherSettings {
   /** Default RAM allocation in MB applied to new profiles. */
   memory: number
@@ -92,6 +119,24 @@ export interface LauncherSettings {
   audioMusicShuffle: boolean
   /** Repeat mode for the local playlist. */
   audioMusicRepeat: 'off' | 'all' | 'one'
+  /** App language (v1.0.88) — English default, Spanish / French available. */
+  language: AppLanguage
+  /** Discord Rich Presence toggle (v1.0.88) — default ON. */
+  discordPresence: boolean
+  /** Discord Application client id used for Rich Presence (empty = no status). */
+  discordClientId: string
+  /** Accessibility: UI font scale factor (1 | 1.15 | 1.3). */
+  accessFontScale: number
+  /** Accessibility: high-contrast mode (v1.0.88). */
+  accessHighContrast: boolean
+  /** Accessibility: colorblind-friendly mode — statuses pair color + shape. */
+  accessColorblind: boolean
+  /** Streaming/recording awareness (v1.0.88) — default ON. */
+  streamingAware: boolean
+  /** Saved server favorites (v1.0.88). */
+  servers: ServerFavorite[]
+  /** Recently played servers (v1.0.88), newest first. */
+  recentServers: RecentServer[]
 
   /* ------------------------------ Updates ------------------------------ */
 

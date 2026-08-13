@@ -6,6 +6,7 @@ import { ModIcon } from '../components/ModIcon'
 import { api, friendlyError } from '../lib/api'
 import { humanDuration, fmtBytes } from '../lib/format'
 import { IconDownload, IconRefresh, IconCheck, IconX } from '../components/icons'
+import { useT } from '../lib/i18n'
 
 interface Download {
   id: string
@@ -38,6 +39,7 @@ const kindLabel: Record<string, string> = {
  * with the real artwork, byte-level progress, speed and ETA.
  */
 export function DownloadsPage() {
+  const t = useT()
   const { launch, notify } = useApp()
   const [history, setHistory] = useState<Download[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,7 +200,7 @@ function ActiveCardBody({ d }: { d: Download }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Downloads</h2>
+          <h2 className="page-title">{t('page.downloads')}</h2>
           <p className="page-sub">Installs and updates, live — real progress, real speed, real artwork</p>
         </div>
         <Button onClick={refresh}><IconRefresh style={{ width: 14, height: 14 }} /> Refresh</Button>

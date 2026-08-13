@@ -4,11 +4,13 @@ import { api } from '../lib/api'
 import { IconPlay, IconStop, IconTerminal, IconLog, IconFolder, IconBolt } from '../components/icons'
 import { humanDuration, timeAgo } from '../lib/format'
 import type { Page } from '../App'
+import { useT } from '../lib/i18n'
 
 /** The primary launch experience — v1.0.85 visual rebuild. Same engine,
  *  same actions; a big glowing play card, the instance switch, live launch
  *  progress and the full setup at a glance. */
 export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
+  const t = useT()
   const { profiles, activeProfile, setActiveProfile, launchProfile, stopLaunch, launch, running, settings, refreshProfiles, notify } = useApp()
 
   /* Real launch state (v1.0.16): busy = actually starting; playing = the
@@ -29,7 +31,7 @@ export function PlayPage({ onNavigate }: { onNavigate: (p: Page) => void }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Play</h2>
+          <h2 className="page-title">{t('page.play')}</h2>
           <p className="page-sub">Choose an instance and press play — the game runs in the background and the launcher stays usable.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

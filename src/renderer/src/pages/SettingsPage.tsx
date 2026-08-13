@@ -52,6 +52,7 @@ function PerfTierIcon({ tier, size = 14 }: { tier: string; size?: number }) {
 }
 
 import type { ThemeId, LauncherSettings, PerfStatus, PerfRecommendation, PerfModOption } from '@shared/types'
+import { useT } from '../lib/i18n'
 
 const themes: { id: ThemeId; label: string; colors: string[] }[] = [
   { id: 'night', label: 'Night', colors: ['#0d0d0f', '#1a1a20', '#8b5cf6'] },
@@ -62,18 +63,18 @@ const themes: { id: ThemeId; label: string; colors: string[] }[] = [
 /* v1.0.85 — reorganized settings: logical flow (how it looks → how it sounds
  * → how it plays → maintenance) and the old "Advanced" section became
  * "Credits" — a proper animated credits page for the team. */
-const sections = [
-  { id: 'general', label: 'General', icon: IconSettings },
-  { id: 'appearance', label: 'Appearance', icon: IconImage },
-  { id: 'audio', label: 'Audio & Music', icon: IconVolume },
-  { id: 'minecraft', label: 'Minecraft', icon: IconGamepad },
-  { id: 'performance', label: 'Performance', icon: IconBolt },
-  { id: 'downloads', label: 'Downloads', icon: IconDownload },
-  { id: 'updates', label: 'Updates', icon: IconRefresh },
-  { id: 'credits', label: 'Credits', icon: IconSparkle }
+const getSections = (t: (k: string) => string) => [
+  { id: 'general', label: t('settings.general'), icon: IconSettings },
+  { id: 'appearance', label: t('settings.appearance'), icon: IconImage },
+  { id: 'audio', label: t('settings.audio'), icon: IconVolume },
+  { id: 'minecraft', label: t('settings.minecraft'), icon: IconGamepad },
+  { id: 'performance', label: t('settings.performance'), icon: IconBolt },
+  { id: 'downloads', label: t('settings.downloads'), icon: IconDownload },
+  { id: 'updates', label: t('settings.updates'), icon: IconRefresh },
+  { id: 'credits', label: t('settings.credits'), icon: IconSparkle }
 ] as const
 
-type SectionId = (typeof sections)[number]['id']
+type SectionId = ReturnType<typeof getSections>[number]['id']
 
 /** Settings search index (V2) — every searchable setting with its category
  *  and a short description. The search box in Settings filters this live and
@@ -98,12 +99,15 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['preset', 'potato', 'balanced', 'high', 'turbo', 'tier'], section: 'performance', label: 'Performance preset (tier)', desc: 'Engine profile applied on every launch' },
   { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
   { query: ['music', 'background', 'tracks', 'mp3', 'playlist'], section: 'audio', label: 'Music', desc: 'Local music library for background playback' },
+  { query: ['discord', 'rich presence', 'status'], section: 'general', label: 'Discord', desc: 'Discord Rich Presence for the launcher' },
+
   { query: ['sound pack', 'customize sounds', 'preview sounds', 'aurora'], section: 'audio', label: 'Preview sounds', desc: 'Hear each action cue (single Aurora theme)' },
   { query: ['about', 'version', 'credits', 'team', 'creator'], section: 'credits', label: 'Credits', desc: 'The team behind Reimagined, version and data directory' },
   { query: ['reset', 'clean release', 'danger'], section: 'credits', label: 'Clean Release Reset', desc: 'Restore the launcher to a fresh installation' }
 ]
 
 export function SettingsPage() {
+  const t = useT()
   const { settings, updateSettings, notify, info, account, logout, setModals, updateInfo } = useApp()
   const [section, setSection] = useState<SectionId>('general')
   /* Settings search (V2): filters the index below and jumps to the result. */
@@ -125,7 +129,7 @@ export function SettingsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="section-head">
         <div>
-          <h2 className="page-title">Settings</h2>
+          <h2 className="page-title">{t('page.settings')}</h2>
           <p className="page-sub">Launcher configuration</p>
         </div>
       </div>
@@ -185,7 +189,7 @@ export function SettingsPage() {
 
       <div className="settings-layout">
         <nav className="settings-nav">
-          {sections.map(({ id, label, icon: Icon }) => (
+          {getSections(t).map(({ id, label, icon: Icon }) => (
             <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}>
               <Icon /> {label}
             </button>
@@ -202,6 +206,35 @@ export function SettingsPage() {
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <Toggle checked={settings.showConsoleOnLaunch} onChange={(v) => updateSettings({ showConsoleOnLaunch: v })} label="Open game console window on launch" />
+                </div>
+              </div>
+              {/* v1.0.88 — Discord Rich Presence */}
+              <div className="panel">
+                <div className="panel-title">Discord</div>
+                <p className="panel-sub">Show what you're doing in Reimagined on your Discord profile.</p>
+                <div style={{ marginTop: 12 }}>
+                  <Toggle
+                    checked={settings.discordPresence ?? true}
+                    onChange={(v) => void updateSettings({ discordPresence: v })}
+                    label="Show Discord Status"
+                    desc="When off, no status is shown and any current status is cleared right away."
+                  />
+                </div>
+                <div style={{ marginTop: 12, maxWidth: 420 }}>
+                  <Field label="Discord Application Client ID">
+                    <TextInput
+                      placeholder="Paste your Discord app client id (discord.com/developers)"
+                      value={settings.discordClientId ?? ''}
+                      onChange={(e) => void updateSettings({ discordClientId: e.target.value })}
+                      spellCheck={false}
+                    />
+                  </Field>
+                  <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
+                    Create a free application at discord.com/developers, then add the launcher's logo
+                    (Logo.png) as an asset named <b>reimagined</b> — that asset becomes the status image.
+                    The Fabric/Forge loader badge shows in the small corner slot. If Discord isn't running
+                    or no client id is set, nothing is shown and no error appears.
+                  </p>
                 </div>
               </div>
               <div className="panel">
@@ -334,6 +367,19 @@ export function SettingsPage() {
             <>
               <PerformanceSection />
               <StabilitySection />
+              {/* v1.0.88 — streaming/recording awareness */}
+              <div className="panel">
+                <div className="panel-title">Streaming & recording</div>
+                <p className="panel-sub">Smart background behavior while OBS (or another capture tool) records the game.</p>
+                <div style={{ marginTop: 12 }}>
+                  <Toggle
+                    checked={settings.streamingAware ?? true}
+                    onChange={(v) => void updateSettings({ streamingAware: v })}
+                    label="Streaming-aware behavior"
+                    desc="When a capture tool is detected: non-critical notifications are held back so nothing pops up mid-recording, and the FPS Boost never triggers AFK's aggressive FPS/render-distance throttling while you're being watched. This never reduces the FPS-preserving capture-hook compatibility work — it only avoids jarring on-screen changes."
+                  />
+                </div>
+              </div>
             </>
           )}
 
