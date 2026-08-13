@@ -20,6 +20,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProgressOverlay } from './components/ProgressOverlay'
 import { api } from './lib/api'
 import { sound } from './lib/sound'
+import { setMusicMode, setMusicEnsureEnabled } from './lib/music'
 import { SplashScreen } from './components/SplashScreen'
 import { BrandLogo } from './components/BrandLogo'
 import { HomePage } from './pages/HomePage'
@@ -48,7 +49,7 @@ export type Page =
   | 'logs'
 
 function Shell() {
-  const { ready, modals, theme, settings, setModals, account, closeContent, popContent, contentStack } = useApp()
+  const { ready, modals, theme, settings, setModals, account, closeContent, popContent, contentStack, updateSettings } = useApp()
   const [page, setPage] = useState<Page>('home')
   /* v1.0.53 — a quick, purposeful breath between pages: the current content
    * dips for ~120ms, the new page mounts and rises in (page-enter), landing
@@ -200,12 +201,25 @@ function Shell() {
       music: settings?.audioMusic ?? false
     })
     sound.setMusicVolume(settings?.audioVolume ?? 0.7)
+    /* v1.0.87 — keep the shared music controller's play-mode in sync so
+       auto-advance honors shuffle/repeat even from the title-bar mini player. */
+    setMusicMode(settings?.audioMusicShuffle ?? false, settings?.audioMusicRepeat ?? 'all')
     if (!(settings?.audioEnabled ?? true) || !(settings?.audioMusic ?? false)) {
       sound.musicStop()
     } else {
       sound.musicStart()
     }
   }, [settings])
+
+  /* v1.0.87 — starting a local track from anywhere (title bar / Settings)
+     enables the music setting live so playback always works first try. */
+  useEffect(() => {
+    setMusicEnsureEnabled(() => {
+      sound.configure({ music: true })
+      void updateSettings({ audioMusic: true })
+    })
+    return () => setMusicEnsureEnabled(null)
+  }, [updateSettings])
 
   /* Global Minecraft-style UI sounds — delegated at the document level so
    * every button / nav item in the app gets the hover tick + click blip

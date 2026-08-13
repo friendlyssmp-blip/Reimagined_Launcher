@@ -1,3 +1,27 @@
+## v1.0.87 — Spotify removed, your MP3s everywhere & a mini player in the title bar
+
+### Spotify is gone
+- The Spotify connection was removed entirely: UI, login flow, Web Playback
+  SDK, stored tokens and settings. No Spotify code ships in the launcher
+  anymore — your music library is 100% local.
+
+### Your own music, at max
+- The local MP3 library (Settings → Audio → Music) runs on a single shared
+  player engine: true pause/resume (keeps your position), previous/next,
+  shuffle, repeat (off / all / one) and volume — your own files only.
+- When a track finishes it auto-advances; if there is no next track it plays
+  the same one again — the music never just stops.
+- Re-selecting the current track (or pressing Next with a single track)
+  restarts it from the beginning.
+
+### Mini player in the title bar
+- Right next to the Reimagined logo at the top of the window there are now
+  Play/Pause and Next buttons plus the current track name — control your
+  background music from anywhere in the launcher.
+- The title-bar player and the Settings panel share the same state, so they
+  always stay in sync (and the track name hides on narrow windows so the
+  window controls never get crowded).
+
 ## v1.0.86 — Creator profiles, browser-like navigation & a new startup sound
 
 ### Clickable creators everywhere

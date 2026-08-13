@@ -97,7 +97,7 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
   { query: ['preset', 'potato', 'balanced', 'high', 'turbo', 'tier'], section: 'performance', label: 'Performance preset (tier)', desc: 'Engine profile applied on every launch' },
   { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
-  { query: ['music', 'spotify', 'background', 'tracks', 'mp3', 'playlist'], section: 'audio', label: 'Music & Spotify', desc: 'Local music library + Spotify connection for background playback' },
+  { query: ['music', 'background', 'tracks', 'mp3', 'playlist'], section: 'audio', label: 'Music', desc: 'Local music library for background playback' },
   { query: ['sound pack', 'customize sounds', 'preview sounds', 'aurora'], section: 'audio', label: 'Preview sounds', desc: 'Hear each action cue (single Aurora theme)' },
   { query: ['about', 'version', 'credits', 'team', 'creator'], section: 'credits', label: 'Credits', desc: 'The team behind Reimagined, version and data directory' },
   { query: ['reset', 'clean release', 'danger'], section: 'credits', label: 'Clean Release Reset', desc: 'Restore the launcher to a fresh installation' }
@@ -514,10 +514,10 @@ export function SettingsPage() {
                   ))}
                 </div>
               </div>
-              {/* v1.0.85 — local music library + Spotify, in Settings → Audio */}
+              {/* v1.0.87 — local music library, in Settings → Audio (Spotify removed) */}
               <div className="panel">
-                <div className="panel-title">Music & Spotify</div>
-                <p className="panel-sub">Your own tracks or your Spotify account — play them quietly in the background while you use the launcher.</p>
+                <div className="panel-title">Music</div>
+                <p className="panel-sub">Your own tracks, played quietly in the background while you use the launcher.</p>
                 <div style={{ marginTop: 14 }}>
                   <MusicSection />
                 </div>

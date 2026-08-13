@@ -165,7 +165,7 @@ const api = {
     folderSizes: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.shareFolderSizes, profileId)
   },
 
-  /** v1.0.85 — local background music + Spotify. */
+  /** v1.0.87 — local background music library. */
   music: {
     list: (): Promise<unknown> => ipcRenderer.invoke(IPC.musicList),
     add: (): Promise<unknown> => ipcRenderer.invoke(IPC.musicAdd),
@@ -180,13 +180,6 @@ const api = {
   yt: {
     avatar: (channelUrl: string): Promise<unknown> => ipcRenderer.invoke(IPC.ytAvatar, channelUrl)
   },
-  spotify: {
-    status: (): Promise<unknown> => ipcRenderer.invoke(IPC.spotifyStatus),
-    begin: (clientId: string): Promise<unknown> => ipcRenderer.invoke(IPC.spotifyBegin, clientId),
-    token: (): Promise<unknown> => ipcRenderer.invoke(IPC.spotifyToken),
-    disconnect: (): Promise<unknown> => ipcRenderer.invoke(IPC.spotifyDisconnect)
-  },
-
 
   system: {
     getMemory: (): Promise<unknown> => ipcRenderer.invoke('system:getMemory'),

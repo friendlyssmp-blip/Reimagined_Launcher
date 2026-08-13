@@ -447,15 +447,6 @@ export const IconMusic = (p: P) => (
   </svg>
 )
 
-export const IconSpotify = (p: P) => (
-  <svg {...base(p)}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="M7 9.2c3.4-1.2 7-0.8 9.8 0.6" />
-    <path d="M6.6 13.2c2.9-1 5.9-0.7 8.3 0.6" />
-    <path d="M6.8 16.9c2.4-0.9 4.9-0.6 6.9 0.5" />
-  </svg>
-)
-
 export const IconPlus = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 5v14M5 12h14" />

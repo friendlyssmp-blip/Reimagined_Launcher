@@ -296,7 +296,7 @@ export const api = {
       unwrap<Record<string, number>>(window.reimagined.share.folderSizes(profileId))
   },
 
-  /** v1.0.85 — local background music + Spotify. */
+  /** v1.0.87 — local background music library. */
   music: {
     list: () => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.list()),
     add: () => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.add()),
@@ -313,13 +313,6 @@ export const api = {
   yt: {
     avatar: (channelUrl: string) => unwrap<string | null>(window.reimagined.yt.avatar(channelUrl))
   },
-  spotify: {
-    status: () => unwrap<{ connected: boolean; displayName?: string }>(window.reimagined.spotify.status()),
-    begin: (clientId: string) => unwrap<{ ok: boolean; error?: string }>(window.reimagined.spotify.begin(clientId)),
-    token: () => unwrap<{ ok: boolean; token?: string; error?: string }>(window.reimagined.spotify.token()),
-    disconnect: () => unwrap<void>(window.reimagined.spotify.disconnect())
-  },
-
   onEvent: (cb: (e: AppEvent) => void) => window.reimagined.onEvent(cb),
   onMaximized: (cb: (v: boolean) => void) => window.reimagined.onMaximized(cb)
 }

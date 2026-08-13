@@ -2919,6 +2919,37 @@ select.select option {
   align-items: center;
   padding-left: 12px;
   opacity: 0.9;
+  gap: 10px;
+}
+
+/* v1.0.87 — mini music player inside the window title bar (play/pause + next). */
+.titlebar-music {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.titlebar-music .titlebar-btn {
+  width: 26px;
+  height: 24px;
+}
+.titlebar-music-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-right: 4px;
+}
+/* Narrow windows: keep only the transport buttons so the window controls
+ * never get crowded out. */
+@media (max-width: 860px) {
+  .titlebar-music-name {
+    display: none;
+  }
 }
 
 

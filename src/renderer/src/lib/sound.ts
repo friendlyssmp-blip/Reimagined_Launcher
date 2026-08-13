@@ -69,6 +69,7 @@ let musicEl: HTMLAudioElement | null = null
  * track (reimagined-music://…). null = the bundled track. */
 let musicUrl: string | null = null
 let musicEndedCb: (() => void) | null = null
+let musicPaused = false
 let musicBase = 0.45 /* music bus level before ducking, relative to master */
 let ducking = false
 let lastHoverAt = 0
@@ -516,6 +517,7 @@ export const sound = {
   /** Menu music loop — routed through the music bus so ducking applies. */
   musicStart(): void {
     if (!cfg.enabled || !cfg.music || musicEl) return
+    musicPaused = false
     try {
       // v1.0.85 — a custom library track when one is set (loop off so the
       // player can auto-advance to the next song), else the bundled loop.
@@ -549,7 +551,32 @@ export const sound = {
   onMusicEnded(cb: (() => void) | null): void {
     musicEndedCb = cb
   },
+  /** v1.0.87 — real pause: keeps the element + position (resume continues). */
+  musicPause(): void {
+    if (!musicEl) return
+    musicPaused = true
+    musicEl.pause()
+  },
+  /** v1.0.87 — resume a paused track from where it stopped. */
+  musicResume(): void {
+    if (!musicEl) return
+    musicPaused = false
+    musicEl.play().catch(() => {})
+  },
+  /** v1.0.87 — replay the current custom track from the beginning. */
+  musicRestart(): void {
+    const url = musicUrl
+    if (musicEl) this.musicStop()
+    musicUrl = url
+    musicPaused = false
+    if (url && cfg.music && cfg.enabled) this.musicStart()
+  },
+  /** v1.0.87 — forget the custom source (back to the bundled menu loop). */
+  clearMusicUrl(): void {
+    musicUrl = null
+  },
   musicStop(): void {
+    musicPaused = false
     if (!musicEl) return
     try {
       musicEl.pause()
@@ -561,7 +588,10 @@ export const sound = {
     musicEl = null
   },
   isMusicPlaying(): boolean {
-    return !!musicEl
+    return !!musicEl && !musicPaused
+  },
+  isMusicPaused(): boolean {
+    return musicPaused
   },
   /** Update loop volume live (called when the volume slider moves). */
   setMusicVolume(v: number): void {

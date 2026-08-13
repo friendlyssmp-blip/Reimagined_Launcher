@@ -52,12 +52,11 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   audioError: true,
   // Menu music is OFF by default — opt-in from Settings → Audio.
   audioMusic: false,
-  // v1.0.85 — local music library + Spotify.
+  // v1.0.87 — local music library.
   audioMusicFiles: [],
   audioMusicVolume: 0.35,
   audioMusicShuffle: false,
   audioMusicRepeat: 'all',
-  spotifyClientId: '',
   autoCheckUpdates: true,
   // v1.0.34: silent auto-update is gone — a detected release shows the
   // 3-option prompt (Update / Cancel / Remind Me Later); the launcher NEVER

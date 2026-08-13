@@ -1,8 +1,8 @@
 {
-  "version": "1.0.86",
-  "installer": "dist/Reimagined-Setup-1.0.86.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.86.exe",
-  "sha256": "baa6a3e4d1485893a0e8bbfe2d2a3cb96bd1e5cfa5fbb266c6378854e87afc56",
-  "notes": "v1.0.86 - Creator profiles, browser-like navigation & new startup sound:\\n1) CREATOR PROFILES: every author name on any project is now clickable and opens a native in-app profile page - real avatar, bio, dynamic category tabs (only what the creator actually has), instant search and project cards. Works for mods, modpacks, resource packs, data packs, shaders, worlds and maps.\\n2) BROWSER-LIKE NAVIGATION: a universal back arrow reverses the real path (project -> author -> another project -> back), at any depth. Pages keep their scroll, filters and search when you go back. Mods and Modpacks now share the exact same version-browsing UI.\\n3) NO DUPLICATE INSTALLS: an item already installed in an instance can no longer be installed twice - no Shift-click re-arm, no duplicate confirmation.\\n4) CREDITS: the creator and contributor cards now show the real YouTube channel profile pictures.\\n5) NEW STARTUP SOUND: one continuous ~4.5s cinematic sequence synced to the splash animation - the system wakes, the logo gets its own sonic signature, everything resolves into a warm chord. Also fixed a duplicated sound phase bug that shadowed the finale.",
-  "publishedAt": "2026-08-12T20:30:00.000Z"
+  "version": "1.0.87",
+  "installer": "dist/Reimagined-Setup-1.0.87.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.87.exe",
+  "sha256": "9117a9f146d6eac7c0dde8ec85a8b203c4164b111d07cf4efad2885c91208f3d",
+  "notes": "v1.0.87 - Spotify removed, your MP3s everywhere & a mini player in the title bar:\\n1) SPOTIFY IS GONE: the whole connection (UI, login flow, Web Playback SDK, tokens, settings) was removed - your music library is 100% local now.\\n2) YOUR OWN MUSIC AT MAX: the local MP3 library runs on a single shared player engine with true pause/resume (keeps position), previous/next, shuffle, repeat off/all/one and volume. Tracks auto-advance when they finish, and if there is no next track the same one plays again - the music never stops. Re-selecting the current track restarts it from the beginning.\\n3) MINI PLAYER IN THE TITLE BAR: Play/Pause and Next buttons plus the current track name right next to the Reimagined logo at the top of the window. Always in sync with the Settings music panel (the track name hides on narrow windows so window controls never get crowded).",
+  "publishedAt": "2026-08-13T01:49:04.449464Z"
 }

@@ -92,8 +92,6 @@ export interface LauncherSettings {
   audioMusicShuffle: boolean
   /** Repeat mode for the local playlist. */
   audioMusicRepeat: 'off' | 'all' | 'one'
-  /** Spotify for Developers Client ID (user-provided, for PKCE). */
-  spotifyClientId: string
 
   /* ------------------------------ Updates ------------------------------ */
 

@@ -164,14 +164,10 @@ export const IPC = {
   // Reliable image proxy (V2 fix) — main-process fetch → data URL
   contentImage: 'content:image',
 
-  // Music (v1.0.85) — local background library + Spotify
+  // Music (v1.0.87) — local background library (Spotify removed)
   musicList: 'music:list',
   musicAdd: 'music:add',
-  musicRemove: 'music:remove',
-  spotifyStatus: 'spotify:status',
-  spotifyBegin: 'spotify:begin',
-  spotifyToken: 'spotify:token',
-  spotifyDisconnect: 'spotify:disconnect'
+  musicRemove: 'music:remove'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
