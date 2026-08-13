@@ -1,8 +1,8 @@
 {
-  "version": "1.0.89",
-  "installer": "dist/Reimagined-Setup-1.0.89.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.89.exe",
-  "sha256": "2d0235a9f9f738bfb41bc6722f69b3813f2d3cd9260e2f6ec0bdaf9eec1ec3f5",
-  "notes": "v1.0.89 - Real server browser + Reimagined \"R\" nametag in-game\n1) REAL SERVER BROWSER (Games > Servers): a curated directory of 15 real public Java servers (Hypixel, CubeCraft, Wynncraft, 2b2t, ManaCube, StoneHollow and more) - search by name/address/tag, filter by category, preview any server with live MOTD/players/version/latency, and a Recommended-for-you row ranked by the mods in your active profile.\n2) INSTALL SERVERS INTO INSTANCES: pick a directory server and install it into any of your instances (searchable instance picker) - it is written into that instance's servers.dat, so it appears in the in-game Multiplayer list when you enter the game.\n3) JOIN launches your active profile directly into the server. Favorites + recently-played history kept.\n4) REIMAGINED \"R\" NAMETAG (FPS Boost 1.0.33, 26.2): the official fragmented Reimagined R now renders next to player nametags in-game - same brand identity as the launcher logo - with soft glow, smooth fade in/out, a Nametag R toggle in the FPS Boost screen, negligible perf cost and no conflicts with Sodium/Iris/Xaero's/Essential/Mod Menu.",
-  "publishedAt": "2026-08-13T03:54:58.706695+00:00"
+  "version": "1.0.90",
+  "installer": "dist/Reimagined-Setup-1.0.90.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.90.exe",
+  "sha256": "0f03b1c927a62d99ec51ff9ca8153595ce3ff9b80e46f06e6f41715d3aa640a2",
+  "notes": "v1.0.90 - CRITICAL: silent updates fixed for real. Two installer bugs made every update fail silently (the launcher closed but never updated): (1) the branded splash hung the installer, (2) the old custom uninstaller aborted the upgrade with a fake 'uninstall' dialog. The splash is removed, the uninstaller only refuses when uninstalling interactively, and the updater now clears a stale old uninstaller before applying, so this update installs cleanly and future updates work automatically.",
+  "publishedAt": "2026-08-13T09:00:00+00:00"
 }

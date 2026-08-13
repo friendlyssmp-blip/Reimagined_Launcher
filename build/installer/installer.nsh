@@ -24,13 +24,11 @@
 ; ============================================================
 !ifndef BUILD_UNINSTALLER
 
-; Short branded splash right at startup (before the first page).
+; v1.0.90 — the branded splash was REMOVED entirely: the splash plugin hangs
+; the installer on this NSIS build (both interactive and silent runs), which
+; is exactly why silent updates never applied. The custom wizard pages below
+; (options + finish) keep the branded installer experience.
 !macro customInit
-  SetOutPath "$TEMP"
-  File "${BUILD_RESOURCES_DIR}\installer\splash.bmp"
-  splash::show 1300 "$TEMP\reimagined-splash.bmp"
-  Pop $0
-  Delete "$TEMP\reimagined-splash.bmp"
 !macroend
 
 ; Options page - explained checkboxes shown after the install-location page.
@@ -119,13 +117,19 @@ FunctionEnd
 !ifdef BUILD_UNINSTALLER
 
 ; Refuse to run while the app (or a game it launched) is still open.
+; v1.0.90 fix: only enforce this for INTERACTIVE manual uninstalls. Silent
+; runs (the new installer invokes the OLD uninstaller with /S --updated to
+; replace the app) must never refuse or abort — electron-builder's own
+; CHECK_APP_RUNNING already handles killing the app during an upgrade.
 !macro customUnInit
-  nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq Reimagined.exe" /NH'
-  Pop $0
-  Pop $1
-  ${If} $0 == 0
-    MessageBox MB_ICONSTOP|MB_OK "Reimagined is still running.$\r$\n$\r$\nPlease close Reimagined (and any Minecraft game launched from it) before uninstalling, then run the uninstaller again."
-    Quit
+  ${IfNot} ${Silent}
+    nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq Reimagined.exe" /NH'
+    Pop $0
+    Pop $1
+    ${If} $0 == 0
+      MessageBox MB_ICONSTOP|MB_OK "Reimagined is still running.$\r$\n$\r$\nPlease close Reimagined (and any Minecraft game launched from it) before uninstalling, then run the uninstaller again."
+      Quit
+    ${EndIf}
   ${EndIf}
 !macroend
 

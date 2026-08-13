@@ -474,6 +474,26 @@ export const updater = {
     logger.info(`Installing update ${info.latestVersion} via the new installer…`)
     eventBus.emit('update:progress', { phase: 'installer', percent: 90, message: 'Preparing the new installer…' })
 
+    // v1.0.90 — neutralize a BROKEN old uninstaller before the new installer runs.
+    // The installer replaces the app by first invoking the OLD uninstaller
+    // (uninstallOldVersion). Uninstallers shipped in v1.0.88/v1.0.89 carried a
+    // custom "app is running? refuse" check that had no silent-mode guard, so
+    // during an update it could abort the whole upgrade (exit code 2) — the
+    // "update wants to uninstall" bug. Deleting the stale uninstaller makes
+    // uninstallOldVersion skip the old-app removal and the new installer
+    // simply overwrites the files and writes a FRESH (fixed) uninstaller.
+    if (app.isPackaged) {
+      try {
+        const uninstaller = path.join(path.dirname(process.execPath), 'Uninstall Reimagined.exe')
+        if (exists(uninstaller)) {
+          fs.rmSync(uninstaller, { force: true })
+          logger.info(`[UPDATE] Removed stale uninstaller ${path.basename(uninstaller)} so the new installer can upgrade cleanly.`)
+        }
+      } catch (err) {
+        logger.warn(`[UPDATE] Could not remove the stale uninstaller: ${(err as Error).message}`)
+      }
+    }
+
     // Remove the Windows "downloaded from the internet" mark (Zone.Identifier)
     // so SmartScreen does not silently block the silent install.
     const { execFile } = await import('node:child_process')

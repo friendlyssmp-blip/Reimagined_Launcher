@@ -1,3 +1,32 @@
+## v1.0.90 - CRITICAL: silent updates fixed for real (the "update wants to uninstall" bug)
+
+### What was actually breaking every update
+Reproduced and fixed end-to-end. Two bugs in the custom branded installer:
+
+1. **The startup splash hung the installer.** The splash plugin hangs this NSIS
+   build (both interactive and silent runs), and the bitmap was also extracted
+   under the wrong file name, so the splash window could never load it. The
+   installer got stuck in its startup routine forever — the app was never
+   replaced, so the version stayed on 1.0.88 no matter how many times you
+   clicked Update. The splash is now removed; the custom wizard pages remain.
+2. **The old uninstaller aborted the upgrade.** To replace the app, the new
+   installer first invokes the OLD uninstaller. Uninstallers from v1.0.88/1.0.89
+   carried a custom "Reimagined is still running — close it before
+   uninstalling" check with NO silent-mode guard, so during an update it could
+   pop a dialog that looked exactly like an uninstall and abort the whole
+   upgrade (installer exit code 2).
+
+### The fixes
+- Installer/uninstaller: the running-app refusal only applies to interactive
+  manual uninstalls now (never during silent updates), and the broken splash
+  is gone. Future uninstallers are safe.
+- Updater hardening: before spawning the new installer, the launcher now
+  removes a stale old uninstaller it detects, so the very next update skips
+  the broken old component entirely and installs a fresh, fixed one.
+- Verified: a full silent install + silent update cycle was run in an isolated
+  sandbox with the real installers — both complete cleanly now (they hung
+  before). Your installed launcher, profiles and data were untouched.
+
 ## v1.0.89 - Real server browser + Reimagined "R" nametag in-game
 
 ### Real server browser (Games > Servers) - not just "add a server"
