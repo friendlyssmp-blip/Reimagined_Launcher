@@ -1,3 +1,34 @@
+## v1.0.95 — FPS Test now measures real gameplay (was measuring the chunk-generation storm)
+
+The first FPS Test results (3-24 FPS in-world, 18 ms world load, 69 ms respawn) were absurd
+because the benchmark was measuring the wrong thing:
+
+- The `reimagined-bench` world was only pre-generated to view-distance 8 while the client
+  plays at render distance 10 — the whole test ran while Minecraft generated the missing
+  chunk ring live ("Preparing spawn area: 16%" for minutes, 4s GC pauses, 0.5 FPS lows).
+- The FPS Boost **AFK Mode** engaged mid-benchmark (180s without input) and capped FPS to
+  12 while dropping render distance to 4.
+- Smart Render Distance kept ratcheting the render distance down under load.
+- "New World Load Time" measured ~1 tick (18 ms) instead of menu → world.
+- "Minecraft Startup Time" measured the whole benchmark duration, not the boot.
+- "Respawn Time" started timing before the async /kill registered (69 ms).
+- The entity test collapsed at 40 entities because the base FPS was already ~24.
+
+### Fixed
+- Bench world pre-generates at **view-distance 16** (covers RD 10 + margin) with a
+  `bench-gen-v2.json` marker so existing v1 bench worlds regenerate once; generation
+  timeout raised to 480s for slow machines.
+- Driver **warm-up**: teleports through the spawn, ocean and RTP zones (generous dwells)
+  so their chunks exist BEFORE any measurement, then waits for FPS ≥ 30 sustained 5s.
+- **AFK + Smart RD disabled for the whole benchmark** via in-memory field assignment
+  (never written to disk — a crash can't persist afkMode=false) and restored after.
+- `worldLoadMs` = menu → world join; `startupMs` = game start → main menu (both real now).
+- Respawn waits for actual death, calls `LocalPlayer.respawn()`, times death → alive.
+- Entity test: 40 per batch with a 3s settle window measuring the lowest FPS (no more
+  instant collapse at 40 entities).
+- Jars rebuilt for 26.1 + 26.2 with the fixed driver; auto-copied to instances by the
+  existing hash-check on launch.
+
 ## v1.0.94 — Music player fixed (imported songs actually play) + "Menu music" toggle removed
 
 ### The music player finally works

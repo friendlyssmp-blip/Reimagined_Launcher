@@ -1,8 +1,8 @@
 {
-  "version": "1.0.94",
-  "installer": "dist/Reimagined-Setup-1.0.94.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.94.exe",
-  "sha256": "1f43b3bfb6678902f3ad366edb10bde94bcae626453fd052aa90fbb7f09484b7",
-  "notes": "Music player fixed: imported songs now actually play with a moving progress bar (local-file protocol served correctly with Range support) and the \"Menu music\" toggle was removed from Settings — the bundled menu loop is always off, your own tracks always play.",
-  "publishedAt": "2026-08-13T11:10:00+00:00"
+  "version": "1.0.95",
+  "installer": "dist/Reimagined-Setup-1.0.95.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.95.exe",
+  "sha256": "16183d6ac966f48dfde921678aec200ff00bc830a2923299eb2db2e5220e14b3",
+  "notes": "FPS Test fixed: it now measures real gameplay instead of the chunk-generation storm (bench world pre-generated at view-distance 16, warm-up before measuring, AFK/Smart-RD disabled during the test, real world-load/startup/respawn timings). Update and re-run the FPS Test from Account.",
+  "publishedAt": "2026-08-13T13:22:00+00:00"
 }

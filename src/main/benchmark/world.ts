@@ -24,16 +24,26 @@ export async function ensureBenchWorld(profile: Profile, worldName: string, say:
   const savesDir = pathMod.join(gameDir, 'saves')
   const worldDir = pathMod.join(savesDir, worldName)
 
-  // A usable world has both the level data AND the world-gen settings the
-  // client needs to build its dimensions (missing settings = "Overworld
-  // settings missing" when the client tries to open the world).
-  const worldReady = (): boolean =>
+  // v1.0.95 — schema marker: v2 pre-generates the spawn area at view-distance
+  // 16 so a RD-10 client NEVER generates chunks live during the benchmark
+  // (the v1 world at view-distance 8 caused the whole test to measure the
+  // chunk-generation storm: "Preparing spawn area: 16%" for minutes, 4s GC
+  // pauses, 3-24 FPS in-world while the settled world runs at 90+). A bench
+  // world missing the marker is regenerated once with the new settings.
+  const marker = 'bench-gen-v2.json'
+  // Structurally complete world (independent of the schema marker).
+  const worldComplete = (): boolean =>
     fsMod.existsSync(pathMod.join(worldDir, 'level.dat')) &&
     fsMod.existsSync(pathMod.join(worldDir, 'data', 'minecraft', 'world_gen_settings.dat'))
+  // v2 world — safe to reuse as-is.
+  const worldV2 = (): boolean => worldComplete() && fsMod.existsSync(pathMod.join(worldDir, marker))
 
-  if (worldReady()) {
+  if (worldV2()) {
     say(`  Reusing existing benchmark world "${worldName}"`)
     return
+  }
+  if (worldComplete()) {
+    say(`  Benchmark world "${worldName}" was generated with old settings — regenerating with the v2 layout…`)
   }
 
   say(`  Generating benchmark world "${worldName}" (headless dedicated server, one-time)…`)
@@ -61,8 +71,11 @@ export async function ensureBenchWorld(profile: Profile, worldName: string, say:
         'level-seed=42',
         'online-mode=false',
         'max-tick-time=-1',
-        'view-distance=8',
-        'simulation-distance=6',
+        // v1.0.95 — pre-generate a 16-chunk radius around spawn (covers the
+        // client's RD-10 view + margin) so chunk generation never happens
+        // while the benchmark measures.
+        'view-distance=16',
+        'simulation-distance=8',
         'gamemode=creative',
         'spawn-protection=0',
         'sync-chunk-writes=false',
@@ -78,7 +91,9 @@ export async function ensureBenchWorld(profile: Profile, worldName: string, say:
     try {
       const done = await new Promise<boolean>((resolve) => {
         let out = ''
-        const timer = setTimeout(() => resolve(false), 240_000)
+        // v1.0.95 — view-distance=16 spawn pre-gen is ~4x the vd-8 area; on
+        // slow 2-core machines "Done" can take several minutes. 480s budget.
+        const timer = setTimeout(() => resolve(false), 480_000)
         const check = (): void => {
           if (out.includes('Done')) {
             clearTimeout(timer)
@@ -106,8 +121,9 @@ export async function ensureBenchWorld(profile: Profile, worldName: string, say:
       // Let the server flush its chunk/world writes before killing it — on
       // Windows a process kill is forced (no shutdown hooks), so the settle
       // window is what guarantees world_gen_settings.dat + spawn regions exist.
+      // v1.0.95 — a vd-16 spawn needs a longer flush than the old vd-8 world.
       say(`  Attempt ${attempt}: spawn area generated — flushing chunks…`)
-      await new Promise((r) => setTimeout(r, 25_000))
+      await new Promise((r) => setTimeout(r, 40_000))
     } finally {
       // Never leave a world-gen server running, whatever happened above.
       if (child.exitCode === null) {
@@ -119,7 +135,7 @@ export async function ensureBenchWorld(profile: Profile, worldName: string, say:
       }
     }
 
-    if (worldReady()) {
+    if (worldComplete()) {
       // Windows can briefly hold handles to the server's log files after the
       // process dies — cleanup is best-effort and must never crash the bench.
       await new Promise((r) => setTimeout(r, 2000))
@@ -133,6 +149,12 @@ export async function ensureBenchWorld(profile: Profile, worldName: string, say:
       tryClean(pathMod.join(savesDir, 'eula.txt'))
       tryClean(pathMod.join(savesDir, 'server.properties'))
       tryClean(pathMod.join(savesDir, 'logs'))
+      // v1.0.95 — mark the world as v2-generated so it is reused on future runs.
+      try {
+        fsMod.writeFileSync(pathMod.join(worldDir, marker), JSON.stringify({ v: 2 }, null, 2))
+      } catch {
+        /* best-effort */
+      }
       say(`  World ready at saves/${worldName}`)
       return
     }
