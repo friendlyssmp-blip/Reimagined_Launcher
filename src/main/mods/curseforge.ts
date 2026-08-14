@@ -11,6 +11,7 @@
  */
 import { settingsManager } from '../settings/settings-manager'
 import { LauncherError } from '../core/errors'
+import { eventBus } from '../core/event-bus'
 import type { ModrinthSearchResult, LoaderType, ProjectDetail, ProjectVersionInfo } from '@shared/types'
 
 const GAME_ID = 432 // Minecraft
@@ -157,7 +158,17 @@ const PROJECT_TTL = 15 * 60_000
 const VERSIONS_TTL = 15 * 60_000
 
 /** Fire-and-forget ping that keeps the Render instance awake. */
+// v1.0.96 — Game Mode: count running game sessions; keep-warm pings stay
+// suspended while at least one game is running (multi-instance safe). Each
+// session — including reattached ones at startup — emits launch:status.
+let runningSessions = 0
+eventBus.on('launch:status', (event) => {
+  const p = event.payload as { running?: boolean } | undefined
+  runningSessions = Math.max(0, runningSessions + (p?.running ? 1 : -1))
+})
+
 function pingProxy(): void {
+  if (runningSessions > 0) return
   try {
     const proxy = settingsManager.get().curseforgeProxyUrl?.trim()
     if (!proxy) return

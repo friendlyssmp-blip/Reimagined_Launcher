@@ -72,7 +72,11 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   // 3-option prompt (Update / Cancel / Remind Me Later); the launcher NEVER
   // updates itself without the user choosing "Update".
   // Re-check GitHub every 15 s while the launcher is open (15 s – 15 min).
-  updateCheckIntervalSec: 15,
+  // v1.0.96 — 5-minute default (was 15 s): the update check used to hit GitHub
+  // every 15 seconds all day, which on weak/slow connections can inflate
+  // in-game latency while the launcher sits open. Checks also pause entirely
+  // while a game is running.
+  updateCheckIntervalSec: 300,
   // V2 download queue: 1 = strict queue (default), 3 / 5 = parallel installs.
   downloadConcurrency: 1,
   // v1.0.92 — Clear Up Space: re-verify every selected file before deleting.

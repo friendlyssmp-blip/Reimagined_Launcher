@@ -1,8 +1,8 @@
 {
-  "version": "1.0.95",
-  "installer": "dist/Reimagined-Setup-1.0.95.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.95.exe",
-  "sha256": "16183d6ac966f48dfde921678aec200ff00bc830a2923299eb2db2e5220e14b3",
-  "notes": "FPS Test fixed: it now measures real gameplay instead of the chunk-generation storm (bench world pre-generated at view-distance 16, warm-up before measuring, AFK/Smart-RD disabled during the test, real world-load/startup/respawn timings). Update and re-run the FPS Test from Account.",
-  "publishedAt": "2026-08-13T13:22:00+00:00"
+  "version": "1.0.96",
+  "installer": "dist/Reimagined-Setup-1.0.96.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.96.exe",
+  "sha256": "e3df4f806551c2c6806afeb89d762466ab951e7ac7e74a0319fe4b94c6a6cc36",
+  "notes": "Game Mode: the launcher goes fully quiet while you play so it can't raise your in-game ping. Update checks now pause entirely during a game session (was polling GitHub every 15 seconds all day — now default 5 minutes), the living background animation freezes so the shared iGPU/CPU is reserved for Minecraft, and CurseForge proxy keep-warm pings are suspended during gameplay. All automatic.",
+  "publishedAt": "2026-08-13T21:20:00+00:00"
 }

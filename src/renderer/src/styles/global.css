@@ -286,6 +286,15 @@ textarea {
 .app[data-bg-lite] .bg-orb { display: none; }
 .app[data-bg-lite] .bg-dot { opacity: 0.07; }
 .app[data-bg-lite] .bg-dot:nth-child(n+9) { display: none; }
+/* v1.0.96 — Game Mode: while a game is running, freeze the ambient layer so
+ * the shared iGPU/CPU on laptops is reserved for Minecraft (the launcher must
+ * never add lag or latency to an active game session). */
+.app[data-game-running] .bg-live .bg-orb,
+.app[data-game-running] .bg-live .bg-dot {
+  animation: none !important;
+}
+.app[data-game-running] .bg-live .bg-dot { display: none; }
+.app[data-game-running] .bg-live .bg-orb { opacity: 0.22; }
 /* v1.0.54 (sweep) — the app's checkboxes (confirm dialog, toggle rows) were
  * the raw OS widget; give them the Reimagined accent + consistent size. */
 input[type='checkbox'] {

@@ -1,3 +1,22 @@
+## v1.0.96 — Game Mode: the launcher goes quiet while you play (fixes high in-game ping)
+
+Your launcher was silently working against you during gameplay: it polled GitHub for
+updates every 15 seconds all day, kept the animated living background running on the
+same GPU as Minecraft, and pinged the CurseForge proxy every 5 minutes — on a laptop
+that CPU/GPU/network contention shows up directly as inflated in-game ping.
+
+### What changed
+- **Update checks paused during gameplay**: while any game is running (multi-instance
+  safe), the launcher makes zero update-check requests. The old default polled GitHub
+  every 15 s — now the default is 5 minutes, and it is skipped entirely during a session.
+- **Living background freezes while a game runs**: the ambient orbs/dust animations stop
+  so the shared iGPU/CPU on laptops is reserved for Minecraft (no more compositing two
+  windows at 60 fps while you play).
+- **CurseForge keep-warm pings suspended during gameplay**: the proxy warm-up loop
+  (every 5 min) is skipped while a game session is active, and resumes afterwards.
+- All of it is automatic — no new settings, nothing to configure. The launcher simply
+  goes fully quiet the moment a game starts and wakes up when you close it.
+
 ## v1.0.95 — FPS Test now measures real gameplay (was measuring the chunk-generation storm)
 
 The first FPS Test results (3-24 FPS in-world, 18 ms world load, 69 ms respawn) were absurd

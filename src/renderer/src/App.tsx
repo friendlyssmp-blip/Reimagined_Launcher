@@ -341,7 +341,15 @@ function Shell() {
     settings?.preset === 'potato'
 
   return (
-    <div className="app" data-theme={theme} data-bg-lite={liteBg ? '1' : undefined}>
+    <div
+      className="app"
+      data-theme={theme}
+      data-bg-lite={liteBg ? '1' : undefined}
+      // v1.0.96 — Game Mode: while a game runs, the launcher goes quiet —
+      // ambient animations freeze (CSS) and background checks pause, so it
+      // cannot steal CPU/GPU/network from the game session.
+      data-game-running={running ? '1' : undefined}
+    >
       <div className="bg-live" aria-hidden="true">
         <span className="bg-orb bg-orb-1" />
         <span className="bg-orb bg-orb-2" />

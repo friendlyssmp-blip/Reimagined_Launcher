@@ -578,16 +578,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
 
-  // Re-check while the launcher stays open (configurable, default 60 s) so a
-  // running launcher notices a new release quickly — the sidebar Update button
-  // appears the moment one is published. Always on. v1.0.25 raised the default
-  // from 15 s to 60 s: each check hits the GitHub API and (when changed) state,
-  // and a 15 s default wasted a request + potential re-render every 15 s all
-  // day for a launcher that is usually just sitting there.
+  // v1.0.96 — Game Mode: never hit the network for update checks while any
+  // game is running (multi-instance safe: runningMap holds one entry per
+  // profile). The launcher goes fully quiet during a session so it cannot
+  // add latency to the game.
+  const gameRunningRef = useRef(false)
+  useEffect(() => {
+    gameRunningRef.current = Object.values(runningMap).some(Boolean)
+  }, [runningMap])
+
+  // Re-check while the launcher stays open (configurable, default 5 min) so a
+  // running launcher notices a new release — the sidebar Update button appears
+  // when one is published. Checks pause entirely while a game is running.
   useEffect(() => {
     if (!ready) return
-    const sec = Math.max(15, Math.min(900, settings?.updateCheckIntervalSec ?? 60))
-    const iv = setInterval(() => void checkForUpdates(true, true), sec * 1000)
+    const sec = Math.max(15, Math.min(900, settings?.updateCheckIntervalSec ?? 300))
+    const iv = setInterval(() => {
+      if (gameRunningRef.current) return
+      void checkForUpdates(true, true)
+    }, sec * 1000)
     return () => clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, settings?.updateCheckIntervalSec])
