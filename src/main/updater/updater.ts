@@ -173,6 +173,45 @@ function downloadFile(info: UpdateInfo): string {
   return path.join(paths.updates, name)
 }
 
+/**
+ * v1.0.97 — clear a possibly-locked update file without throwing EBUSY.
+ * A freshly downloaded installer is often momentarily held by Windows
+ * Defender/antivirus scanning or OneDrive, which makes a plain unlink fail
+ * with "EBUSY: resource busy or locked". Retry briefly (the lock usually
+ * releases within a moment); if it stays locked, quarantine the file aside
+ * under a unique name so a fresh download can always write to the clean
+ * path instead of failing the whole update.
+ */
+function clearDownloadPath(p: string): void {
+  if (!exists(p)) return
+  let lastErr: NodeJS.ErrnoException | null = null
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      fs.rmSync(p, { force: true })
+      return
+    } catch (err) {
+      lastErr = err as NodeJS.ErrnoException
+      const code = lastErr.code
+      if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'EACCES' && code !== 'ENOTEMPTY') throw err
+      // File is momentarily locked — wait briefly, then retry. A short sync
+      // sleep is fine here: the launcher is downloading/installing an update.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250)
+    }
+  }
+  // Still locked after the retries: quarantine instead of failing the update.
+  try {
+    const quarantine = `${p}.locked-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+    fs.renameSync(p, quarantine)
+    logger.warn(`[UPDATE] Previous update file was locked; moved it aside: ${path.basename(quarantine)}`)
+  } catch {
+    throw lastErr
+      ? new Error(
+          `${lastErr.message} — the previous update file is locked by another program (usually antivirus or OneDrive scanning it). Close the launcher, wait a second, and try the update again.`
+        )
+      : new Error('The previous update file could not be cleared. Try the update again in a moment.')
+  }
+}
+
 /** `1.2.3` vs `1.2.10` numeric comparison (leading `v` tolerated). */
 function compareVersions(a: string, b: string): number {
   const pa = a.replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
@@ -372,7 +411,7 @@ export const updater = {
    *  file path on success. */
   async downloadPayload(info: UpdateInfo): Promise<string> {
     const dest = downloadFile(info)
-    if (exists(dest)) fs.rmSync(dest, { force: true })
+    clearDownloadPath(dest)
 
     const url = info.assetUrl || CODELOAD_ZIP
     // v1.0.31 — never silently download the wrong artifact: a packaged
@@ -403,13 +442,19 @@ export const updater = {
     let lastEmit = 0
     let lastPct = -1
     const file = fs.createWriteStream(dest)
+    // A write error must never crash the process with an unhandled 'error'
+    // event — surface it as a normal update failure instead.
+    const streamError = new Promise<never>((_, reject) => file.once('error', reject))
     const reader = res.body.getReader()
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
       if (value) {
         if (!file.write(Buffer.from(value))) {
-          await new Promise<void>((resolve) => file.once('drain', resolve))
+          await Promise.race([
+            new Promise<void>((resolve) => file.once('drain', resolve)),
+            streamError
+          ])
         }
         received += value.byteLength
       }
@@ -422,9 +467,12 @@ export const updater = {
         eventBus.emit('update:progress', { phase: 'download', percent: pct, downloadedBytes: received, totalBytes: total })
       }
     }
-    await new Promise<void>((resolve, reject) =>
-      file.end((err: Error | null | undefined) => (err ? reject(err) : resolve()))
-    )
+    await Promise.race([
+      new Promise<void>((resolve, reject) =>
+        file.end((err: Error | null | undefined) => (err ? reject(err) : resolve()))
+      ),
+      streamError
+    ])
     // v1.0.31 — verify the SHA-256 of the downloaded installer against the
     // manifest when one is declared. A corrupt/partial/tampered file must
     // never be offered for install; on mismatch the file is deleted so a
@@ -441,7 +489,7 @@ export const updater = {
       })
       const actual = hash.digest('hex')
       if (actual.toLowerCase() !== info.sha256.toLowerCase()) {
-        fs.rmSync(dest, { force: true })
+        clearDownloadPath(dest)
         logger.error(
           `Update checksum mismatch — expected ${info.sha256.slice(0, 12)}…, got ${actual.slice(0, 12)}… — file deleted, update cancelled.`
         )
@@ -450,7 +498,33 @@ export const updater = {
       logger.info('Update checksum OK — the package is genuine.')
     }
     logger.info(`Update package downloaded (${Math.round(received / 1024 / 1024)} MB) — ${dest}`)
+    // v1.0.97 — the updates folder used to accumulate every installer ever
+    // downloaded (~3.5 GB). After a verified download, prune the stale ones.
+    this.pruneOldInstallers(dest)
     return dest
+  },
+
+  /**
+   * v1.0.97 — delete every old Reimagined-Setup-*.exe in the updates folder
+   * except the freshly downloaded one, freeing gigabytes. Never fails the
+   * update: a locked stale file is just quarantined by clearDownloadPath.
+   */
+  pruneOldInstallers(keep: string): void {
+    try {
+      const entries = fs.readdirSync(paths.updates)
+      for (const name of entries) {
+        if (!/^Reimagined-Setup-.*\.exe$/i.test(name)) continue
+        const full = path.join(paths.updates, name)
+        if (full === keep) continue
+        try {
+          clearDownloadPath(full)
+        } catch {
+          /* a locked stale installer is not worth failing the update over */
+        }
+      }
+    } catch (err) {
+      logger.warn(`[UPDATE] prune old installers: ${(err as Error).message}`)
+    }
   },
 
   /**

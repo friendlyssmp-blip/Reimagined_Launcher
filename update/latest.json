@@ -1,8 +1,8 @@
 {
-  "version": "1.0.96",
-  "installer": "dist/Reimagined-Setup-1.0.96.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.96.exe",
-  "sha256": "e3df4f806551c2c6806afeb89d762466ab951e7ac7e74a0319fe4b94c6a6cc36",
-  "notes": "Game Mode: the launcher goes fully quiet while you play so it can't raise your in-game ping. Update checks now pause entirely during a game session (was polling GitHub every 15 seconds all day — now default 5 minutes), the living background animation freezes so the shared iGPU/CPU is reserved for Minecraft, and CurseForge proxy keep-warm pings are suspended during gameplay. All automatic.",
-  "publishedAt": "2026-08-13T21:20:00+00:00"
+  "version": "1.0.97",
+  "installer": "dist/Reimagined-Setup-1.0.97.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.97.exe",
+  "sha256": "fb18fb81d1eabc6f3a834ba3d3222b7618bd2650d763ad97b96ac1d0ff7789ca",
+  "notes": "Update fixed: no more 'EBUSY resource busy or locked' when updating (the previous installer file was locked by antivirus/OneDrive scanning — now it retries and quarantines instead of failing). Also the launcher now prunes all the old installers it had been hoarding since v1.0.47, freeing ~3.5 GB of disk.",
+  "publishedAt": "2026-08-13T21:50:00+00:00"
 }

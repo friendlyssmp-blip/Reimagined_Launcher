@@ -1,3 +1,22 @@
+## v1.0.97 — Update fixed: no more EBUSY (file locked) + frees ~3.5 GB of old installers
+
+Clicking Update could fail with "EBUSY: resource busy or locked" — the launcher tried to
+delete the previously downloaded installer while Windows Defender (or OneDrive) was still
+scanning/locking it, and the failure was not handled. Also, every installer ever downloaded
+(since v1.0.47!) was kept forever in the updates folder — about 3.5 GB of stale files.
+
+### What changed
+- **Lock-safe update cleanup**: deleting the old update file now retries briefly (a scanner
+  usually releases the handle within a moment) and, if it stays locked, quarantines the file
+  aside instead of failing — the update always proceeds.
+- **Friendly error instead of a raw crash** if the file is locked so hard it cannot even be
+  moved aside.
+- **Download stream hardened**: a write error during the download can no longer crash the
+  launcher with an unhandled exception — it surfaces as a normal update failure.
+- **Old installers are pruned**: after a successful download, every previous
+  Reimagined-Setup-*.exe in the updates folder is deleted (recovering gigabytes), keeping
+  only the version being installed.
+
 ## v1.0.96 — Game Mode: the launcher goes quiet while you play (fixes high in-game ping)
 
 Your launcher was silently working against you during gameplay: it polled GitHub for
