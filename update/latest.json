@@ -1,8 +1,8 @@
 {
-  "version": "1.0.97",
-  "installer": "dist/Reimagined-Setup-1.0.97.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.97.exe",
-  "sha256": "fb18fb81d1eabc6f3a834ba3d3222b7618bd2650d763ad97b96ac1d0ff7789ca",
-  "notes": "Update fixed: no more 'EBUSY resource busy or locked' when updating (the previous installer file was locked by antivirus/OneDrive scanning — now it retries and quarantines instead of failing). Also the launcher now prunes all the old installers it had been hoarding since v1.0.47, freeing ~3.5 GB of disk.",
-  "publishedAt": "2026-08-13T21:50:00+00:00"
+  "version": "1.0.98",
+  "installer": "dist/Reimagined-Setup-1.0.98.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.98.exe",
+  "sha256": "90e6f5faba94521f481ccc4640bd136763ddee375027a475af164c189afde35d",
+  "notes": "OBS no longer tanks your FPS: the FPS Boost mod now really detects recording (OBS/Streamlabs/etc.), caps FPS to a stable 60 while recording so the encoder keeps up (no more 90->30 swings), and never lets AFK throttle mid-stream. Plus the new Stutter Guard: potato/turbo PCs cap FPS at 120 instead of running uncapped, which stops the multi-second freezes at 200 FPS on 2-core laptops.",
+  "publishedAt": "2026-08-15T15:10:00+00:00"
 }

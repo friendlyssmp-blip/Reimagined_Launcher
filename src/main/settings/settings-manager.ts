@@ -65,6 +65,9 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   accessHighContrast: false,
   accessColorblind: false,
   streamingAware: true,
+  // v1.0.98 — Stutter Guard: potato/turbo tiers cap FPS at 120 (not
+  // Unlimited) so a weak CPU/iGPU isn't buried in GC churn at 200 FPS.
+  stutterGuard: true,
   servers: [],
   recentServers: [],
   autoCheckUpdates: true,

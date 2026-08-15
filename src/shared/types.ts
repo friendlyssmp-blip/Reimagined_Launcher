@@ -166,6 +166,8 @@ export interface LauncherSettings {
   accessColorblind: boolean
   /** Streaming/recording awareness (v1.0.88) — default ON. */
   streamingAware: boolean
+  /** Stutter Guard (v1.0.98) — caps FPS at 120 on weak tiers to stop GC/thermal freezes. */
+  stutterGuard: boolean
   /** Saved server favorites (v1.0.88). */
   servers: ServerFavorite[]
   /** Recently played servers (v1.0.88), newest first. */

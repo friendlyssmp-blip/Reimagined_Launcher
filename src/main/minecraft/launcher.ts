@@ -1116,10 +1116,15 @@ class Launcher {
       // 60/120 cap that v1.0.41 removed — keeping it would silently re-cap the
       // game via the in-game watchdog. The tier value (260 = Unlimited) always
       // wins here, exactly as before the merge.
+      // v1.0.98 — Stutter Guard: potato/turbo tiers now carry a 120 FPS
+      // ceiling from fpsConfigFor; turning the guard off in Settings returns
+      // the old 260 (Unlimited). unlimitedFps still wins over everything.
       merged.maxFps = merged.unlimitedFps
         ? 0
-        : typeof config.maxFps === 'number'
-          ? config.maxFps
+        : s.stutterGuard !== false
+          ? typeof config.maxFps === 'number'
+            ? config.maxFps
+            : 260
           : 260
       if (merged.unlimitedFps) {
         fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2))

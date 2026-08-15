@@ -99,6 +99,7 @@ const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc
   { query: ['theme', 'colors', 'appearance'], section: 'appearance', label: 'Theme', desc: 'The launcher color identity' },
   { query: ['performance mode', 'animations', '2d previews'], section: 'appearance', label: 'Performance mode', desc: 'Fewer animations, 2D previews' },
   { query: ['preset', 'potato', 'balanced', 'high', 'turbo', 'tier'], section: 'performance', label: 'Performance preset (tier)', desc: 'Engine profile applied on every launch' },
+  { query: ['stutter', 'freeze', 'lag spike', 'fps cap', 'gc'], section: 'performance', label: 'Stutter Guard', desc: 'Caps FPS at 120 on weak PCs to stop multi-second freezes' },
   { query: ['sound', 'audio', 'volume', 'music'], section: 'audio', label: 'Audio', desc: 'UI sounds, volume, hover/click/notifications' },
   { query: ['music', 'background', 'tracks', 'mp3', 'playlist'], section: 'audio', label: 'Music', desc: 'Local music library for background playback' },
   { query: ['discord', 'rich presence', 'status'], section: 'general', label: 'Discord', desc: 'Discord Rich Presence for the launcher' },
@@ -830,6 +831,24 @@ function PerformanceSection() {
             {settings.unlimitedFps
               ? 'Off by default for a reason: without a frame cap the GPU runs at 100% load and on some PCs that triggers thermal shutdown or a power-protection restart. Only enable this on desktop hardware with strong cooling.'
               : 'The engine caps FPS to a safe value (matching your monitor refresh rate, max 240) so the GPU never runs unbounded — this prevents whole-PC crashes on weaker hardware.'}
+          </div>
+        </div>
+
+        {/* v1.0.98 — Stutter Guard: on weak tiers (potato/turbo) the engine caps
+            FPS at 120 by default — far above a 60 Hz refresh, but it halves the
+            garbage-collection churn and heat that caused the multi-second
+            freezes while running uncapped (200 FPS) on 2-core laptops. */}
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <Toggle
+            checked={settings.stutterGuard ?? true}
+            onChange={(v) => {
+              void updateSettings({ stutterGuard: v })
+              notify(v ? 'success' : 'info', 'Stutter Guard ' + (v ? 'enabled' : 'disabled'), v ? 'Weak PCs now cap FPS at 120 to stop GC/thermal freezes — still far above your screen refresh.' : 'Weak PCs return to uncapped FPS — the long freezes may come back.')
+            }}
+            label="Stutter Guard (weak PCs)"
+          />
+          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>
+            On potato/turbo hardware the engine caps FPS at 120 instead of running uncapped — at 200+ FPS a 2-core laptop spends every spare cycle on garbage collection and heat, which is what makes the game freeze for seconds at a time. 'Unlimited FPS' above overrides this.
           </div>
         </div>
 

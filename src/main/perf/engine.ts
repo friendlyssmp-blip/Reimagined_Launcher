@@ -164,10 +164,12 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
   }
   const slowStorage = hw?.storage.type === 'HDD'
   if (tier === 'potato') {
-    // v1.0.44 — maxFps 60 -> 260: the forced potato cap is gone. Everything
-    // else stays conservative (RD 8-10, LOD 48, reduced FX) — stability; only
-    // the FPS ceiling is lifted so weak iGPUs show their real uncapped FPS.
-    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 260 }
+    // v1.0.98 — Stutter Guard replaces the v1.0.44 uncapped potato: running
+    // 200+ FPS on a 2C/4T iGPU laptop (60 Hz panel) buries the CPU in GC churn
+    // — the measured multi-second freezes. 120 is still double the refresh
+    // rate and visually identical, but halves allocation/heat. Everything else
+    // stays conservative (RD 8-10, LOD 48, reduced FX).
+    return { ...base, reduceVisualEffects: true, smartRdCap: slowStorage ? 8 : 10, entityAnimDistance: 32, lodDistance: 48, maxFps: 120 }
   }
   if (tier === 'balanced') {
     return { ...base, smartRdCap: slowStorage ? 10 : 12, entityAnimDistance: 48, lodDistance: 64, maxFps: 260 }
@@ -189,7 +191,8 @@ export function fpsConfigFor(tier: PerfTier, hw: HardwareProfile | null): Record
     textureBatching: true,
     fogDistanceCutoff: true,    // fog-assisted distance cutoff for distant terrain
     particleDensity: 0.25,      // quarter-density particles
-    maxFps: 260,
+    // v1.0.98 — Stutter Guard on the most thread-starved tier (see potato note).
+    maxFps: 120,
 
   }
 }

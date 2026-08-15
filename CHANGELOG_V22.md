@@ -1,3 +1,33 @@
+## v1.0.98 — OBS no longer tanks your FPS + Stutter Guard stops the multi-second freezes
+
+### OBS / recording: 90 FPS no longer swings to 30
+Root cause: on a 2-core laptop with an iGPU, OBS's x264 encoder competes with
+Minecraft for the same 4 threads — uncapped game FPS makes it worse (the encoder
+falls behind and the game swings hard). Also, the v1.0.88 "streaming-aware" hand-off
+never actually reached the game: the launcher wrote `streamingActive` into the mod's
+config JSON, but the mod had no such field and never read it, so AFK Mode could still
+throttle mid-recording.
+- **The mod now really detects recording** (OBS / Streamlabs / XSplit / Bandicam /
+  Medal / …): while a recording is active it caps FPS to a stable 60 (configurable,
+  `streamFpsCap`) — a flat 60 records far better than 90 swinging to 30, and it frees
+  CPU/GPU for the encoder. Restored the moment the recording stops; never written to
+  options.txt.
+- **AFK Mode never engages while recording** — no jarring FPS/render-distance drop
+  mid-stream.
+- Discord/Steam overlays are treated as overlays (borderless enforcement only), so
+  having Discord open does NOT cap your FPS.
+- In-game log now states exactly what is happening when OBS is detected.
+- Tip: in OBS use Game Capture (not Display Capture) and hardware encoding
+  (Intel QuickSync on this laptop) instead of x264 for the biggest FPS win.
+
+### Freeze spikes at 200 FPS: Stutter Guard
+Root cause: potato-tier hardware (2C/4T iGPU laptop) was running at *Unlimited* FPS on
+a 60 Hz screen — 200 FPS of pure garbage-collection churn on a 2-core CPU produces the
+multi-second freezes (the engine's own PROF data measured this exact pattern). 
+- Potato/turbo tiers now cap FPS at 120 by default (still double the refresh rate,
+  visually identical, but halves allocation/heat) — the freezes disappear.
+- New Settings > Performance toggle "Stutter Guard (weak PCs)" (default ON) to
+  restore uncapped behavior; "Unlimited FPS" still overrides everything.
 ## v1.0.97 — Update fixed: no more EBUSY (file locked) + frees ~3.5 GB of old installers
 
 Clicking Update could fail with "EBUSY: resource busy or locked" — the launcher tried to
