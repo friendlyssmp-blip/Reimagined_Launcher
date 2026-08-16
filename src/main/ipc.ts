@@ -733,6 +733,9 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.musicList, () => musicStore.listTracks())
   on(IPC.musicAdd, () => musicStore.addTracks())
   on(IPC.musicRemove, (id: string) => musicStore.removeTrack(id))
+  // v1.0.99 — drag-and-drop import + open the library folder
+  on(IPC.musicImport, (paths: string[]) => musicStore.importFiles(paths))
+  on(IPC.musicOpenFolder, () => musicStore.openMusicFolder())
 
   /* ------------------------- Discord Rich Presence (v1.0.88) ------------------------- */
 

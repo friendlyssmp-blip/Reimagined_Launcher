@@ -70,7 +70,11 @@ let musicEl: HTMLAudioElement | null = null
 let musicUrl: string | null = null
 let musicEndedCb: (() => void) | null = null
 let musicPaused = false
-let musicBase = 0.45 /* music bus level before ducking, relative to master */
+/* v1.0.99 — the background-music volume is FULLY INDEPENDENT from the UI
+ * sound volume: it lives on the audio element (el.volume) instead of being
+ * folded into the master cfg.volume, so turning UI sounds up/down never
+ * touches the music. Matches the audioMusicVolume setting default (0.35). */
+let musicBase = 0.35
 let ducking = false
 let lastHoverAt = 0
 let lastClickAt = 0
@@ -282,7 +286,9 @@ export const sound = {
   },
   setEnabled(v: boolean): void {
     cfg.enabled = v
-    if (!v) sound.musicStop()
+    /* v1.0.99 — music is independent from the UI-sounds toggle: turning UI
+     * sounds off must NOT stop the user's background music (they control it
+     * with their own volume slider). */
   },
   isEnabled(): boolean {
     return cfg.enabled
@@ -515,7 +521,7 @@ export const sound = {
 
   /** Menu music loop — routed through the music bus so ducking applies. */
   musicStart(): void {
-    if (!cfg.enabled || musicEl) return
+    if (musicEl) return
     /* v1.0.94 — the "Menu music" toggle is gone: the bundled menu loop only
        plays when cfg.music is on, but custom library tracks always play. */
     if (!musicUrl && !cfg.music) return
@@ -524,16 +530,28 @@ export const sound = {
       // v1.0.85 — a custom library track when one is set (loop off so the
       // player can auto-advance to the next song), else the bundled loop.
       const custom = !!musicUrl
-      const el = new Audio(musicUrl ?? './ui/sound/menu1.ogg')
+      /* v1.0.99 — FIX: the launcher's audio element is routed through
+       * WebAudio (createMediaElementSource) for ducking/limiter, and WebAudio
+       * SILENCES media that was fetched cross-origin without CORS approval.
+       * The reimagined-music:// source is cross-origin to the renderer, so we
+       * must fetch it in CORS mode (crossOrigin) and the main process serves
+       * it with Access-Control-Allow-Origin (see index.ts serveLocalFile).
+       * The element is created without src first so crossOrigin is set BEFORE
+       * the fetch starts — otherwise the track stays silent forever. */
+      const el = new Audio()
+      el.crossOrigin = 'anonymous'
+      el.src = musicUrl ?? './ui/sound/menu1.ogg'
       el.loop = !custom
-      el.volume = Math.min(1, cfg.volume * musicBase)
+      /* v1.0.99 — volume lives on the element (independent of master); the
+       * bus runs at unity so ducking still works on top. */
+      el.volume = Math.min(1, Math.max(0, musicBase))
       if (custom) el.onended = () => musicEndedCb?.()
       const c = ac()
       if (c && musicBus) {
         /* Route through WebAudio so the limiter + ducking cover it too. */
         const src = c.createMediaElementSource(el)
         src.connect(musicBus)
-        musicBus.gain.setTargetAtTime(musicBase, c.currentTime, 0.05)
+        musicBus.gain.setTargetAtTime(1, c.currentTime, 0.05)
       }
       el.play().catch(() => {})
       musicEl = el
@@ -547,7 +565,7 @@ export const sound = {
     const wasPlaying = !!musicEl
     if (musicEl) this.musicStop()
     musicUrl = url
-    if (wasPlaying && url && cfg.enabled) this.musicStart()
+    if (wasPlaying && url) this.musicStart()
   },
   /** v1.0.85 — callback fired when a custom track finishes (auto-advance). */
   onMusicEnded(cb: (() => void) | null): void {
@@ -571,7 +589,7 @@ export const sound = {
     if (musicEl) this.musicStop()
     musicUrl = url
     musicPaused = false
-    if (url && cfg.enabled) this.musicStart()
+    if (url) this.musicStart()
   },
   /** v1.0.87 — forget the custom source (back to the bundled menu loop). */
   clearMusicUrl(): void {
@@ -595,9 +613,11 @@ export const sound = {
   isMusicPaused(): boolean {
     return musicPaused
   },
-  /** Update loop volume live (called when the volume slider moves). */
+  /** v1.0.99 — the background-music volume (0..1), fully independent from the
+   * UI sound volume. Applied live to the element; the WebAudio bus stays at
+   * unity so ducking can still dip it briefly for important UI cues. */
   setMusicVolume(v: number): void {
-    musicBase = 0.45
-    if (musicEl) musicEl.volume = Math.min(1, v * 0.45)
+    musicBase = Math.min(1, Math.max(0, v))
+    if (musicEl) musicEl.volume = musicBase
   }
 }

@@ -8,7 +8,7 @@
  */
 import path from 'node:path'
 import fsp from 'node:fs/promises'
-import { dialog } from 'electron'
+import { dialog, shell } from 'electron'
 import { paths } from '../paths'
 import { exists, mkdirp } from '../utils/fs'
 import { logger } from '../logs/logger'
@@ -50,17 +50,16 @@ export async function listTracks(): Promise<MusicTrack[]> {
   return readTracks()
 }
 
-/** Pick audio files from anywhere on disk and import them into the library. */
-export async function addTracks(): Promise<MusicTrack[]> {
-  const res = await dialog.showOpenDialog({
-    title: 'Add background music',
-    properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Audio files', extensions: ['mp3', 'flac', 'ogg', 'wav', 'm4a', 'aac', 'opus'] }]
-  })
-  if (res.canceled || res.filePaths.length === 0) return readTracks()
+/** Copy audio files into the library (shared by the picker + drag-and-drop). */
+async function importPaths(srcs: string[]): Promise<{ added: number; skipped: number }> {
   mkdirp(musicDir())
   let added = 0
-  for (const src of res.filePaths) {
+  let skipped = 0
+  for (const src of srcs) {
+    if (!AUDIO_EXT.has(path.extname(src).toLowerCase())) {
+      skipped++
+      continue
+    }
     const base = path.basename(src)
     let dest = path.join(musicDir(), base)
     if (exists(dest)) {
@@ -69,9 +68,36 @@ export async function addTracks(): Promise<MusicTrack[]> {
     }
     const ok = await fsp.copyFile(src, dest).then(() => true).catch(() => false)
     if (ok) added++
+    else skipped++
   }
-  logger.info(`Music: imported ${added} file(s) into the library`)
+  logger.info(`Music: imported ${added} file(s) into the library (${skipped} skipped)`)
+  return { added, skipped }
+}
+
+/** Pick audio files from anywhere on disk and import them into the library. */
+export async function addTracks(): Promise<MusicTrack[]> {
+  const res = await dialog.showOpenDialog({
+    title: 'Add background music',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Audio files', extensions: ['mp3', 'flac', 'ogg', 'wav', 'm4a', 'aac', 'opus'] }]
+  })
+  if (res.canceled || res.filePaths.length === 0) return readTracks()
+  await importPaths(res.filePaths)
   return readTracks()
+}
+
+/** v1.0.99 — import files dragged onto the launcher (paths come from the
+ * renderer's drop event). Returns the refreshed library. */
+export async function importFiles(paths: string[]): Promise<MusicTrack[]> {
+  await importPaths((paths ?? []).filter((p) => typeof p === 'string' && p.length > 0))
+  return readTracks()
+}
+
+/** v1.0.99 — open the music folder in Explorer so the user can see exactly
+ * where their files live (and drop more in if they want). */
+export async function openMusicFolder(): Promise<void> {
+  mkdirp(musicDir())
+  await shell.openPath(musicDir())
 }
 
 /** Remove a track from the library (deletes its copied file). */
@@ -84,4 +110,4 @@ export async function removeTrack(id: string): Promise<MusicTrack[]> {
   return readTracks()
 }
 
-export const musicStore = { listTracks, addTracks, removeTrack, trackUrl }
+export const musicStore = { listTracks, addTracks, importFiles, openMusicFolder, removeTrack, trackUrl }

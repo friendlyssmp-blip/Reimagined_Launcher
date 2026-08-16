@@ -173,6 +173,9 @@ export const IPC = {
   musicList: 'music:list',
   musicAdd: 'music:add',
   musicRemove: 'music:remove',
+  // v1.0.99 — drag-and-drop import + open the library folder
+  musicImport: 'music:import',
+  musicOpenFolder: 'music:open-folder',
   // v1.0.88 — Discord Rich Presence
   presenceSet: 'presence:set',
   presenceClear: 'presence:clear',

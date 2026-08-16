@@ -8,7 +8,7 @@
  * Playback state is shared with the mini player in the window title bar via
  * the music controller (lib/music.ts) — they always stay in sync.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { sound } from '../lib/sound'
 import { api, friendlyError } from '../lib/api'
@@ -25,7 +25,7 @@ import {
 } from '../lib/music'
 import {
   IconMusic, IconPlay, IconPause, IconSkipBack, IconSkipForward,
-  IconShuffle, IconRepeat, IconTrash, IconPlus, IconVolume
+  IconShuffle, IconRepeat, IconTrash, IconPlus, IconVolume, IconFolder
 } from './icons'
 
 /* ------------------------------ local library ------------------------------ */
@@ -34,6 +34,8 @@ function LocalPlayer() {
   const { settings, updateSettings, notify } = useApp()
   const { tracks, idx, playing } = useMusicState()
   const [loading, setLoading] = useState(true)
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
 
   /* refreshMusic never throws — it reports the library state internally. */
   const refresh = useCallback(async () => {
@@ -55,6 +57,50 @@ function LocalPlayer() {
     }
   }
 
+  /* v1.0.99 — drag & drop: drop audio files anywhere on the player to import
+   * them. Depth counting keeps the highlight stable while dragging over
+   * children (dragenter fires per nested element). */
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    dragDepth.current++
+    setDragging(true)
+  }
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    const paths: string[] = []
+    for (const f of Array.from(e.dataTransfer.files)) {
+      const p = api.filePath(f)
+      if (p) paths.push(p)
+    }
+    if (paths.length === 0) return
+    try {
+      await api.music.import(paths)
+      await refresh()
+      notify('success', 'Music added', `${paths.length} track(s) added to the background library.`)
+    } catch (err) {
+      notify('error', 'Could not add music', friendlyError(err))
+    }
+  }
+
+  const openFolder = async () => {
+    try {
+      await api.music.openFolder()
+    } catch (err) {
+      notify('error', 'Could not open the music folder', friendlyError(err))
+    }
+  }
+
   const remove = async (t: MusicTrack) => {
     try {
       await removeMusic(t.id)
@@ -69,7 +115,14 @@ function LocalPlayer() {
   const volume = settings.audioMusicVolume ?? 0.35
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div
+      className={'music-player' + (dragging ? ' dragging' : '')}
+      style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => void onDrop(e)}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="music-now-art"><IconMusic style={{ width: 18, height: 18 }} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -77,11 +130,16 @@ function LocalPlayer() {
             {current ? current.name : 'No music added yet'}
           </b>
           <small style={{ color: 'var(--text-3)', fontSize: 11 }}>
-            {current ? `${fmtBytes(current.size)} · ${shuffle ? 'shuffle' : 'playlist'}` : 'Drop your own .mp3 files to play them as background music'}
+            {current ? `${fmtBytes(current.size)} · ${shuffle ? 'shuffle' : 'playlist'}` : 'Drop your own .mp3 files here (or click Add) to play them as background music'}
           </small>
         </div>
         <Button size="sm" variant="ghost" onClick={() => void add()} title="Add audio files">
           <IconPlus style={{ width: 13, height: 13 }} /> Add
+        </Button>
+        {/* v1.0.99 — open the library folder so the user can see exactly where
+            their files live (and drop more in directly). */}
+        <Button size="sm" variant="ghost" onClick={() => void openFolder()} title="Open the music folder">
+          <IconFolder style={{ width: 13, height: 13 }} /> Folder
         </Button>
       </div>
 
@@ -112,6 +170,8 @@ function LocalPlayer() {
         </button>
       </div>
 
+      {/* v1.0.99 — music volume, fully independent from the UI sound volume
+          (writes audioMusicVolume, never audioVolume). */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconVolume style={{ width: 13, height: 13, color: 'var(--text-3)' }} />
         <input
@@ -121,12 +181,17 @@ function LocalPlayer() {
           max={1}
           step={0.01}
           value={volume}
+          aria-label="Background music volume"
+          title="Background music volume (independent from UI sounds)"
           onChange={(e) => {
             const v = Number(e.target.value)
             void updateSettings({ audioMusicVolume: v })
             sound.setMusicVolume(v)
           }}
         />
+        <span style={{ fontSize: 11, color: 'var(--text-3)', minWidth: 34, textAlign: 'right' }}>
+          {Math.round(volume * 100)}%
+        </span>
       </div>
 
       {loading ? (

@@ -157,7 +157,14 @@ if (!gotLock && !SMOKE && !BENCH) {
             const headers: Record<string, string> = {
               'Content-Type': mime,
               'Accept-Ranges': 'bytes',
-              'Content-Length': String(end - start + 1)
+              'Content-Length': String(end - start + 1),
+              /* v1.0.99 — FIX: the renderer routes the <audio> element
+               * through WebAudio (createMediaElementSource) for ducking and
+               * the limiter, and WebAudio outputs SILENCE for media fetched
+               * cross-origin without CORS approval. The reimagined-music://
+               * and reimagined-shot:// schemes are cross-origin to the
+               * renderer, so every response must allow cross-origin reads. */
+              'Access-Control-Allow-Origin': '*'
             }
             if (m) headers['Content-Range'] = `bytes ${start}-${end}/${data.length}`
             return new Response(data.subarray(start, end + 1), { status: m ? 206 : 200, headers })

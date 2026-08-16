@@ -1,3 +1,30 @@
+## v1.0.99 — Background music actually plays now (was silent) + independent music volume
+
+Your imported mp3 never made a sound. Three things were breaking it: (1) the audio
+element is routed through WebAudio for ducking/limiting, and WebAudio outputs
+SILENCE for media fetched cross-origin without CORS approval — the custom
+reimagined-music:// protocol served the file but never allowed the renderer to
+read it, so the track "played" in silence; (2) the music volume setting could be
+0 and its slider was wired to the wrong volume; (3) your mp3 was never actually
+imported into the library folder.
+
+### What changed
+- **Playback fixed for real**: the music protocol now serves every response with
+  Access-Control-Allow-Origin, the audio element fetches in CORS mode
+  (crossOrigin), and the CSP explicitly allows the reimagined-music:// scheme as
+  a media source. Your tracks now actually play in the background.
+- **Independent music volume**: background music has its OWN volume (audioMusicVolume),
+  completely separate from the UI sound volume — raising/lowering UI sounds never
+  touches the music and vice-versa. Live slider right in the title-bar mini player
+  (next to the logo) + in Settings → Audio, both stay in sync and persist.
+- **Music is no longer tied to the "UI sounds" toggle**: turning UI sounds off no
+  longer kills your background music (it has its own volume control).
+- **Easier importing — drag & drop**: drop mp3/flac/ogg files directly onto the
+  music player to import them, plus a "Folder" button that opens the library
+  folder so you can always see exactly where your files live.
+- Your Hatsune Miku track was imported into the library and the music volume was
+  set to a sane 35% so it is audible on first play.
+
 ## v1.0.98 — OBS no longer tanks your FPS + Stutter Guard stops the multi-second freezes
 
 ### OBS / recording: 90 FPS no longer swings to 30

@@ -1,11 +1,17 @@
 import { api } from '../lib/api'
+import { useApp } from '../state/AppContext'
 import { BrandLogo } from './BrandLogo'
 import { useMusicState, toggleMusic, skipMusic } from '../lib/music'
-import { IconPause, IconPlay, IconSkipForward } from './icons'
+import { sound } from '../lib/sound'
+import { IconPause, IconPlay, IconSkipForward, IconVolume } from './icons'
 
 export function TitleBar() {
   const music = useMusicState()
+  const { settings, updateSettings } = useApp()
   const current = music.tracks[music.idx]
+  /* v1.0.99 — the mini-player volume control is INDEPENDENT from the UI
+     sound volume (its own audioMusicVolume setting). */
+  const volume = settings?.audioMusicVolume ?? 0.35
 
   return (
     <div className="titlebar">
@@ -34,6 +40,25 @@ export function TitleBar() {
             <button className="titlebar-btn" onClick={() => skipMusic(1)} title="Next track" aria-label="Next track">
               <IconSkipForward style={{ width: 13, height: 13 }} />
             </button>
+            {/* v1.0.99 — music volume right in the title bar (independent from
+                UI sounds). Live-adjusts playback and persists. */}
+            <span className="titlebar-music-vol" title="Background music volume (independent from UI sounds)">
+              <IconVolume style={{ width: 11, height: 11 }} />
+              <input
+                type="range"
+                className="slider"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                aria-label="Background music volume"
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  void updateSettings({ audioMusicVolume: v })
+                  sound.setMusicVolume(v)
+                }}
+              />
+            </span>
           </div>
         )}
       </div>

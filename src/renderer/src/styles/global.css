@@ -3133,12 +3133,45 @@ html[data-cb='1'] .badge-accent::before {
   color: var(--text-3);
   margin-right: 4px;
 }
+/* v1.0.99 — independent music volume inside the title-bar mini player. */
+.titlebar-music-vol {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 5px;
+  padding-left: 7px;
+  border-left: 1px solid var(--border);
+  color: var(--text-3);
+}
+.titlebar-music-vol input[type='range'] {
+  width: 56px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 /* Narrow windows: keep only the transport buttons so the window controls
- * never get crowded out. */
+ * never get crowded out (the volume is still available in Settings → Audio). */
 @media (max-width: 860px) {
   .titlebar-music-name {
     display: none;
   }
+  .titlebar-music-vol {
+    display: none;
+  }
+}
+
+/* v1.0.99 — drag-and-drop highlight on the music player (import audio files). */
+.music-player {
+  border: 1px dashed transparent;
+  border-radius: 12px;
+  padding: 2px;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.music-player.dragging {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 

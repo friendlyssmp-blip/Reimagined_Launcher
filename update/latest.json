@@ -1,8 +1,8 @@
 {
-  "version": "1.0.98",
-  "installer": "dist/Reimagined-Setup-1.0.98.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.98.exe",
-  "sha256": "90e6f5faba94521f481ccc4640bd136763ddee375027a475af164c189afde35d",
-  "notes": "OBS no longer tanks your FPS: the FPS Boost mod now really detects recording (OBS/Streamlabs/etc.), caps FPS to a stable 60 while recording so the encoder keeps up (no more 90->30 swings), and never lets AFK throttle mid-stream. Plus the new Stutter Guard: potato/turbo PCs cap FPS at 120 instead of running uncapped, which stops the multi-second freezes at 200 FPS on 2-core laptops.",
-  "publishedAt": "2026-08-15T15:10:00+00:00"
+  "version": "1.0.99",
+  "installer": "dist/Reimagined-Setup-1.0.99.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.99.exe",
+  "sha256": "b1f6633c95b955e35c11faadb998f5b88cc8a12258d1458d8f87f3ff53c80e7c",
+  "notes": "Background music actually plays now (was silent): the music protocol serves CORS headers, the audio element fetches in CORS mode and the CSP allows the reimagined-music:// scheme as a media source. Music volume is now fully independent from the UI sound volume, with a live slider in the title-bar mini player (next to the logo) and in Settings → Audio. Turning UI sounds off no longer stops your music. Import is easier too: drag & drop mp3/flac/ogg straight onto the music player, or open the library folder with the new Folder button.",
+  "publishedAt": "2026-08-15T23:55:00+00:00"
 }

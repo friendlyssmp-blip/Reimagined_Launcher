@@ -4,7 +4,7 @@
  * Exposes a typed, whitelisted API on `window.reimagined` via contextBridge.
  * The renderer has no direct Node or Electron access (contextIsolation on).
  */
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC, EVENT_CHANNEL, type AppEvent } from '@shared/ipc'
 
 const api = {
@@ -169,7 +169,10 @@ const api = {
   music: {
     list: (): Promise<unknown> => ipcRenderer.invoke(IPC.musicList),
     add: (): Promise<unknown> => ipcRenderer.invoke(IPC.musicAdd),
-    remove: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.musicRemove, id)
+    remove: (id: string): Promise<unknown> => ipcRenderer.invoke(IPC.musicRemove, id),
+    // v1.0.99 — drag-and-drop import + open the library folder
+    import: (paths: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.musicImport, paths),
+    openFolder: (): Promise<unknown> => ipcRenderer.invoke(IPC.musicOpenFolder)
   },
 
 
@@ -251,6 +254,17 @@ const api = {
     status: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostStatus, profileId),
     install: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostInstall, profileId),
     remove: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.fpsBoostRemove, profileId)
+  },
+
+  /** v1.0.99 — resolve a dropped File's absolute path (Electron 32+ removed
+   * File.path; webUtils is the sanctioned replacement, exposed here because
+   * it can only be used from the preload). */
+  filePath: (file: File): string => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
   },
 
 

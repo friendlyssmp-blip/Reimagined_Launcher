@@ -209,17 +209,16 @@ function Shell() {
       // player) produce music, and they play regardless of this flag.
       music: false
     })
-    sound.setMusicVolume(settings?.audioVolume ?? 0.7)
+    /* v1.0.99 — the background-music volume is INDEPENDENT from the UI sound
+       volume: it uses its own audioMusicVolume setting (NOT the master
+       audioVolume), so changing one never touches the other. */
+    sound.setMusicVolume(settings?.audioMusicVolume ?? 0.35)
     /* v1.0.87 — keep the shared music controller's play-mode in sync so
        auto-advance honors shuffle/repeat even from the title-bar mini player. */
     setMusicMode(settings?.audioMusicShuffle ?? false, settings?.audioMusicRepeat ?? 'all')
-    if (!(settings?.audioEnabled ?? true)) {
-      sound.musicStop()
-    } else {
-      /* v1.0.94 — musicStart() is a no-op without a loaded track (menu loop
-         off); it only starts custom library tracks. */
-      sound.musicStart()
-    }
+    /* v1.0.99 — the bundled menu loop is always off and custom tracks are
+       started by the player itself; the UI-sounds toggle must NOT stop the
+       user's background music (it has its own volume control). */
   }, [settings])
 
   /* v1.0.88 — apply the saved language (and future re-applies when changed). */

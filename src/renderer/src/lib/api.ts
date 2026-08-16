@@ -330,8 +330,15 @@ export const api = {
   music: {
     list: () => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.list()),
     add: () => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.add()),
-    remove: (id: string) => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.remove(id))
+    remove: (id: string) => unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.remove(id)),
+    // v1.0.99 — drag-and-drop import + open the library folder
+    import: (paths: string[]) =>
+      unwrap<{ id: string; name: string; size: number; addedAt: string }[]>(window.reimagined.music.import(paths)),
+    openFolder: () => window.reimagined.music.openFolder()
   },
+
+  /** v1.0.99 — resolve a dropped file's absolute path (Electron 32+). */
+  filePath: (file: File) => window.reimagined.filePath(file),
 
 
   authors: {
