@@ -23,7 +23,7 @@ import { profileManager } from '../profiles/profile-manager'
 import type { Profile, ProfileMod } from '@shared/types'
 
 const FPS_BOOST_ID = 'reimagined-fps-boost'
-const FPS_BOOST_VERSION = '1.0.33'
+const FPS_BOOST_VERSION = '1.0.34'
 
 /**
  * Minecraft branch → bundled jar filename. A profile pins one Minecraft
@@ -31,8 +31,8 @@ const FPS_BOOST_VERSION = '1.0.33'
  * the jars produced by FpsBoost-source build-all.sh.
  */
 const FPS_BOOST_JARS: Record<string, string> = {
-  '26.1': 'Reimagined FPS Boost-1.0.33-mc26.1.jar',
-  '26.2': 'Reimagined FPS Boost-1.0.33-mc26.2.jar'
+  '26.1': 'Reimagined FPS Boost-1.0.34-mc26.1.jar',
+  '26.2': 'Reimagined FPS Boost-1.0.34-mc26.2.jar'
 }
 
 /** Resolve the bundled jar filename for a Minecraft version, or null. */

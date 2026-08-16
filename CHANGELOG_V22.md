@@ -1,3 +1,33 @@
+## v2.0.1 - UI (chests/inventory) opens instantly again: no more 1-3s freezes
+
+Opening a chest, inventory or any screen could take SECONDS on weak PCs. Real PROF
+data from the game log showed the cause: frame freezes of up to 2.9s (maxMs=2911),
+garbage-collection pauses of over 1 second (gcMs=1063), game ticks of 200-320ms,
+and "Can't keep up" 2.7 seconds behind - exactly the "chest opens seconds later"
+feeling.
+
+### Why it happened
+- The Stutter Guard cap (120 FPS on weak tiers, added in v1.0.98) had been turned
+  OFF in the launcher settings, so the game ran uncapped at 200+ FPS on a 60 Hz
+  panel - pure garbage-collector churn on a 2-core iGPU laptop, producing the 1-3
+  second freezes.
+- The memory setting was 8 GB (the launcher already caps this to 4 GB on weak
+  tiers, but the oversized reservation lengthened stop-the-world GC pauses).
+- After respawn/teleport the async chunk pipeline applied up to 48 chunks per
+  game tick (teleport boost) - on a 2-core CPU that stalls the tick loop for
+  hundreds of ms (spike correlation spkTasks=P).
+
+### What changed
+- Launcher: Stutter Guard re-enabled and memory set to 4 GB in the settings.
+- FPS Boost mod v1.0.34: the teleport/respawn chunk boost is now gentler on weak
+  CPUs (24 chunks/tick instead of 48 on <=4 threads) so the screen still fills
+  fast but the game thread never freezes - input/UI stay responsive.
+- Rebuilt mod jars for 26.1 and 26.2 (verified the new code is inside).
+
+### To apply
+Close the launcher and the game completely, update to v2.0.1, and relaunch - the
+launcher re-seeds the new mod jar and the frame cap applies on the next game start.
+
 ## v2.0.0 — Servers rebuilt: real icons, live status that actually resolves, full i18n, proper dark styling
 
 ### BUG 1 — raw translation keys leaking in the Servers page (FIXED)

@@ -1,8 +1,8 @@
 {
-  "version": "2.0.0",
-  "installer": "dist/Reimagined-Setup-2.0.0.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.0.exe",
-  "sha256": "52a5bb50d879759e6773427289a026d66be3375b9fa91973306a1a6754a28221",
-  "notes": "Servers rebuilt: raw translation keys fixed (all strings now in EN/ES/FR), server status no longer stuck on Loading (pings resolve when data arrives + auto-refresh every 60s), real server favicon icons on every card, and full dark/purple restyle of the Servers page. Also included: music progress bar in the title bar and a small now-playing menu next to your instance (progress, pause, +-10s).",
-  "publishedAt": "2026-08-16T12:00:00+00:00"
+  "version": "2.0.1",
+  "installer": "dist/Reimagined-Setup-2.0.1.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.1.exe",
+  "sha256": "c03fda436ab09f634320f5ddb336e917ab70c3befcf42cc37023d8592e252109",
+  "notes": "UI (chests/inventory) opens instantly again. Real game-log data showed 1-3 second freezes caused by the FPS cap being off (200+ FPS on a 60Hz panel = GC churn) plus an 8 GB memory reservation and a too-aggressive chunk boost after respawn/teleport. Stutter Guard is re-enabled (120 FPS cap), memory set to 4 GB, and FPS Boost mod v1.0.34 gentles the post-teleport chunk apply on weak CPUs (24/tick instead of 48). Close the launcher and game fully before updating.",
+  "publishedAt": "2026-08-16T12:25:00+00:00"
 }
