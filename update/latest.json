@@ -1,8 +1,8 @@
 {
-  "version": "1.0.99",
-  "installer": "dist/Reimagined-Setup-1.0.99.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-1.0.99.exe",
-  "sha256": "b1f6633c95b955e35c11faadb998f5b88cc8a12258d1458d8f87f3ff53c80e7c",
-  "notes": "Background music actually plays now (was silent): the music protocol serves CORS headers, the audio element fetches in CORS mode and the CSP allows the reimagined-music:// scheme as a media source. Music volume is now fully independent from the UI sound volume, with a live slider in the title-bar mini player (next to the logo) and in Settings → Audio. Turning UI sounds off no longer stops your music. Import is easier too: drag & drop mp3/flac/ogg straight onto the music player, or open the library folder with the new Folder button.",
-  "publishedAt": "2026-08-15T23:55:00+00:00"
+  "version": "2.0.0",
+  "installer": "dist/Reimagined-Setup-2.0.0.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.0.exe",
+  "sha256": "52a5bb50d879759e6773427289a026d66be3375b9fa91973306a1a6754a28221",
+  "notes": "Servers rebuilt: raw translation keys fixed (all strings now in EN/ES/FR), server status no longer stuck on Loading (pings resolve when data arrives + auto-refresh every 60s), real server favicon icons on every card, and full dark/purple restyle of the Servers page. Also included: music progress bar in the title bar and a small now-playing menu next to your instance (progress, pause, +-10s).",
+  "publishedAt": "2026-08-16T12:00:00+00:00"
 }

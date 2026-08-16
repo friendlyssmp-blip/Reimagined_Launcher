@@ -25,6 +25,9 @@ export interface ServerStatus {
   motd?: string
   players?: { online: number; max: number }
   version?: string
+  /* v2.0.0 — the server's real icon: a data:image/png;base64 favicon served
+   * by the server-list protocol (when the server provides one). */
+  icon?: string
 }
 
 export function parseAddress(input: string): { host: string; port: number } {
@@ -131,6 +134,8 @@ export function pingServer(address: string, timeoutMs = 3500): Promise<ServerSta
           }
           if (d.players) status.players = { online: d.players.online ?? 0, max: d.players.max ?? 0 }
           if (d.version?.name) status.version = String(d.version.name)
+          /* v2.0.0 — real server icon (data:image/png;base64 favicon). */
+          if (typeof d.favicon === 'string' && d.favicon.startsWith('data:image')) status.icon = d.favicon
           done()
         }
       } catch {
@@ -146,7 +151,7 @@ function encodePacket(id: number, body: Buffer): Buffer {
   return Buffer.concat([writeVarInt(body.length + 1), writeVarInt(id), body])
 }
 
-function tryParseStatus(buf: Buffer): { description?: any; players?: any; version?: any } | null {
+function tryParseStatus(buf: Buffer): { description?: any; players?: any; version?: any; favicon?: any } | null {
   /* Frame: varint length, varint packet id (0x00), varint json length, json. */
   const { value: frameLen, bytes: frameBytes } = readVarInt(buf, 0)
   if (buf.length < frameBytes + frameLen) return null

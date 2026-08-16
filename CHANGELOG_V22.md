@@ -1,3 +1,35 @@
+## v2.0.0 — Servers rebuilt: real icons, live status that actually resolves, full i18n, proper dark styling
+
+### BUG 1 — raw translation keys leaking in the Servers page (FIXED)
+The Servers section was built after the i18n sweep, so it referenced 14 keys
+that never existed — the UI showed literal "srv.discover", "srv.recommended",
+"srv.allCategories" instead of real text. Added all missing keys in English,
+Spanish and French (tab labels, category dropdown, search placeholder,
+Join/Install labels, empty states, toasts), translated category names, and
+ran an automated audit across the whole renderer: 0 missing keys remain.
+
+### BUG 2 — server status stuck on "Loading…" forever (FIXED)
+The ping ran once on mount, but the Discover/Recommended lists load AFTER
+mount — so those cards never got a status and never left "Loading…". The page
+now re-pings whenever the server set changes (data arrival, favorites edits)
+and refreshes automatically in the background every 60 s. Ping genuinely
+failing now shows "Unreachable" instead of an eternal spinner.
+
+### BUG 3 — plain white cards with a letter avatar (FIXED + upgraded)
+- Real server icons: the server-list protocol returns each server's favicon
+  (base64 PNG) — it is now parsed and shown as the card icon. Servers without
+  one fall back to a clean on-brand globe tile (no more raw letter boxes).
+- Full restyle to the Reimagined dark/purple language: dark panels, hover
+  lift, purple Join buttons, category pills, players/max + ping rows,
+  styled tabs, search field and category dropdown, empty states.
+- Consistent layout: icon left, name + category + address, description,
+  status, Join / Install / favorite per row — same style on Favorites,
+  Discover, Recommended and the preview + install modals.
+
+### ALSO SHIPPED (v1.0.100 work, rolled into 2.0.0)
+- Music progress bar in the title bar mini-player (click to seek) and a
+  small "now playing" menu next to the instance (progress, pause, ±10 s).
+
 ## v1.0.99 — Background music actually plays now (was silent) + independent music volume
 
 Your imported mp3 never made a sound. Three things were breaking it: (1) the audio

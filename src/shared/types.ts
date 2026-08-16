@@ -59,6 +59,8 @@ export interface ServerStatus {
   motd?: string
   players?: { online: number; max: number }
   version?: string
+  /** v2.0.0 — real server icon (data:image/png;base64 favicon), when the server provides one. */
+  icon?: string
 }
 
 export interface LauncherSettings {

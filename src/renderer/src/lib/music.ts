@@ -23,9 +23,11 @@ export interface MusicState {
   playing: boolean
   /** True once the library has been listed at least once. */
   ready: boolean
+  /** v1.0.100 — live playback progress of the current track. */
+  progress: { current: number; duration: number } | null
 }
 
-let state: MusicState = { tracks: [], idx: 0, playing: false, ready: false }
+let state: MusicState = { tracks: [], idx: 0, playing: false, ready: false, progress: null }
 const listeners = new Set<() => void>()
 
 let shuffle = false
@@ -65,6 +67,17 @@ export function setMusicEnsureEnabled(fn: (() => void) | null): void {
 function trackUrl(id: string): string {
   return 'reimagined-music://music/' + encodeURIComponent(id)
 }
+
+/* v1.0.100 — subscribe to live progress from the audio engine and mirror it
+ * into the shared state so the title-bar and top-bar players both update.
+ * A zero duration means playback stopped → clear the bar. */
+sound.onMusicProgress((current, duration) => {
+  const progress = duration > 0 ? { current, duration } : null
+  if (state.progress === null && progress === null) return
+  if (state.progress && progress && state.progress.current === current && state.progress.duration === duration) return
+  state = { ...state, progress }
+  emit()
+})
 
 /** Reload the library from disk and repair the current position. */
 export async function refreshMusic(): Promise<MusicTrack[]> {
@@ -116,7 +129,7 @@ export function playAt(i: number): void {
   }
   sound.setMusicUrl(trackUrl(t.id))
   if (!sound.isMusicPlaying() && !sound.isMusicPaused()) sound.musicStart()
-  state = { ...state, playing: sound.isMusicPlaying() }
+  state = { ...state, playing: sound.isMusicPlaying(), progress: null }
   emit()
 }
 
@@ -163,6 +176,30 @@ export async function removeMusic(id: string): Promise<void> {
     /* ignore — the refresh below reports the real state */
   }
   await refreshMusic()
+}
+
+/* v1.0.100 — seek helpers for the title-bar / top-bar mini players. */
+
+/** Jump the current track forward/backward by a number of seconds. */
+export function seekMusicBy(delta: number): void {
+  if (state.tracks.length === 0) return
+  sound.musicSeekBy(delta)
+  const p = sound.getMusicProgress()
+  if (p) {
+    state = { ...state, progress: p }
+    emit()
+  }
+}
+
+/** Jump the current track to an absolute position (seconds). */
+export function seekMusicTo(seconds: number): void {
+  if (state.tracks.length === 0) return
+  sound.musicSeekTo(seconds)
+  const p = sound.getMusicProgress()
+  if (p) {
+    state = { ...state, progress: p }
+    emit()
+  }
 }
 
 /* Auto-advance when a custom track finishes: repeat-one replays it, shuffle

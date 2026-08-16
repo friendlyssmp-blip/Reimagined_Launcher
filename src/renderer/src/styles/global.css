@@ -1617,6 +1617,113 @@ html[data-cb='1'] .badge-accent::before {
 
 /* ------------------------------ context / menus ------------------------------ */
 
+/* v1.0.100 — tiny "now playing" menu anchored to the top bar, next to the
+   instance: progress bar + pause + ±10 s. Minimalist but pretty. */
+.topbar-music-pop {
+  position: relative;
+  flex: 0 0 auto;
+}
+.topbar-music-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-3);
+}
+.topbar-music-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1150;
+  width: 232px;
+  padding: 12px 13px 11px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+  box-shadow: var(--shadow-2);
+  transform-origin: top left;
+  animation: menuIn 0.13s var(--ease);
+}
+.tmm-track {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 9px;
+  padding-right: 4px;
+}
+.tmm-progress {
+  position: relative;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  overflow: hidden;
+  cursor: pointer;
+}
+.tmm-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  transition: width 0.15s linear;
+}
+.tmm-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tmm-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tmm-btn {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.tmm-btn:hover {
+  color: var(--text-1);
+  border-color: var(--accent-2);
+  background: var(--accent-soft);
+}
+.tmm-btn:active {
+  transform: scale(0.94);
+}
+.tmm-play {
+  width: 40px;
+  height: 34px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none;
+  color: #fff;
+}
+.tmm-play:hover {
+  color: #fff;
+  filter: brightness(1.12);
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.tmm-seek-label {
+  letter-spacing: 0.4px;
+  font-variant-numeric: tabular-nums;
+}
+
 .ctx-menu {
   position: fixed;
   z-index: 1100;
@@ -3149,6 +3256,37 @@ html[data-cb='1'] .badge-accent::before {
   margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
+}
+/* v1.0.100 — thin seekable progress strip along the bottom of the title-bar
+   mini player. Sits under the transport controls; hidden (zero width fill)
+   until a track actually loads. Click anywhere on it to jump. */
+.titlebar-music {
+  position: relative;
+}
+.titlebar-music-progress {
+  position: absolute;
+  left: 10px;
+  right: 6px;
+  bottom: -2px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--bg-3);
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: height var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  opacity: 0.55;
+}
+.titlebar-music:hover .titlebar-music-progress {
+  height: 4px;
+  opacity: 1;
+}
+.titlebar-music-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.45);
+  transition: width 0.15s linear;
 }
 /* Narrow windows: keep only the transport buttons so the window controls
  * never get crowded out (the volume is still available in Settings → Audio). */
@@ -5028,4 +5166,378 @@ select.select:hover {
 .author-link:hover {
   color: var(--accent);
   border-bottom-color: currentColor;
+}
+
+/* ------------------------------ servers (v2.0.0) ------------------------------ */
+/* Full dark/purple styling for the Servers page — cards, tabs, toolbar,
+   icons, inputs and empty states all match the Reimagined design language.
+   (These classes were unstyled before, which rendered as plain white boxes.) */
+
+.srv-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  width: fit-content;
+}
+.srv-tab {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.srv-tab:hover {
+  color: var(--text-1);
+  background: var(--bg-3);
+}
+.srv-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+
+.srv-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* v2.0.0 — the page-level search field (only used on ServersPage). */
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--text-3);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.search-wrap:focus-within {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--bg-3);
+}
+
+/* v2.0.0 — category dropdown (matches the app's custom selects). */
+.srv-select {
+  appearance: none;
+  height: 36px;
+  padding: 0 30px 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2)
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23a3aabe'/%3E%3C/svg%3E")
+    no-repeat right 11px center;
+  color: var(--text-1);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.srv-select:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background-color: var(--bg-3);
+}
+.srv-select option {
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+
+/* Server cards — dark panel, hover lift, purple accents. */
+.srv-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.srv-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.srv-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-2);
+}
+.srv-card-body {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.srv-card-body:hover {
+  background: var(--bg-3);
+}
+
+/* Real server icon tile — the server's favicon PNG, or a branded fallback. */
+.srv-icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.srv-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  image-rendering: pixelated;
+}
+.srv-icon.fallback {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(59, 130, 246, 0.08));
+  color: var(--accent-3);
+  border-color: var(--accent-border);
+}
+
+.srv-info {
+  flex: 1;
+  min-width: 0;
+}
+.srv-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.srv-title-row b {
+  font-size: 13.5px;
+  color: var(--text-1);
+}
+.srv-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-3);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.srv-cat.fav {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #fbbf24;
+}
+.srv-addr {
+  display: block;
+  margin-top: 2px;
+}
+.srv-desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.srv-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.srv-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 12px 6px;
+  border-left: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+/* v2.0.0 — small icon action button (star / clear-search). */
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.icon-btn:hover {
+  background: var(--bg-3);
+  color: var(--text-1);
+  border-color: var(--border);
+}
+.icon-btn.active {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+/* Favorites: add-server card + rows. */
+.srv-add-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 14px;
+}
+.srv-input {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.srv-input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--bg-3);
+}
+.srv-input::placeholder {
+  color: var(--text-3);
+}
+.server-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Empty state. */
+.empty-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 42px 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.srv-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 4px 0 10px;
+}
+.srv-recent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.srv-recent:hover {
+  color: var(--text-1);
+  border-color: var(--accent-2);
+  background: var(--accent-soft);
+}
+
+/* Preview modal. */
+.srv-preview-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+}
+.srv-tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 10.5px;
+}
+
+/* Install-to-instance picker rows. */
+.srv-instance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.srv-instance-row:hover {
+  background: var(--bg-3);
+  border-color: var(--border);
+}
+.srv-instance-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 720px) {
+  .srv-card {
+    flex-direction: column;
+  }
+  .srv-actions {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: 10px 14px;
+    justify-content: flex-end;
+  }
 }

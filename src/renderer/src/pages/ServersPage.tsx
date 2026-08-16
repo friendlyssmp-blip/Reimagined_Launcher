@@ -1,5 +1,5 @@
 /**
- * Servers (v1.0.89) — a real server browser, not just "add a server":
+ * Servers (v1.0.89, visually upgraded v2.0.0) — a real server browser:
  *
  *   Favorites   your saved servers (live ping / MOTD / players, add + join)
  *   Discover    a curated directory of real public servers, searchable and
@@ -9,6 +9,10 @@
  * Any directory server can be INSTALLED into an instance — the launcher writes
  * it into that instance's servers.dat, so it appears in the in-game multiplayer
  * list. Join launches the active profile straight into the server.
+ *
+ * v2.0.0: every string routes through i18n (no raw keys), live status actually
+ * resolves (ping re-runs when data arrives + periodic refresh), and cards show
+ * the server's real favicon icon with full dark/purple theming.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
@@ -56,6 +60,23 @@ function motdHtml(motd: string): string {
   return out
 }
 
+/** v2.0.0 — the server's real favicon (data:image/png;base64), or a clean
+ * on-brand generic server tile when the server provides no icon. */
+function ServerIcon({ status, name, size = 44 }: { status?: ServerStatus; name: string; size?: number }) {
+  if (status?.icon) {
+    return (
+      <div className="srv-icon" style={{ width: size, height: size }}>
+        <img src={status.icon} alt="" draggable={false} />
+      </div>
+    )
+  }
+  return (
+    <div className="srv-icon fallback" style={{ width: size, height: size }} title={name}>
+      <IconGlobe style={{ width: size * 0.5, height: size * 0.5 }} />
+    </div>
+  )
+}
+
 export function ServersPage() {
   const { settings, updateSettings, activeProfile, profiles, notify } = useApp()
   const t = useT()
@@ -100,10 +121,22 @@ export function ServersPage() {
     setPinging(false)
   }, [favorites, directory, recommended, pingOne])
 
+  /* v2.0.0 — BUG FIX: the old code pinged once on mount, but the directory /
+   * recommended lists load AFTER mount, so those cards never got a status and
+   * stayed on "Loading…" forever. Now the effect re-runs whenever the server
+   * set changes (data arrival, favorite add/remove) and refreshes in the
+   * background every 60 s. */
+  const addrKey = [
+    favorites.map((f) => f.address).join(','),
+    directory.map((d) => d.address).join(','),
+    recommended.map((d) => d.address).join(',')
+  ].join('|')
   useEffect(() => {
     void pingAll()
+    const iv = window.setInterval(() => void pingAll(), 60_000)
+    return () => window.clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [addrKey])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -125,7 +158,7 @@ export function ServersPage() {
   const add = async () => {
     const addr = newAddr.trim()
     if (!addr) {
-      notify('error', 'Add server', 'Enter a server address, e.g. play.example.com:25565')
+      notify('error', t('srv.addServer'), t('srv.enterAddress'))
       return
     }
     setAdding(true)
@@ -135,9 +168,9 @@ export function ServersPage() {
       setNewName('')
       setNewAddr('')
       void pingOne(addr)
-      notify('success', 'Server added', `${newName.trim() || addr} was saved to your favorites.`)
+      notify('success', t('srv.added'), t('srv.added.sub', { name: newName.trim() || addr }))
     } catch (err) {
-      notify('error', 'Could not add server', friendlyError(err))
+      notify('error', t('srv.couldNotAdd'), friendlyError(err))
     } finally {
       setAdding(false)
     }
@@ -148,7 +181,7 @@ export function ServersPage() {
       const list = await api.servers.removeFavorite(id)
       await updateSettings({ servers: list })
     } catch (err) {
-      notify('error', 'Could not remove server', friendlyError(err))
+      notify('error', t('srv.couldNotRemove'), friendlyError(err))
     }
   }
 
@@ -156,21 +189,21 @@ export function ServersPage() {
     const existing = favorites.find((f) => f.address === address)
     if (existing) {
       await remove(existing.id)
-      notify('info', 'Removed from favorites', name)
+      notify('info', t('srv.removedFav'), name)
     } else {
       try {
         const list = await api.servers.addFavorite({ name, address })
         await updateSettings({ servers: list })
-        notify('success', 'Added to favorites', name)
+        notify('success', t('srv.addedFav'), name)
       } catch (err) {
-        notify('error', 'Could not add server', friendlyError(err))
+        notify('error', t('srv.couldNotAdd'), friendlyError(err))
       }
     }
   }
 
   const join = async (address: string, name: string) => {
     if (!activeProfile) {
-      notify('info', 'No profile selected', 'Select an instance in the top bar first — Join launches the game with that profile.')
+      notify('info', t('srv.noProfileSel'), t('srv.noProfileSel.sub'))
       return
     }
     setJoining(address)
@@ -178,9 +211,9 @@ export function ServersPage() {
       const list = await api.servers.join({ profileId: activeProfile.id, address, name })
       await updateSettings({ recentServers: list })
       setPreview(null)
-      notify('success', 'Joining server', `Launching ${activeProfile.name} into ${address}…`)
+      notify('success', t('srv.joining'), t('srv.joining.sub', { profile: activeProfile.name, address }))
     } catch (err) {
-      notify('error', 'Could not join', friendlyError(err))
+      notify('error', t('srv.couldNotJoin'), friendlyError(err))
     } finally {
       setJoining(null)
     }
@@ -195,13 +228,13 @@ export function ServersPage() {
       setPreview(null)
       notify(
         'success',
-        'Server installed',
+        t('srv.installed'),
         res.installed
-          ? `${installServer.name} is now in ${profile?.name ?? 'the instance'} — you'll see it in the in-game multiplayer list.`
-          : `${installServer.name} was already in ${profile?.name ?? 'that instance'}.`
+          ? t('srv.installed.sub', { name: installServer.name, profile: profile?.name ?? t('srv.installTo') })
+          : t('srv.alreadyInstalled.sub', { name: installServer.name, profile: profile?.name ?? t('srv.installTo') })
       )
     } catch (err) {
-      notify('error', 'Could not install server', friendlyError(err))
+      notify('error', t('srv.couldNotInstall'), friendlyError(err))
     }
   }
 
@@ -210,14 +243,23 @@ export function ServersPage() {
   const statusRow = (address: string, small = false) => {
     const s = statuses[address]
     if (!s) return <span className="mono muted">{t('status.loading')}</span>
-    if (!s.online) return <span className="mono muted">offline</span>
+    if (!s.online) {
+      return (
+        <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-3)' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-3)', display: 'inline-block' }} />
+          {t('srv.unreachable')}
+        </span>
+      )
+    }
     return (
-      <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-2)' }}>
+      <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-2)', flexWrap: 'wrap' }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-        {s.latencyMs != null ? `${s.latencyMs}ms` : 'online'}
+        {s.latencyMs != null ? `${s.latencyMs}ms` : t('status.online')}
         {s.players ? (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            <IconUser style={{ width: 11, height: 11 }} /> {s.players.online.toLocaleString()}
+            <IconUser style={{ width: 11, height: 11 }} />
+            {s.players.online.toLocaleString()}
+            {s.players.max > 0 ? <span className="muted">/ {s.players.max.toLocaleString()}</span> : null}
           </span>
         ) : null}
         {s.version && small ? <span className="muted">· {s.version}</span> : null}
@@ -227,19 +269,24 @@ export function ServersPage() {
 
   const DirectoryCard = ({ s, showCategory = true }: { s: DirectoryServer; showCategory?: boolean }) => {
     const fav = favorites.find((f) => f.address === s.address)
+    const status = statuses[s.address]
     return (
       <div className="card srv-card">
         <button className="srv-card-body" onClick={() => setPreview(s)}>
-          <div className="srv-avatar">{s.name.charAt(0).toUpperCase()}</div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <b style={{ fontSize: 13.5 }}>{s.name}</b>
-              {showCategory ? <span className="srv-cat">{s.category}</span> : null}
-              {fav ? <span className="srv-cat fav">★ favorite</span> : null}
+          <ServerIcon status={status} name={s.name} />
+          <div className="srv-info">
+            <div className="srv-title-row">
+              <b>{s.name}</b>
+              {showCategory ? <span className="srv-cat">{t(`srv.cat.${s.category}`)}</span> : null}
+              {fav ? (
+                <span className="srv-cat fav">
+                  <IconStar style={{ width: 10, height: 10 }} /> {t('srv.favBadge')}
+                </span>
+              ) : null}
             </div>
-            <span className="mono muted" style={{ fontSize: 11 }}>{s.address}</span>
+            <span className="mono muted srv-addr">{s.address}</span>
             <p className="srv-desc">{s.description}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>{statusRow(s.address, true)}</div>
+            <div className="srv-status-row">{statusRow(s.address, true)}</div>
           </div>
           <IconChevronRight style={{ width: 14, height: 14, color: 'var(--text-3)', flexShrink: 0 }} />
         </button>
@@ -252,7 +299,7 @@ export function ServersPage() {
           </Button>
           <button
             className={`icon-btn ${fav ? 'active' : ''}`}
-            title={fav ? 'Remove from favorites' : 'Add to favorites'}
+            title={fav ? t('srv.unfavorite') : t('srv.favorite')}
             aria-label="Toggle favorite"
             onClick={() => void toggleFavorite(s.address, s.name)}
           >
@@ -265,6 +312,7 @@ export function ServersPage() {
 
   const renderFavoriteRow = (f: ServerFavorite) => (
     <div key={f.id} className="card server-card" style={{ padding: '14px 16px' }}>
+      <ServerIcon status={statuses[f.address]} name={f.name} size={40} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <b style={{ fontSize: 13.5 }}>{f.name}</b>
@@ -284,7 +332,7 @@ export function ServersPage() {
         <Button size="sm" variant="primary" disabled={joining === f.address} onClick={() => void join(f.address, f.name)}>
           {joining === f.address ? <Spinner /> : <IconPlay style={{ width: 12, height: 12 }} />} {t('action.join')}
         </Button>
-        <button className="icon-danger-btn" title="Remove" aria-label="Remove server" onClick={() => void remove(f.id)}>
+        <button className="icon-danger-btn" title={t('action.remove')} aria-label="Remove server" onClick={() => void remove(f.id)}>
           <IconTrash style={{ width: 13, height: 13 }} />
         </button>
       </div>
@@ -319,14 +367,14 @@ export function ServersPage() {
 
       {tab === 'discover' || tab === 'recommended' ? (
         <>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="srv-toolbar">
             <div className="search-wrap" style={{ flex: 1, minWidth: 220 }}>
               <IconSearch style={{ width: 13, height: 13 }} />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('misc.searchPlaceholder')}
-                style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text)', flex: 1, fontSize: 13 }}
+                style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-1)', flex: 1, fontSize: 13 }}
               />
               {query ? (
                 <button className="icon-btn" onClick={() => setQuery('')} aria-label="Clear search">
@@ -342,7 +390,7 @@ export function ServersPage() {
               >
                 <option value="">{t('srv.allCategories')}</option>
                 {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>{t(`srv.cat.${c}`)}</option>
                 ))}
               </select>
             ) : null}
@@ -363,7 +411,7 @@ export function ServersPage() {
       ) : (
         <>
           {/* Add server */}
-          <div className="card" style={{ padding: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="card srv-add-card">
             <input
               className="srv-input"
               placeholder={t('srv.namePlaceholder')}
@@ -415,11 +463,15 @@ export function ServersPage() {
         <Modal onClose={() => setPreview(null)} title={preview.name}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div className="srv-avatar" style={{ width: 46, height: 46, fontSize: 20 }}>{preview.name.charAt(0)}</div>
+              <ServerIcon status={statuses[preview.address]} name={preview.name} size={46} />
               <div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span className="srv-cat">{preview.category}</span>
-                  {favorites.some((f) => f.address === preview.address) ? <span className="srv-cat fav">★ favorite</span> : null}
+                  <span className="srv-cat">{t(`srv.cat.${preview.category}`)}</span>
+                  {favorites.some((f) => f.address === preview.address) ? (
+                    <span className="srv-cat fav">
+                      <IconStar style={{ width: 10, height: 10 }} /> {t('srv.favBadge')}
+                    </span>
+                  ) : null}
                 </div>
                 <span className="mono muted">{preview.address}</span>
               </div>
@@ -464,7 +516,7 @@ export function ServersPage() {
                 value={installSearch}
                 onChange={(e) => setInstallSearch(e.target.value)}
                 placeholder={t('srv.searchInstances')}
-                style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text)', flex: 1, fontSize: 13 }}
+                style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-1)', flex: 1, fontSize: 13 }}
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
@@ -473,7 +525,7 @@ export function ServersPage() {
               ) : (
                 installableProfiles.map((p) => (
                   <button key={p.id} className="srv-instance-row" onClick={() => void doInstall(p.id)}>
-                    <div className="srv-avatar" style={{ width: 30, height: 30, fontSize: 13 }}>{p.name.charAt(0).toUpperCase()}</div>
+                    <div className="srv-instance-icon">{p.name.charAt(0).toUpperCase()}</div>
                     <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
                       <div className="mono muted" style={{ fontSize: 11 }}>

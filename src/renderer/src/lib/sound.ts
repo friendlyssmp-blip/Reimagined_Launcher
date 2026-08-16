@@ -69,6 +69,8 @@ let musicEl: HTMLAudioElement | null = null
  * track (reimagined-music://…). null = the bundled track. */
 let musicUrl: string | null = null
 let musicEndedCb: (() => void) | null = null
+/* v1.0.100 — live playback progress (fired on timeupdate / metadata). */
+let musicProgressCb: ((current: number, duration: number) => void) | null = null
 let musicPaused = false
 /* v1.0.99 — the background-music volume is FULLY INDEPENDENT from the UI
  * sound volume: it lives on the audio element (el.volume) instead of being
@@ -553,6 +555,16 @@ export const sound = {
         src.connect(musicBus)
         musicBus.gain.setTargetAtTime(1, c.currentTime, 0.05)
       }
+      /* v1.0.100 — progress events: keep the title-bar / top-bar players in
+       * sync with real playback time (fires ~4×/s while playing and once
+       * when the track metadata is known). */
+      const onProgress = () => {
+        if (musicProgressCb && Number.isFinite(el.duration) && el.duration > 0) {
+          musicProgressCb(el.currentTime, el.duration)
+        }
+      }
+      el.addEventListener('loadedmetadata', onProgress)
+      el.addEventListener('timeupdate', onProgress)
       el.play().catch(() => {})
       musicEl = el
     } catch {
@@ -595,6 +607,30 @@ export const sound = {
   clearMusicUrl(): void {
     musicUrl = null
   },
+  /** v1.0.100 — subscribe to live playback progress of the current track. */
+  onMusicProgress(cb: ((current: number, duration: number) => void) | null): void {
+    musicProgressCb = cb
+  },
+  /** v1.0.100 — current position / duration (null when nothing is loaded). */
+  getMusicProgress(): { current: number; duration: number } | null {
+    if (!musicEl || !Number.isFinite(musicEl.duration) || musicEl.duration <= 0) return null
+    return { current: musicEl.currentTime, duration: musicEl.duration }
+  },
+  /** v1.0.100 — jump to an absolute position (clamped to the track length). */
+  musicSeekTo(seconds: number): void {
+    if (!musicEl) return
+    const d = musicEl.duration
+    const max = Number.isFinite(d) ? d : seconds
+    musicEl.currentTime = Math.min(Math.max(0, seconds), max)
+  },
+  /** v1.0.100 — jump forward/backward by a delta (clamped). */
+  musicSeekBy(delta: number): void {
+    if (!musicEl) return
+    const cur = musicEl.currentTime || 0
+    const d = musicEl.duration
+    const max = Number.isFinite(d) ? d : cur + delta
+    musicEl.currentTime = Math.min(Math.max(0, cur + delta), max)
+  },
   musicStop(): void {
     musicPaused = false
     if (!musicEl) return
@@ -606,6 +642,8 @@ export const sound = {
     }
     if (musicBus && ctx) musicBus.gain.setTargetAtTime(0, ctx.currentTime, 0.03)
     musicEl = null
+    /* v1.0.100 — let the UI clear the progress bar when playback stops. */
+    musicProgressCb?.(0, 0)
   },
   isMusicPlaying(): boolean {
     return !!musicEl && !musicPaused

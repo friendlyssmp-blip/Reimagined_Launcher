@@ -1,7 +1,7 @@
 import { api } from '../lib/api'
 import { useApp } from '../state/AppContext'
 import { BrandLogo } from './BrandLogo'
-import { useMusicState, toggleMusic, skipMusic } from '../lib/music'
+import { useMusicState, toggleMusic, skipMusic, seekMusicTo } from '../lib/music'
 import { sound } from '../lib/sound'
 import { IconPause, IconPlay, IconSkipForward, IconVolume } from './icons'
 
@@ -12,6 +12,14 @@ export function TitleBar() {
   /* v1.0.99 — the mini-player volume control is INDEPENDENT from the UI
      sound volume (its own audioMusicVolume setting). */
   const volume = settings?.audioMusicVolume ?? 0.35
+  /* v1.0.100 — live progress for the title-bar strip. */
+  const progress = music.progress
+  const pct = progress && progress.duration > 0 ? Math.min(100, (progress.current / progress.duration) * 100) : 0
+  const fmt = (s: number): string => {
+    const m = Math.floor(s / 60)
+    const ss = Math.floor(s % 60)
+    return `${m}:${String(ss).padStart(2, '0')}`
+  }
 
   return (
     <div className="titlebar">
@@ -59,6 +67,20 @@ export function TitleBar() {
                 }}
               />
             </span>
+            {/* v1.0.100 — thin seekable progress strip along the bottom of the
+                mini player: shows where the track is and lets you jump by
+                clicking. Zero-height (hidden) until a track actually loads. */}
+            <div
+              className="titlebar-music-progress"
+              title={progress && progress.duration > 0 ? `${fmt(progress.current)} / ${fmt(progress.duration)}` : ''}
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                const ratio = (e.clientX - rect.left) / rect.width
+                if (progress && progress.duration > 0) seekMusicTo(ratio * progress.duration)
+              }}
+            >
+              <div className="titlebar-music-progress-fill" style={{ width: `${pct}%` }} />
+            </div>
           </div>
         )}
       </div>
