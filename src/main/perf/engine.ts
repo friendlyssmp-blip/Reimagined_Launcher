@@ -337,6 +337,40 @@ export function applyFrameCap(gameDir: string, maxFps: number): void {
 }
 
 /**
+ * v2.0.2 — make chunk saves non-blocking on weak tiers. Vanilla's
+ * `syncChunkWrites:true` writes every chunk synchronously on the SERVER
+ * thread; on a 2C/4T CPU a full autosave (all dimensions) turns into a
+ * 1.5-3 s stall + ParallelGC full collection — the measured "chest opens
+ * seconds later" freeze (PROF data: gcMs up to 5199, maxMs 2900, "Can't
+ * keep up" 10.5 s behind). Setting it to false moves the writes to
+ * background threads; the game waits for pending writes on quit, so data
+ * safety is unchanged. Rewritten on every launch (the game owns the file
+ * and overwrites it on exit) — same mechanism as applyFrameCap.
+ */
+export function applySyncChunkWrites(gameDir: string, asyncWrites: boolean): void {
+  try {
+    const file = path.join(gameDir, 'options.txt')
+    let content = ''
+    try {
+      content = fs.readFileSync(file, 'utf-8')
+    } catch {
+      content = ''
+    }
+    const value = asyncWrites ? 'false' : 'true'
+    const patched = content.replace(/^syncChunkWrites:.*$/m, 'syncChunkWrites:' + value)
+    if (patched === content) {
+      const sep = content && !content.endsWith('\n') ? '\n' : ''
+      fs.writeFileSync(file, content + sep + 'syncChunkWrites:' + value + '\n', 'utf-8')
+    } else {
+      fs.writeFileSync(file, patched, 'utf-8')
+    }
+    logger.info('RPE: syncChunkWrites=' + value + ' for this session (async chunk writes on weak tier).')
+  } catch (err) {
+    logger.warn('RPE: could not apply syncChunkWrites: ' + (err as Error).message)
+  }
+}
+
+/**
  * v1.0.43 — force VSync off in an instance's real options.txt. A 60 Hz panel
  * with VSync on caps the game at 60 FPS regardless of the frame cap, so when
  * the user enables "force VSync off" the launcher rewrites the enableVsync
@@ -663,4 +697,4 @@ export async function applyRecommendation(payload: { id?: string; profileId?: st
   }
 }
 
-export const engine = { detectHardware, scoreHardware, recommendMemoryMB, effectiveTier, fpsConfigFor, jvmFlagsFor, perfStatus, buildRecommendations, applyRecommendation, recordSessionFromLog, applyFrameCap }
+export const engine = { detectHardware, scoreHardware, recommendMemoryMB, effectiveTier, fpsConfigFor, jvmFlagsFor, perfStatus, buildRecommendations, applyRecommendation, recordSessionFromLog, applyFrameCap, applySyncChunkWrites }

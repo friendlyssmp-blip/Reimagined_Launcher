@@ -1,3 +1,33 @@
+## v2.0.2 - Save-freeze fix: autosaves no longer freeze the game (async chunk writes + save-aware mod)
+
+Real PROF data from the user's hardcore session showed the recurring "chest opens seconds later"
+freeze was caused by AUTOSAVES: each "Saving and pausing game..." serializes all chunks of all
+dimensions synchronously on the server thread, flooding memory so ParallelGC full collections
+stop the world for 1.5-3s (measured gcMs up to 5199, maxMs 2900, "Can't keep up" 10.5s behind).
+The v2.0.1 GC fix removed the old 1-5s GC freezes but the save stalls remained.
+
+Launcher (v2.0.2 final):
+- syncChunkWrites:false now applies on EVERY tier (never a toggle) -> chunk writes move to
+  background threads on all machines; the server thread no longer blocks during saves. Data safety
+  is unchanged (the game waits for pending writes on quit). Rewritten every launch like the FPS cap.
+- FPS Boost bundle bumped to v1.0.36 (jars renamed Reimagined FPS Boost-1.0.36-mc26.x.jar).
+
+FPS Boost mod v1.0.35 -> v1.0.36:
+- New ServerSaveMixin on MinecraftServer.saveAllChunks + SaveDetector: the client now KNOWS when
+  a save is in flight, and the async chunk-decode pipeline stands down during saves instead of
+  compounding the memory flood.
+- NEW v1.0.36 ReloadCap: while a resource pack / shader reload is in flight the render FPS is
+  temporarily capped to 30 (loading screen doesn't need more). Real data: a pack switch caused a
+  77,926 ms reload with a 6,834 ms full GC. Cutting render work ~4x during the window drops the
+  heap churn proportionally, so reloads finish sooner and never trigger multi-second freezes.
+  Fully reversible - previous limit restored the first tick after the reload completes.
+- PROF line now marks save-coincident spike frames with a lowercase 's' in spkTasks (distinct from
+  'S' stabilizer) and reload-window frames with 'r' - both stutter sources are measurable.
+
+Validated: typechecks 0 errors, build OK, smoke 13/14 (game-boot test blocked by the user's open
+launcher single-instance lock, same env issue as v2.0.1), jars 26.1+26.2 rebuilt with ReloadCap +
+SaveDetector verified inside. Nothing touched in physics-mod or Xaero's mods.
+
 ## v2.0.1 - UI (chests/inventory) opens instantly again: no more 1-3s freezes
 
 Opening a chest, inventory or any screen could take SECONDS on weak PCs. Real PROF

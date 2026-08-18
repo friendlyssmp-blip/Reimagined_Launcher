@@ -1142,6 +1142,13 @@ class Launcher {
       // the frame cap. When the user enables "force VSync off" the launcher
       // rewrites the enableVsync line so the game runs at the unlocked rate.
       rpe.applyVsyncSetting(gameDir, s.forceVsyncOff ?? false)
+      // v2.0.2 — save-freeze fix, applied on EVERY tier (never a toggle):
+      // chunk writes go async so a full autosave stops blocking the server
+      // thread (measured 1.5-3 s save+GC freezes on 2C/4T CPUs — the "chest
+      // opens seconds later"). Async writes are safe (the game flushes
+      // pending writes on quit) and a strict improvement on any machine.
+      // The mod's SaveDetector + PROF 's' mark makes it verifiable in-game.
+      rpe.applySyncChunkWrites(gameDir, true)
       // v1.0.43 — launch confirmation log: the ACTUAL state the game will
       // start with (options.txt maxFps + vsync) and the FPS Boost jar present.
       try {

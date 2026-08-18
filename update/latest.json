@@ -1,8 +1,8 @@
 {
-  "version": "2.0.1",
-  "installer": "dist/Reimagined-Setup-2.0.1.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.1.exe",
-  "sha256": "c03fda436ab09f634320f5ddb336e917ab70c3befcf42cc37023d8592e252109",
-  "notes": "UI (chests/inventory) opens instantly again. Real game-log data showed 1-3 second freezes caused by the FPS cap being off (200+ FPS on a 60Hz panel = GC churn) plus an 8 GB memory reservation and a too-aggressive chunk boost after respawn/teleport. Stutter Guard is re-enabled (120 FPS cap), memory set to 4 GB, and FPS Boost mod v1.0.34 gentles the post-teleport chunk apply on weak CPUs (24/tick instead of 48). Close the launcher and game fully before updating.",
-  "publishedAt": "2026-08-16T12:25:00+00:00"
+  "version": "2.0.2",
+  "installer": "dist/Reimagined-Setup-2.0.2.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.2.exe",
+  "sha256": "633221b6232bcb5c48f1acce6baad9e95b1f62799212ec8bb64bf2cd7481f738",
+  "notes": "Autosaves and resource-pack reloads no longer freeze the game. Real PROF data: a pack switch caused a 78-second reload with a 6.8-second GC freeze, and autosaves stalled the server thread 1.5-3s. Now chunk writes are async on every machine (syncChunkWrites:false, never a toggle), the mod stands down during saves (SaveDetector), and during any resource/shader reload the render FPS is temporarily capped to 30 so the loading screen stops generating garbage that triggers multi-second freezes (ReloadCap). FPS Boost mod v1.0.36. Close the launcher and game fully before updating.",
+  "publishedAt": "2026-08-18T11:22:00+00:00"
 }
