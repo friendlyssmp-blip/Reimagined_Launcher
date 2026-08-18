@@ -1,8 +1,8 @@
 {
-  "version": "2.0.3",
-  "installer": "dist/Reimagined-Setup-2.0.3.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.3.exe",
-  "sha256": "72b1034bbbd1b1f299c75d0ffb95daa93b1d68b8ac421a8e7dd05a62b34046eb",
-  "notes": "Stutter Guard can't silently break FPS anymore. Real data showed the game at 78-94 FPS (not 50) — the drop was caused by the Stutter Guard toggle being off (uncapped rendering = GC dips), not by the update. Your settings were restored to the safe config (Stutter Guard ON + 4 GB). Plus a safety ceiling: even with the guard off on weak PCs, the game now caps at 144 FPS (invisible on any screen, but no more uncapped render garbage).",
-  "publishedAt": "2026-08-18T12:42:00+00:00"
+  "version": "2.0.4",
+  "installer": "dist/Reimagined-Setup-2.0.4.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.4.exe",
+  "sha256": "b6290e99f0799356599e89fea233b6028940b8a9f8690d10f5661ae9af64e863",
+  "notes": "The fragmented Reimagined R next to player nametags is gone \u2014 the nametag branding code was fully removed from the FPS Boost mod (now v1.0.37, rebuilt for 26.1 and 26.2). All FPS, save, reload and GC fixes stay exactly as they were.",
+  "publishedAt": "2026-08-18T16:22:00+00:00"
 }

@@ -1,3 +1,13 @@
+## v2.0.4 - Nametag "R" branding removed
+
+The fragmented Reimagined "R" next to player nametags (introduced in mod v1.0.33) is gone
+entirely: the NametagR renderer, its NameTagFeatureRendererMixin and the RenderTypeAccessor
+helper were deleted from the mod, the mixins list is empty again, the config field and the
+in-game K-menu toggle were removed (existing configs ignore the leftover field), and the
+EN/ES lang keys were cleaned. The bundled mod is now v1.0.37 (jars rebuilt for 26.1 + 26.2,
+verified to contain no nametag code). Nothing else changed — all FPS/pipeline/save/reload
+fixes from v2.0.1-v2.0.3 stay exactly as they were.
+
 ## v2.0.3 - Stutter Guard can't silently break FPS anymore (safety ceiling 144 FPS on weak tiers)
 
 Diagnosis from REAL data after a report of "FPS dropped to 50": the game was running at
