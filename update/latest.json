@@ -1,8 +1,8 @@
 {
-  "version": "2.0.2",
-  "installer": "dist/Reimagined-Setup-2.0.2.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.2.exe",
-  "sha256": "633221b6232bcb5c48f1acce6baad9e95b1f62799212ec8bb64bf2cd7481f738",
-  "notes": "Autosaves and resource-pack reloads no longer freeze the game. Real PROF data: a pack switch caused a 78-second reload with a 6.8-second GC freeze, and autosaves stalled the server thread 1.5-3s. Now chunk writes are async on every machine (syncChunkWrites:false, never a toggle), the mod stands down during saves (SaveDetector), and during any resource/shader reload the render FPS is temporarily capped to 30 so the loading screen stops generating garbage that triggers multi-second freezes (ReloadCap). FPS Boost mod v1.0.36. Close the launcher and game fully before updating.",
-  "publishedAt": "2026-08-18T11:22:00+00:00"
+  "version": "2.0.3",
+  "installer": "dist/Reimagined-Setup-2.0.3.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.3.exe",
+  "sha256": "72b1034bbbd1b1f299c75d0ffb95daa93b1d68b8ac421a8e7dd05a62b34046eb",
+  "notes": "Stutter Guard can't silently break FPS anymore. Real data showed the game at 78-94 FPS (not 50) — the drop was caused by the Stutter Guard toggle being off (uncapped rendering = GC dips), not by the update. Your settings were restored to the safe config (Stutter Guard ON + 4 GB). Plus a safety ceiling: even with the guard off on weak PCs, the game now caps at 144 FPS (invisible on any screen, but no more uncapped render garbage).",
+  "publishedAt": "2026-08-18T12:42:00+00:00"
 }

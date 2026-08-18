@@ -1,3 +1,30 @@
+## v2.0.3 - Stutter Guard can't silently break FPS anymore (safety ceiling 144 FPS on weak tiers)
+
+Diagnosis from REAL data after a report of "FPS dropped to 50": the game was running at
+78-94 FPS average (PROF avg, live) — NOT 50 — and the pre-update session averaged 70.2 FPS,
+so the v2.0.2 update did NOT lower FPS. The actual cause: settings.json had been changed to
+stutterGuard:false + memory:8192 (the pre-v2.0.1 bad config, via the Settings toggle), which
+makes the launcher launch uncapped (maxFps=260) — an uncapped render thread on this 2C/4T
+iGPU laptop spins at maximum load and generates the garbage behind the low=9.9-25.9 FPS dips.
+
+The user's setting was restored (stutterGuard:true, memory:4096 — the v2.0.1 known-good
+config). To make this impossible to repeat, v2.0.3 adds a SAFETY CEILING:
+
+- With Stutter Guard OFF on weak tiers (potato/turbo), the launcher now caps at 144 FPS
+  instead of fully uncapped 260. 144 exceeds every 60/120 Hz screen refresh, so the user
+  loses nothing visible, but the render thread can no longer spin at 200+ FPS and create the
+  GC dips. The toggle still means something (120 vs 144); it just can't silently degrade the
+  machine anymore. Strong tiers keep 260 when the guard is off.
+- Clear launch log line when the safety ceiling engages.
+
+Also answered definitively: the launcher does NOT run inside the game — the FPS Boost mod
+(which the launcher auto-installs into every instance and seeds with safe settings) is what
+does the in-game FPS work. The launcher's job is the install + safe launch settings (cap,
+memory ceiling, GC flags, vsync, async chunk writes).
+
+Validated: typechecks 0 errors, build OK, smoke 13/14 (game-boot test blocked by the user's
+open launcher lock, same env issue as before).
+
 ## v2.0.2 - Save-freeze fix: autosaves no longer freeze the game (async chunk writes + save-aware mod)
 
 Real PROF data from the user's hardcore session showed the recurring "chest opens seconds later"

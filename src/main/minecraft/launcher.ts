@@ -1119,13 +1119,29 @@ class Launcher {
       // v1.0.98 — Stutter Guard: potato/turbo tiers now carry a 120 FPS
       // ceiling from fpsConfigFor; turning the guard off in Settings returns
       // the old 260 (Unlimited). unlimitedFps still wins over everything.
+      // v2.0.3 — safety ceiling: with the guard OFF on a weak tier, cap at
+      // 144 instead of fully uncapped. 144 exceeds every 60/120 Hz screen
+      // refresh, so the user loses nothing visible, but the render thread
+      // can no longer spin at 200+ FPS and generate the per-frame garbage
+      // that turns into GC dips (real data: uncapped runs on this 2C/4T
+      // iGPU laptop showed low=9.9-25.9 FPS dips; the 120-guard runs did
+      // not). The toggle still means something (120 vs 144), it just can't
+      // silently degrade the machine anymore.
+      const weakTier = tier === 'potato' || tier === 'turbo'
       merged.maxFps = merged.unlimitedFps
         ? 0
         : s.stutterGuard !== false
           ? typeof config.maxFps === 'number'
             ? config.maxFps
             : 260
-          : 260
+          : weakTier
+            ? 144
+            : 260
+      if (merged.unlimitedFps) {
+        logger.info('RPE: unlimited FPS enabled by the user — no frame cap applied (thermal/power risk warned in Settings).')
+      } else if (s.stutterGuard === false && weakTier) {
+        logger.info('RPE: Stutter Guard OFF on weak tier — safety ceiling 144 FPS applied (prevents uncapped render garbage).')
+      }
       if (merged.unlimitedFps) {
         fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2))
         // v1.0.42 — even in unlimited mode, neutralize any stale cap persisted
