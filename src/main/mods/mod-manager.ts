@@ -493,10 +493,15 @@ class ModManager {
       }
       return mod
     })
-    if (demoted) {
+    if (demoted || changed) {
+      // v2.1.2 — persist the fix, don't just fix it in-memory: the dedupe
+      // above collapses ghost rows but only wrote them back to disk when a
+      // manual item was also demoted, so on-disk duplicates survived a
+      // restart and re-appeared. Now any reconciliation (removed-missing,
+      // dedup, or demotion) is saved to the profile.
       await profileManager.update(profileId, { mods: healed })
       eventBus.emit('mods:changed', { profileId, action: 'reconciled' })
-      logger.info(`Demoted ${healed.filter((m, i) => m.source === 'local' && deduped[i]?.source !== 'local').length} unlinked item(s) to manual in "${profile.name}"`)
+      logger.info(`Reconciled "${profile.name}": dedup ${deduped.length}/${verified.length}, demoted ${healed.filter((m, i) => m.source === 'local' && deduped[i]?.source !== 'local').length} unlinked item(s)`)
     }
     return healed
   }

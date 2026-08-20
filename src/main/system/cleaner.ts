@@ -16,9 +16,28 @@
  */
 import path from 'node:path'
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import { paths, appVersion } from '../paths'
 import { logger } from '../logs/logger'
 import { exists, listDir } from '../utils/fs'
+
+/**
+ * v2.1.2 — the old scan ran every fs call synchronously on the main thread,
+ * so a large data dir froze the whole launcher ("Not Responding") and the
+ * renderer counter stayed at "0 files" until the very end. Now every walk
+ * yields to the event loop periodically and reports live progress, so the
+ * UI stays responsive and the counter ticks up as the scan advances.
+ */
+const YIELD_EVERY = 256
+type Progress = { scannedFiles: number; currentDir: string } | null
+
+async function yieldIfNeeded(counter: { n: number }, progress: Progress, onProgress?: (p: NonNullable<Progress>) => void): Promise<void> {
+  counter.n++
+  if (counter.n % YIELD_EVERY === 0) {
+    await new Promise((r) => setImmediate(r))
+    onProgress?.({ scannedFiles: counter.n, currentDir: progress?.currentDir ?? '' })
+  }
+}
 
 export type StorageCategory = 'cache' | 'temporary' | 'duplicates' | 'updates' | 'orphaned' | 'backups'
 
@@ -79,26 +98,43 @@ function isProtected(p: string): boolean {
 
 /* --------------------------------- scanning --------------------------------- */
 
-function walk(dir: string, out: string[], depth = 0, maxDepth = 8): void {
+async function walk(dir: string, out: string[], opts: { depth?: number; maxDepth?: number; counter?: { n: number }; progress?: Progress; onProgress?: (p: NonNullable<Progress>) => void } = {}): Promise<void> {
+  const maxDepth = opts.maxDepth ?? 8
+  const depth = opts.depth ?? 0
+  if (depth > maxDepth) return
   let entries: fs.Dirent[]
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
+    entries = (await fsp.readdir(dir, { withFileTypes: true })) as fs.Dirent[]
   } catch {
     return
   }
+  if (opts.progress) opts.progress.currentDir = dir
   for (const e of entries) {
     const p = path.join(dir, e.name)
-    if (e.isDirectory()) {
-      if (depth < maxDepth) walk(p, out, depth + 1, maxDepth)
-    } else if (e.isFile()) {
+    let isDir = e.isDirectory()
+    let isFile = e.isFile()
+    // Symlinks show as neither — resolve so we don't silently skip them.
+    if (!isDir && !isFile) {
+      try {
+        const st = await fsp.lstat(p)
+        isDir = st.isDirectory()
+        isFile = st.isFile()
+      } catch {
+        continue
+      }
+    }
+    if (opts.counter) await yieldIfNeeded(opts.counter, opts.progress ?? null, opts.onProgress)
+    if (isDir) {
+      await walk(p, out, { depth: depth + 1, maxDepth, counter: opts.counter, progress: opts.progress, onProgress: opts.onProgress })
+    } else if (isFile) {
       out.push(p)
     }
   }
 }
 
-function fileSize(p: string): number {
+async function fileSize(p: string): Promise<number> {
   try {
-    return fs.statSync(p).size
+    return (await fsp.stat(p)).size
   } catch {
     return 0
   }
@@ -127,31 +163,46 @@ function quickFingerprint(p: string): string {
   }
 }
 
-/** Run a full storage scan. Never blocks the launcher for long. */
-export async function scanStorage(): Promise<StorageScanResult> {
+/**
+ * Run a full storage scan async and non-blocking: every directory walk and
+ * stat is now async and yields to the event loop, so a large data dir can
+ * never freeze the launcher. Progress (files counted + current dir) is
+ * pushed to the renderer in real time via `onProgress`.
+ */
+export async function scanStorage(
+  onProgress?: (p: { scannedFiles: number; currentDir: string }) => void
+): Promise<StorageScanResult> {
   const ranAt = new Date().toISOString()
   const items: StorageItem[] = []
-  let scannedFiles = 0
+  const counter = { n: 0 }
+  const progress: Progress = { scannedFiles: 0, currentDir: '' }
+  const bump = (): void => {
+    onProgress?.({ scannedFiles: counter.n, currentDir: progress.currentDir })
+  }
+  const walkOpts = { counter, progress, onProgress: (p: NonNullable<Progress>) => onProgress?.(p) }
   const now = Date.now()
 
   /* 1) OBSOLETE UPDATE PACKAGES — every installer in data/updates except the
    *    current launcher's own package. 100% obsolete after a successful update. */
   try {
-    const files = await listDir(paths.updates)
-    for (const f of files) {
+    for (const f of await listDir(paths.updates)) {
       const p = path.join(paths.updates, f)
-      let st: fs.Stats
+      let isFile = false
+      let size = 0
+      let mtime = 0
       try {
-        st = fs.statSync(p)
+        const st = await fsp.stat(p)
+        isFile = st.isFile()
+        size = st.size
+        mtime = st.mtimeMs
       } catch {
         continue
       }
-      if (!st.isFile()) continue
-      scannedFiles++
+      if (!isFile) continue
+      counter.n++
       if (f === 'check.json') continue
       // Never offer an in-flight partial download (modified in the last minute).
-      const growing = now - st.mtimeMs < 60_000
-      if (growing) {
+      if (now - mtime < 60_000) {
         items.push({
           id: 'upd-' + f,
           path: p,
@@ -167,7 +218,7 @@ export async function scanStorage(): Promise<StorageScanResult> {
       items.push({
         id: 'upd-' + f,
         path: p,
-        sizeBytes: st.size,
+        sizeBytes: size,
         category: 'updates',
         confidence: 100,
         label: 'Old update package: ' + f,
@@ -175,6 +226,7 @@ export async function scanStorage(): Promise<StorageScanResult> {
         autoSelected: true
       })
     }
+    bump()
   } catch {
     /* no updates dir yet */
   }
@@ -184,12 +236,11 @@ export async function scanStorage(): Promise<StorageScanResult> {
     const tmpRoot = path.join(paths.data, 'tmp')
     if (exists(tmpRoot)) {
       const files: string[] = []
-      walk(tmpRoot, files, 0, 6)
+      await walk(tmpRoot, files, walkOpts)
       let total = 0
-      for (const p of files) {
-        scannedFiles++
-        total += fileSize(p)
-      }
+      for (const p of files) total += await fileSize(p)
+      counter.n += files.length
+      bump()
       items.push({
         id: 'tmp-staging',
         path: tmpRoot,
@@ -205,7 +256,6 @@ export async function scanStorage(): Promise<StorageScanResult> {
     /* non-fatal */
   }
 
-
   /* 3) REGENERATABLE CACHE — perf probe, validation cache. */
   for (const [rel, label, conf] of [
     ['perf', 'Hardware detection cache', 95],
@@ -214,12 +264,11 @@ export async function scanStorage(): Promise<StorageScanResult> {
     const dir = path.join(paths.data, rel)
     if (!exists(dir)) continue
     const files: string[] = []
-    walk(dir, files, 0, 4)
+    await walk(dir, files, walkOpts)
     let total = 0
-    for (const p of files) {
-      scannedFiles++
-      total += fileSize(p)
-    }
+    for (const p of files) total += await fileSize(p)
+    counter.n += files.length
+    bump()
     if (total > 0) {
       items.push({
         id: 'cache-' + rel,
@@ -247,13 +296,13 @@ export async function scanStorage(): Promise<StorageScanResult> {
         stamps.sort()
         for (let i = 0; i < stamps.length - 1; i++) {
           const snapDir = path.join(instDir, stamps[i])
+          progress.currentDir = snapDir
           const files: string[] = []
-          walk(snapDir, files, 0, 6)
+          await walk(snapDir, files, walkOpts)
           let total = 0
-          for (const p of files) {
-            scannedFiles++
-            total += fileSize(p)
-          }
+          for (const p of files) total += await fileSize(p)
+          counter.n += files.length
+          bump()
           items.push({
             id: 'backup-' + inst + '-' + stamps[i],
             path: snapDir,
@@ -274,13 +323,14 @@ export async function scanStorage(): Promise<StorageScanResult> {
   /* 5) ORPHANED PARTIAL DOWNLOADS — *.part / *.tmp / *.download fragments. */
   try {
     const files: string[] = []
-    walk(paths.data, files, 0, 5)
+    progress.currentDir = paths.data
+    await walk(paths.data, files, walkOpts)
     for (const p of files) {
       const base = path.basename(p).toLowerCase()
       if (!base.endsWith('.part') && !base.endsWith('.tmp') && !base.endsWith('.download') && !base.endsWith('.crdownload')) continue
       if (isProtected(p)) continue
-      scannedFiles++
-      const size = fileSize(p)
+      counter.n++
+      const size = await fileSize(p)
       items.push({
         id: 'orphan-' + Buffer.from(p).toString('base64url').slice(0, 24),
         path: p,
@@ -292,21 +342,21 @@ export async function scanStorage(): Promise<StorageScanResult> {
         autoSelected: true
       })
     }
+    bump()
   } catch {
     /* non-fatal */
   }
-
 
   /* 6) DUPLICATE FILES inside the launcher's own cache areas. */
   try {
     const candidates: string[] = []
     const tmpDir = path.join(paths.data, 'tmp')
-    if (exists(tmpDir)) walk(tmpDir, candidates, 0, 5)
+    if (exists(tmpDir)) await walk(tmpDir, candidates, walkOpts)
     const seen = new Map<string, { path: string; size: number }>()
     for (const p of candidates) {
       if (isProtected(p)) continue
-      scannedFiles++
-      const size = fileSize(p)
+      counter.n++
+      const size = await fileSize(p)
       if (size === 0) continue
       const fp = quickFingerprint(p)
       if (!fp) continue
@@ -325,41 +375,51 @@ export async function scanStorage(): Promise<StorageScanResult> {
       } else {
         seen.set(fp, { path: p, size })
       }
+      if (counter.n % YIELD_EVERY === 0) bump()
     }
+    bump()
   } catch {
     /* non-fatal */
   }
 
   /* 7) STORAGE BREAKDOWN (visual) — full picture, nothing is deleted. */
   const breakdownItems: { label: string; bytes: number }[] = []
-  const measure = (label: string, dir: string): void => {
+  const measure = async (label: string, dir: string): Promise<void> => {
     let total = 0
     try {
       if (exists(dir)) {
+        progress.currentDir = dir
         const files: string[] = []
-        walk(dir, files, 0, 5)
-        for (const p of files) total += fileSize(p)
+        await walk(dir, files, walkOpts)
+        for (const p of files) total += await fileSize(p)
+        counter.n += files.length
+        bump()
       }
     } catch {
       /* non-fatal */
     }
     breakdownItems.push({ label, bytes: total })
   }
-  measure('Instances', paths.instances)
-  measure('Launcher data', path.join(paths.data, 'games'))
-  measure('Downloads & cache', paths.updates)
-  measure('Temporary', path.join(paths.data, 'tmp'))
-  measure('Logs', paths.logs)
-  measure('Profiles & backups', path.join(paths.data, 'profiles'))
+  for (const [label, dir] of [
+    ['Instances', paths.instances],
+    ['Launcher data', path.join(paths.data, 'games')],
+    ['Downloads & cache', paths.updates],
+    ['Temporary', path.join(paths.data, 'tmp')],
+    ['Logs', paths.logs],
+    ['Profiles & backups', path.join(paths.data, 'profiles')]
+  ] as const) {
+    await measure(label, dir)
+  }
 
   const recoverableBytes = items.filter((i) => i.autoSelected).reduce((s, i) => s + i.sizeBytes, 0)
-  logger.info('Clear Up Space scan: ' + scannedFiles + ' files scanned, ' + items.length + ' candidate(s), ' + (recoverableBytes / 1e6).toFixed(0) + ' MB auto-recoverable')
+  onProgress?.({ scannedFiles: counter.n, currentDir: '' })
+  logger.info('Clear Up Space scan: ' + counter.n + ' files scanned, ' + items.length + ' candidate(s), ' + (recoverableBytes / 1e6).toFixed(0) + ' MB auto-recoverable')
 
   return {
     items,
     recoverableBytes,
     breakdown: breakdownItems,
-    scannedFiles,
+    scannedFiles: counter.n,
     ranAt
   }
 }

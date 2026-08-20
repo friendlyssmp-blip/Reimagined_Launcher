@@ -842,9 +842,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   // v1.0.92 — Clear Up Space: scan storage, then clean a selection.
+  // v2.1.2 — the scan is fully async now and streams real progress to the
+  // renderer instead of blocking the main process (the old sync walk froze
+  // the launcher as "Not Responding" and left the counter at 0 files).
   on(IPC.storageScan, async () => {
     const { scanStorage } = await import('./system/cleaner')
-    return scanStorage()
+    return scanStorage((p) => eventBus.emit('storage:progress', p))
   })
   on(IPC.storageClean, async (payload: { ids: string[] } = { ids: [] }) => {
     const { cleanSelected } = await import('./system/cleaner')

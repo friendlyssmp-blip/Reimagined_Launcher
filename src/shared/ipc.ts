@@ -237,6 +237,7 @@ export type AppEventType =
   | 'share:deep-link'
   | 'system:info'
   | 'streaming:changed'
+  | 'storage:progress'
 
 export interface AppEvent {
   type: AppEventType

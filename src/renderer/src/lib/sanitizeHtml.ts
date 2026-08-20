@@ -42,6 +42,14 @@ export function sanitizeHtml(html: string): string {
       if (tag === 'img' && name === 'src' && !SAFE_URL.test(val)) { el.removeAttribute(attr.name); continue }
       if (tag === 'img' && !['src', 'alt', 'title', 'width', 'height'].includes(name)) { el.removeAttribute(attr.name); continue }
       if (tag === 'a' && !['href', 'title', 'target', 'rel'].includes(name)) { el.removeAttribute(attr.name); continue }
+      // v2.1.2 — every link must open in the SYSTEM browser, never navigate
+      // the launcher in place (that stranded users on an external page with
+      // no back button). Force target=_blank + rel so the main window's
+      // setWindowOpenHandler routes it to shell.openExternal.
+      if (tag === 'a') {
+        el.setAttribute('target', '_blank')
+        el.setAttribute('rel', 'noopener noreferrer')
+      }
       if (tag !== 'a' && tag !== 'img' && name !== 'title') el.removeAttribute(attr.name)
     }
     for (const child of Array.from(el.childNodes)) {

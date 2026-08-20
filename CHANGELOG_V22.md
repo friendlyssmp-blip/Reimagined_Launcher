@@ -1,3 +1,33 @@
+## v2.1.2 - Storage scan no longer freezes the launcher + duplicate mods healed on disk + external links open in the browser
+
+### Clear Up Space no longer freezes the launcher ("Not Responding")
+
+- The storage scan previously ran every file-operation synchronously on the
+  main process thread, so a large data directory blocked the whole launcher as
+  "Not Responding" and the file counter sat at "0 files" until the very end.
+- The entire scan is now fully asynchronous (fs/promises with periodic
+  event-loop yields), so it can never block the UI.
+- The renderer streams **real-time progress** (files counted + the current
+  directory being scanned) instead of a frozen counter.
+
+### Duplicate mods in Installed are now healed permanently
+
+- The installed-mods list could show the same mod several times (real case:
+  "Better Block Entities" listed twice). The old dedupe collapsed them in
+  memory but never wrote the fix back to disk, so they reappeared on restart.
+- Now every reconciliation (removed-missing, dedupe, unlinked-item demotion)
+  is persisted to the profile, so on-disk duplicates are cured once and for all.
+
+### External links open in the system browser, never stranded in-app
+
+- Links inside CurseForge/Modrinth descriptions (and fixed detail links like
+  Report issues / View source / Discord) could navigate the launcher in place,
+  showing an external page with no back button. All sanitized anchors now
+  force `target=_blank` + `rel=noopener noreferrer`.
+- Added a `will-navigate` safety net in the main window that catches any
+  in-place navigation to an external http(s) site and opens it in the default
+  browser instead.
+
 ## v2.1.1 - Keybinds grouped by their real mod + false-update fix (Physics Mod Pro) + polish pass
 
 ### Keybinds — every keybind now lives in its real mod's category

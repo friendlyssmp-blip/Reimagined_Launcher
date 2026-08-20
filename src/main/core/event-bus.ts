@@ -62,7 +62,8 @@ class EventBus {
       'launch:fabric-mismatch': true,
       'share:deep-link': true,
       'system:info': true,
-      'streaming:changed': true
+      'streaming:changed': true,
+      'storage:progress': true
     }
   }
 }

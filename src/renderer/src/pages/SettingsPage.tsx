@@ -1290,6 +1290,9 @@ function StorageSection() {
   const { notify } = useApp()
   const [scan, setScan] = useState<StorageScanResult | null>(null)
   const [scanning, setScanning] = useState(false)
+  /* v2.1.2 — live scan progress: the main process streams (files, dir) as it
+     walks so the counter ticks up in real time instead of staying at 0. */
+  const [liveProgress, setLiveProgress] = useState<{ scannedFiles: number; currentDir: string } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [cleaning, setCleaning] = useState(false)
   const [result, setResult] = useState<StorageCleanResult | null>(null)
@@ -1297,9 +1300,11 @@ function StorageSection() {
   const runScan = async (): Promise<void> => {
     setScanning(true)
     setResult(null)
+    setLiveProgress(null)
     try {
       const s = await api.system.scanStorage()
       setScan(s)
+      setLiveProgress(null)
       // Auto-select only items with confidence >= 90.
       setSelected(new Set(s.items.filter((i) => i.autoSelected).map((i) => i.id)))
     } catch (err) {
@@ -1310,7 +1315,13 @@ function StorageSection() {
   }
 
   useEffect(() => {
+    const off = api.onEvent((e: { type: string; payload?: unknown }) => {
+      if (e.type === 'storage:progress') {
+        setLiveProgress(e.payload as { scannedFiles: number; currentDir: string })
+      }
+    })
     void runScan()
+    return () => off()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1384,7 +1395,12 @@ function StorageSection() {
 
       {scanning && (
         <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-2)' }}>
-          <Spinner /> Scanning Reimagined storage… ({scan?.scannedFiles ?? 0} files)
+          <Spinner /> Scanning Reimagined storage… ({liveProgress?.scannedFiles ?? scan?.scannedFiles ?? 0} files)
+          {liveProgress?.currentDir && (
+            <span style={{ fontSize: 11.5, color: 'var(--text-3)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              · {liveProgress.currentDir}
+            </span>
+          )}
         </div>
       )}
 

@@ -1,8 +1,8 @@
 {
-  "version": "2.1.1",
-  "installer": "dist/Reimagined-Setup-2.1.1.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.1.exe",
-  "sha256": "c9a9b8830e59e13f03d01cde5217d651cd849f376d76b0134f840b34d46fd719",
-  "notes": "Keybinds are now grouped by their real mod (Xaero's Minimap, Xaero's World Map, Voice Chat, Jade, Physics Mod, Essential, Iris...) with no raw key ids anywhere. False-update fix: Physics Mod Pro can no longer be mistaken for the free Physics Mod (manual installs only link by exact SHA-1; wrongly-linked items are healed automatically and unlinked installs never get an update badge). Downloads show the real project cover art for version-specific installs and modpacks. Credits > About has Open Folder / Copy Path on the data directory. Performance settings: recommended RAM and sessions-learned are separated so the numbers can't be confused, explanations are cleaner, and tier reasons got a 'Why this profile' header. Title-bar music player: bigger volume hitbox and more comfortable spacing. Launch state can never stick on 'Launching...': it resets on every fresh start and a 3-minute watchdog returns to idle if the game never appears.",
-  "publishedAt": "2026-08-20T15:30:00+00:00"
+  "version": "2.1.2",
+  "installer": "dist/Reimagined-Setup-2.1.2.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.2.exe",
+  "sha256": "b582fd03598fc82e8a1ac6cd644a4300a9bee857af8a76db716076737e43f867",
+  "notes": "Clear Up Space no longer freezes the whole launcher ('Not Responding'): the storage scan is now fully async with real-time progress (files counted + current directory) instead of blocking the main thread and sitting at '0 files'. Duplicate mods in Installed are now healed permanently on disk (real case: Better Block Entities listed twice) — the dedupe used to collapse in-memory only and re-appeared on restart, now any reconciliation is persisted. External links (CurseForge/Modrinth descriptions, Report issues / View source / Discord) now always open in the system browser with a will-navigate safety net — no more being stranded on an external page inside the launcher with no back button.",
+  "publishedAt": "2026-08-20T16:45:00+00:00"
 }

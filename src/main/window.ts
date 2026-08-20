@@ -42,6 +42,20 @@ export function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  // v2.1.2 — safety net: catch any navigation happening IN PLACE (a link that
+  // slipped through without target=_blank would otherwise replace the SPA with
+  // an external site and leave the user stranded with no back button). Any
+  // http(s) navigation away from the app is redirected to the system browser
+  // and blocked in-window. The packaged app loads from file:// (dev loads from
+  // the local dev server URL), so external web origins are always external.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    const isLocal = url.startsWith('file://') || (devUrl ? url.startsWith(devUrl) : false)
+    if (isLocal) return
+    event.preventDefault()
+    if (url.startsWith('http://') || url.startsWith('https://')) void shell.openExternal(url)
+  })
+
   mainWindow.on('maximize', () => mainWindow?.webContents.send('reimagined:maximized', true))
   mainWindow.on('unmaximize', () => mainWindow?.webContents.send('reimagined:maximized', false))
 
