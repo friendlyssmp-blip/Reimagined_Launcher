@@ -1,8 +1,8 @@
 {
-  "version": "2.0.4",
-  "installer": "dist/Reimagined-Setup-2.0.4.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.0.4.exe",
-  "sha256": "b6290e99f0799356599e89fea233b6028940b8a9f8690d10f5661ae9af64e863",
-  "notes": "The fragmented Reimagined R next to player nametags is gone \u2014 the nametag branding code was fully removed from the FPS Boost mod (now v1.0.37, rebuilt for 26.1 and 26.2). All FPS, save, reload and GC fixes stay exactly as they were.",
-  "publishedAt": "2026-08-18T16:22:00+00:00"
+  "version": "2.1.0",
+  "installer": "dist/Reimagined-Setup-2.1.0.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.0.exe",
+  "sha256": "01c17709beec4ef856d4dc5c65b23e7450a7e96a8d108dc58b89ec780390a598",
+  "notes": "Keybinds manager (System section): reads your instance's real in-game keybinds incl. mod keybinds, click-to-rebind, apply-to-all, save-as-default for new instances. Servers: Minemen, PvP HQ, MCTiers, BlocksMC, Lunar, Hoplite, VeltPvP and Purple Prison added, and your favorite servers now auto-seed into every new instance. Update All: skip is a real checkbox, update downloads show the mod's cover art, update checks stop offering pre-release alphas, and a signature-validated cache means the update count can never get stuck. Settings: removed the fake Clear download cache button (use Storage -> Clear Up Space).",
+  "publishedAt": "2026-08-20T14:15:00+00:00"
 }

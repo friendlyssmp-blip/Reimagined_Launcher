@@ -872,6 +872,32 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     const { fpsTestReportPath } = await import('./benchmark/fps-test')
     return fpsTestReportPath()
   })
+
+  /* ------------------------- Keybinds (v2.1.0) ------------------------- */
+
+  on(IPC.keybindList, (profileId: string) =>
+    import('./instances/keybinds').then((m) => m.keybindsService.listKeybinds(String(profileId ?? '')))
+  )
+  on(IPC.keybindSet, (p) =>
+    import('./instances/keybinds').then((m) =>
+      m.keybindsService.setKeybind(String(p?.profileId ?? ''), String(p?.key ?? ''), String(p?.value ?? ''))
+    )
+  )
+  on(IPC.keybindApplyAll, (profileId: string) =>
+    import('./instances/keybinds').then((m) => m.keybindsService.applyKeybindsToAll(String(profileId ?? '')))
+  )
+  on(IPC.keybindSaveTemplate, (profileId: string) =>
+    import('./instances/keybinds').then((m) => m.keybindsService.saveTemplate(String(profileId ?? '')))
+  )
+  on(IPC.keybindOpenFolder, async (profileId: string) => {
+    const { shell } = await import('electron')
+    const { keybindsService } = await import('./instances/keybinds')
+    const { instancePath } = await import('./instances/paths')
+    const profile = await profileManager.get(String(profileId ?? ''))
+    if (!profile) return false
+    shell.openPath(instancePath(profile))
+    return true
+  })
   on(IPC.fpsTestOpenReport, async (payload: { path?: string } = {}) => {
     const { shell } = await import('electron')
     const { fpsTestReportPath } = await import('./benchmark/fps-test')

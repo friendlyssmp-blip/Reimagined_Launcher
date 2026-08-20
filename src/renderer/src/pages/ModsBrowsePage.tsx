@@ -16,6 +16,7 @@ import { api, friendlyError } from '../lib/api'
 import { ProjectDetail } from '../components/ProjectDetail'
 import { PickInstanceModal, type PickTarget } from '../components/PickInstanceModal'
 import { SearchableSelect } from '../components/SearchableSelect'
+import { useT } from '../lib/i18n'
 import { ModIcon } from '../components/ModIcon'
 import { IconPuzzle, IconDownload, IconGlobe } from '../components/icons'
 import type { ModrinthSearchResult } from '@shared/types'
@@ -55,6 +56,7 @@ const PAGE_SIZE = 24
 
 export function ModsBrowsePage() {
   const { notify } = useApp()
+  const t = useT()
   const [provider, setProvider] = useState<Provider>('modrinth')
   const [browseType, setBrowseType] = useState<BrowseType>('mod')
   const [mcVersion, setMcVersion] = useState('')
@@ -346,14 +348,14 @@ export function ModsBrowsePage() {
           options={mcVersions}
           value={mcVersion}
           onChange={(v) => setMcVersion(v)}
-          firstOption="Any Minecraft version"
+          firstOption={t('filter.anyMinecraftVersion')}
           firstValue=""
           placeholder="Search versions…"
           className="sort-select"
         />
         {isMod && (
           <select className="select sort-select" value={loader} onChange={(e) => setLoader(e.target.value as LoaderFilter)} title="Filter by loader">
-            <option value="any">Any loader</option>
+            <option value="any">{t('filter.anyLoader')}</option>
             <option value="fabric">Fabric</option>
             <option value="forge">Forge</option>
           </select>

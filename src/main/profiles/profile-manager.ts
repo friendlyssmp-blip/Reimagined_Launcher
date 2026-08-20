@@ -111,6 +111,22 @@ class ProfileManager {
       await writeJson(this.file(id), profile)
       this.cache.set(id, profile)
 
+      // v2.1.0 — a brand-new instance starts with the user's world already:
+      // favorite servers land in servers.dat and the saved default keybind
+      // layout lands in options.txt (both no-ops when nothing was saved yet).
+      try {
+        const { seedFavoritesToInstance } = await import('../servers/servers')
+        await seedFavoritesToInstance(instanceRoot)
+      } catch (err) {
+        logger.warn('Could not seed favorite servers: ' + (err as Error).message)
+      }
+      try {
+        const { seedKeybindTemplate } = await import('../instances/keybinds')
+        seedKeybindTemplate(instanceRoot)
+      } catch (err) {
+        logger.warn('Could not seed default keybinds: ' + (err as Error).message)
+      }
+
       // Fabric profiles get the Fabric API mod automatically so they are
       // immediately playable — this also gives the create progress bar real
       // work to show (download step).

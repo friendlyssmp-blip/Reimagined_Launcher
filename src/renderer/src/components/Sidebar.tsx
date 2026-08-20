@@ -12,6 +12,7 @@ import {
   IconLog,
   IconPuzzle,
   IconGlobe,
+  IconKeyboard,
   IconChevronLeft,
   IconChevronRight
 } from './icons'
@@ -60,6 +61,8 @@ const navSections: NavSection[] = [
     labelKey: 'nav.system',
     items: [
       { id: 'settings', labelKey: 'nav.settings', icon: IconSettings },
+      /* v2.1.0 — in-game keybinds manager (reads/writes each instance's options.txt) */
+      { id: 'keybinds', labelKey: 'nav.keybinds', icon: IconKeyboard },
       { id: 'account', labelKey: 'nav.account', icon: IconUser }
     ]
   }

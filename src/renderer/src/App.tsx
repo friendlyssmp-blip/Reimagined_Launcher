@@ -35,6 +35,7 @@ import { ServersPage } from './pages/ServersPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { DownloadsPage } from './pages/DownloadsPage'
 import { LogsPage } from './pages/LogsPage'
+import { KeybindsPage } from './pages/KeybindsPage'
 import { AccountPage } from './pages/AccountPage'
 
 /* Launcher navigation — global destinations at the top level, content
@@ -51,6 +52,7 @@ export type Page =
   | 'settings'
   | 'account'
   | 'logs'
+  | 'keybinds'
 
 function Shell() {
   const { ready, modals, theme, settings, setModals, account, closeContent, popContent, contentStack, updateSettings, activeProfile, running } = useApp()
@@ -395,6 +397,7 @@ function Shell() {
               {page === 'settings' && <SettingsPage />}
               {page === 'downloads' && <DownloadsPage />}
               {page === 'logs' && <LogsPage />}
+              {page === 'keybinds' && <KeybindsPage />}
               {page === 'account' && <AccountPage onNavigate={navigate} />}
             </div>
           </ErrorBoundary>

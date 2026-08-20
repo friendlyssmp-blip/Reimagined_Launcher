@@ -199,6 +199,8 @@ interface RawModrinthVersion {
   files?: { filename: string; url: string; size: number }[]
   date_published: string
   project_id?: string
+  /* v2.1.0 — release channel: 'release' | 'beta' | 'alpha'. */
+  version_type?: string
 }
 
 /** Normalize a raw API version into the camelCase ModrinthVersion shape. The
@@ -214,6 +216,22 @@ function toModrinthVersion(v: RawModrinthVersion): ModrinthVersion {
     datePublished: v.date_published ?? '',
     projectId: v.project_id
   }
+}
+
+/* v2.1.0 — STABLE-FIRST ordering. The version list endpoint returns newest
+ * by date, which puts alpha/beta builds ahead of the actual stable release.
+ * That made the Update badge flag mods whose only "newer" file is a
+ * pre-release (e.g. Sodium flagging mc26.2-0.9.2-alpha.4 over the installed
+ * stable) — and, worse, "Update All" would install those alphas. pickStable
+ * prefers the newest RELEASE, then the newest BETA, and only falls back to
+ * an alpha when that is all that exists for the version. */
+function pickStable(versions: RawModrinthVersion[]): RawModrinthVersion | null {
+  if (!versions.length) return null
+  const release = versions.find((v) => (v.version_type ?? 'release') === 'release')
+  if (release) return release
+  const beta = versions.find((v) => v.version_type === 'beta')
+  if (beta) return beta
+  return versions[0]
 }
 
 /**
@@ -242,13 +260,15 @@ export async function latestVersionFor(
     headers: headers(),
     timeoutMs: 15_000
   })
-  if (versions.length > 0) return toModrinthVersion(versions[0])
+  const matched = pickStable(versions)
+  if (matched) return toModrinthVersion(matched)
   // Fallback: any version matching the MC version regardless of loader.
   const relaxed = await apiGet<RawModrinthVersion[]>(
     `${API}/project/${projectId}/version?game_versions=${encodeURIComponent(JSON.stringify([mcVersion]))}`,
     { headers: headers(), timeoutMs: 15_000 }
   )
-  return relaxed[0] ? toModrinthVersion(relaxed[0]) : null
+  const relaxedMatch = pickStable(relaxed)
+  return relaxedMatch ? toModrinthVersion(relaxedMatch) : null
 }
 
 interface FullProjectResponse {

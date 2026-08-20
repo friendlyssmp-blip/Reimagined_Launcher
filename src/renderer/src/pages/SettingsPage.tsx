@@ -421,13 +421,12 @@ export function SettingsPage() {
               <div className="panel">
                 <div className="panel-title">Cache</div>
                 <p className="panel-sub">Version, library and asset download behavior</p>
-                <div className="row" style={{ marginTop: 8 }}>
-                  <Button onClick={() => notify('info', 'Download cache', 'All Minecraft files are cached in data/games for reuse across profiles.')}>
-                    Clear download cache
-                  </Button>
-                </div>
-                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 14, lineHeight: 1.5 }}>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
                   Files already downloaded are skipped on future installs, so reinstalling versions is instant.
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
+                  To free disk space safely, use <b>Settings → Storage → Clear Up Space</b> — it scans caches,
+                  duplicate downloads and temporary files, and only deletes what you confirm.
                 </p>
               </div>
             </>

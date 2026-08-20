@@ -279,13 +279,13 @@ export function ModpacksPage() {
                 options={mcVersions}
                 value={mcFilter}
                 onChange={setMcFilter}
-                firstOption="Any Minecraft version"
+                firstOption={t('filter.anyMinecraftVersion')}
                 firstValue="any"
                 placeholder="Search versions…"
                 className="sort-select"
               />
               <select className="select sort-select" value={loaderFilter} onChange={(e) => setLoaderFilter(e.target.value as typeof loaderFilter)} title="Loader">
-                <option value="any">Any loader</option>
+                <option value="any">{t('filter.anyLoader')}</option>
                 <option value="fabric">Fabric</option>
                 <option value="forge">Forge</option>
               </select>

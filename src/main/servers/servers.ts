@@ -257,7 +257,32 @@ export const SERVER_DIRECTORY: DirectoryServer[] = [
     tags: ['survival', 'oneblock', 'skyblock', 'ranks'] },
   { id: 'autumn', name: 'AutumnMC', address: 'play.autumnmc.com', category: 'Survival',
     description: 'Semi-vanilla survival with land claims, player shops and events.',
-    tags: ['survival', 'smp', 'claims', 'vanilla'] }
+    tags: ['survival', 'smp', 'claims', 'vanilla'] },
+  /* v2.1.0 — the big PvP / practice networks the directory was missing */
+  { id: 'minemen', name: 'Minemen Club', address: 'minemen.club', category: 'Minigames',
+    description: 'The biggest competitive practice PvP server - Sumo, Boxing, BedFight, BuildUHC and 1v1 queues with elo.',
+    tags: ['pvp', 'practice', '1v1', 'sumo', 'boxing', 'elo'] },
+  { id: 'pvphq', name: 'PvP HQ', address: 'pvphq.com', category: 'Minigames',
+    description: 'US-based practice PvP network - Bridge, Sumo, Parkour and FFA on 1.8 combat.',
+    tags: ['pvp', 'practice', 'bridge', 'ffa', 'sumo'] },
+  { id: 'mctiers', name: 'MCTiers', address: 'mctiers.com', category: 'Minigames',
+    description: 'LatAm practice PvP server - Sumo, Boxing, Bridge, Parkour and 1v1 ladders.',
+    tags: ['pvp', 'practice', 'latam', 'sumo', 'boxing', 'bridge'] },
+  { id: 'blocksmc', name: 'BlocksMC', address: 'blocksmc.com', category: 'Minigames',
+    description: 'Big minigame network - BedWars, SkyWars, Lifesteal SMP and classic games.',
+    tags: ['bedwars', 'skywars', 'lifesteal', 'minigames', 'pvp'] },
+  { id: 'lunar', name: 'Lunar Network', address: 'play.lunar.gg', category: 'Minigames',
+    description: 'Lunar client\'s network - BedWars, KitMap, UHC Champions and practice modes.',
+    tags: ['bedwars', 'kitmap', 'uhc', 'practice', 'pvp'] },
+  { id: 'hoplite', name: 'Hoplite', address: 'hoplite.gg', category: 'Minigames',
+    description: '1.8 competitive PvP server - Arena duels, ladder matches and tournaments.',
+    tags: ['pvp', '1.8', 'duels', 'arena', 'tournaments'] },
+  { id: 'veltpvp', name: 'VeltPvP', address: 'play.veltpvp.com', category: 'Minigames',
+    description: 'HCF, KitMap and practice PvP - factions with a long competitive history.',
+    tags: ['hcf', 'kitmap', 'practice', 'factions', 'pvp'] },
+  { id: 'purpleprison', name: 'Purple Prison', address: 'purpleprison.net', category: 'Prison',
+    description: 'The classic prison server - mines, cellmates, gangs and daily events.',
+    tags: ['prison', 'mines', 'gangs', 'economy'] }
 ]
 
 export function discoverServers(query?: string, category?: string): DirectoryServer[] {
@@ -281,7 +306,7 @@ const CATEGORY_KEYWORDS: [DirectoryServer['category'], string[]][] = [
   ['Skyblock', ['skyblock', 'island', 'oneblock']],
   ['Anarchy', ['anarchy', '2b2t', 'constantiam', 'no-rules']],
   ['MMORPG', ['wynn', 'rpg', 'mmo', 'quest', 'dungeon']],
-  ['Minigames', ['bedwars', 'skywars', 'minigame', 'kitpvp', 'practice', 'eggwars', 'lifesteal']],
+  ['Minigames', ['bedwars', 'skywars', 'minigame', 'kitpvp', 'practice', 'eggwars', 'lifesteal', 'pvp', 'duel', 'sumo', 'bridge', 'boxing', 'uhc', 'hcf']],
   ['Prison', ['prison', 'cells', 'factions']],
   ['Creative', ['creative', 'build', 'plots']],
   ['Survival', ['survival', 'smp', 'towny', 'vanilla', 'claims']]
@@ -465,6 +490,35 @@ export function readServersDat(buf: Buffer): InstalledServerEntry[] {
   return out
 }
 
+/**
+ * v2.1.0 — seed a freshly-created instance with the user's favorite servers
+ * (launcher-level, shared by every instance) so favorites are instantly in
+ * the in-game multiplayer list of any new instance.
+ */
+export async function seedFavoritesToInstance(gameDir: string): Promise<number> {
+  const favs = settingsManager.get().servers ?? []
+  if (!favs.length) return 0
+  const serversDat = path.join(gameDir, 'servers.dat')
+  let servers: InstalledServerEntry[] = []
+  try {
+    if (fs.existsSync(serversDat)) servers = readServersDat(fs.readFileSync(serversDat))
+  } catch {
+    servers = []
+  }
+  const existing = new Set(servers.map((s) => s.address))
+  let added = 0
+  for (const f of favs) {
+    if (existing.has(f.address)) continue
+    servers.push({ name: f.name, address: f.address })
+    added++
+  }
+  if (added > 0) {
+    fs.mkdirSync(path.dirname(serversDat), { recursive: true })
+    fs.writeFileSync(serversDat, buildServersDat(servers))
+  }
+  return added
+}
+
 /** Write a server into an instance's servers.dat so it appears in-game. */
 export async function installToInstance(profileId: string, address: string, name?: string): Promise<InstallServerResult> {
   const profile = await profileManager.get(profileId)
@@ -488,4 +542,4 @@ export async function installToInstance(profileId: string, address: string, name
   return { installed, total: servers.length, gameDir: profile.gameDir }
 }
 
-export const serversService = { pingServer, addFavorite, removeFavorite, recordRecent, joinServer, parseAddress, discoverServers, recommendServers, installToInstance, buildServersDat, readServersDat }
+export const serversService = { pingServer, addFavorite, removeFavorite, recordRecent, joinServer, parseAddress, discoverServers, recommendServers, installToInstance, seedFavoritesToInstance, buildServersDat, readServersDat }

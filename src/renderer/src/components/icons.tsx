@@ -52,6 +52,13 @@ export const IconPlay = (p: P) => (
   </svg>
 )
 
+export const IconKeyboard = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6" />
+  </svg>
+)
+
 export const IconStop = (p: P) => (
   <svg {...base(p)}>
     <rect x="5" y="5" width="14" height="14" rx="2" />

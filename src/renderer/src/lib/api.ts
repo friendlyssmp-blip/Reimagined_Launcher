@@ -33,7 +33,8 @@ import type {
   InstallServerResult,
   StorageScanResult,
   StorageCleanResult,
-  FpsTestStatus
+  FpsTestStatus,
+  KeybindEntry
 } from '@shared/types'
 import type { AppEvent } from '@shared/ipc'
 
@@ -110,6 +111,19 @@ export const api = {
       }>(window.reimagined.fpsTest.results()),
     reportPath: () => unwrap<string | null>(window.reimagined.fpsTest.reportPath()),
     openReport: (path?: string) => unwrap<boolean>(window.reimagined.fpsTest.openReport(path))
+  },
+  /** v2.1.0 — Keybinds (System section). */
+  keybinds: {
+    list: (profileId: string) =>
+      unwrap<KeybindEntry[]>(window.reimagined.keybinds.list(profileId)),
+    set: (profileId: string, key: string, value: string) =>
+      unwrap<KeybindEntry[]>(window.reimagined.keybinds.set({ profileId, key, value })),
+    applyAll: (profileId: string) =>
+      unwrap<{ applied: string[] }>(window.reimagined.keybinds.applyAll(profileId)),
+    saveTemplate: (profileId: string) =>
+      unwrap<{ count: number }>(window.reimagined.keybinds.saveTemplate(profileId)),
+    openFolder: (profileId: string) =>
+      unwrap<boolean>(window.reimagined.keybinds.openFolder(profileId))
   },
   dialog: {
     pickJava: () => unwrap<string | null>(window.reimagined.dialog.pickJava()),

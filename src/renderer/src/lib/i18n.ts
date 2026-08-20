@@ -45,6 +45,7 @@ const en: Record<string, string> = {
   'nav.account': 'Account',
   'nav.servers': 'Servers',
   'nav.logs': 'Logs',
+  'nav.keybinds': 'Keybinds',
 
   /* page titles */
   'page.home': 'Home',
@@ -57,6 +58,7 @@ const en: Record<string, string> = {
   'page.account': 'Account',
   'page.servers': 'Servers',
   'page.logs': 'Logs',
+  'page.keybinds': 'Keybinds',
   'page.home.sub': 'Welcome back',
   'page.instances.sub': 'Your Minecraft worlds',
   'page.mods.sub': 'Discover and manage content',
@@ -65,6 +67,27 @@ const en: Record<string, string> = {
   'page.settings.sub': 'Launcher configuration',
   'page.account.sub': 'Your account, your launcher',
   'page.servers.sub': 'Join your favorite servers',
+  'page.keybinds.sub': 'Your in-game keybinds, everywhere',
+
+  /* filters — kept identical across sections so every version picker reads the same */
+  'filter.anyMinecraftVersion': 'Any Minecraft version',
+  'filter.anyLoader': 'Any loader',
+
+  /* keybinds page (v2.1.0) */
+  'kb.activeProfile': 'Active instance',
+  'kb.searchPlaceholder': 'Search keybinds…',
+  'kb.unbound': 'Unbound',
+  'kb.clickToRebind': 'Click to change',
+  'kb.pressKey': 'Press a key… (Esc to clear)',
+  'kb.applyAll': 'Apply to all instances',
+  'kb.applyAllDone': 'Keybinds applied',
+  'kb.saveTemplate': 'Save as default for new instances',
+  'kb.templateSaved': 'Default keybinds saved',
+  'kb.noProfile': 'Select an instance to manage its keybinds.',
+  'kb.notFound': 'No keybinds found in this instance yet. Launch the game once and its controls will appear here.',
+  'kb.other': 'Other',
+  'kb.openFolder': 'Open instance folder',
+  'kb.changesApply': "Changes write directly into this instance's options.txt — the exact file Minecraft reads at startup.",
 
   /* common actions */
   'action.install': 'Install',
@@ -254,6 +277,7 @@ const es: Record<string, string> = {
   'nav.account': 'Cuenta',
   'nav.servers': 'Servidores',
   'nav.logs': 'Registros',
+  'nav.keybinds': 'Teclas',
   'page.home': 'Inicio',
   'page.play': 'Jugar',
   'page.instances': 'Instancias',
@@ -412,7 +436,25 @@ const es: Record<string, string> = {
   'misc.profile': 'Perfil',
   'misc.searchPlaceholder': 'Buscar…',
   'misc.off': 'Apagado',
-  'misc.on': 'Encendido'
+  'misc.on': 'Encendido',
+  'page.keybinds': 'Teclas',
+  'page.keybinds.sub': 'Tus teclas del juego, en todas partes',
+  'filter.anyMinecraftVersion': 'Cualquier versión de Minecraft',
+  'filter.anyLoader': 'Cualquier loader',
+  'kb.activeProfile': 'Instancia activa',
+  'kb.searchPlaceholder': 'Buscar teclas…',
+  'kb.unbound': 'Sin asignar',
+  'kb.clickToRebind': 'Clic para cambiar',
+  'kb.pressKey': 'Pulsa una tecla… (Esc para borrar)',
+  'kb.applyAll': 'Aplicar a todas las instancias',
+  'kb.applyAllDone': 'Teclas aplicadas',
+  'kb.saveTemplate': 'Guardar como predeterminadas para nuevas instancias',
+  'kb.templateSaved': 'Teclas predeterminadas guardadas',
+  'kb.noProfile': 'Selecciona una instancia para gestionar sus teclas.',
+  'kb.notFound': 'Aún no hay teclas en esta instancia. Inicia el juego una vez y sus controles aparecerán aquí.',
+  'kb.other': 'Otros',
+  'kb.openFolder': 'Abrir carpeta de la instancia',
+  'kb.changesApply': 'Los cambios se escriben directamente en el options.txt de esta instancia — el mismo archivo que Minecraft lee al iniciar.'
 }
 
 /* ------------------------------------------------------------------ fr -- */
@@ -449,6 +491,7 @@ const fr: Record<string, string> = {
   'nav.account': 'Compte',
   'nav.servers': 'Serveurs',
   'nav.logs': 'Journaux',
+  'nav.keybinds': 'Touches',
   'page.home': 'Accueil',
   'page.play': 'Jouer',
   'page.instances': 'Instances',
@@ -607,7 +650,25 @@ const fr: Record<string, string> = {
   'misc.profile': 'Profil',
   'misc.searchPlaceholder': 'Rechercher…',
   'misc.off': 'Désactivé',
-  'misc.on': 'Activé'
+  'misc.on': 'Activé',
+  'page.keybinds': 'Touches',
+  'page.keybinds.sub': 'Vos touches de jeu, partout',
+  'filter.anyMinecraftVersion': 'Toute version de Minecraft',
+  'filter.anyLoader': 'Tout loader',
+  'kb.activeProfile': 'Instance active',
+  'kb.searchPlaceholder': 'Rechercher des touches…',
+  'kb.unbound': 'Non assignée',
+  'kb.clickToRebind': 'Cliquer pour changer',
+  'kb.pressKey': 'Appuyez sur une touche… (Échap pour effacer)',
+  'kb.applyAll': 'Appliquer à toutes les instances',
+  'kb.applyAllDone': 'Touches appliquées',
+  'kb.saveTemplate': 'Enregistrer par défaut pour les nouvelles instances',
+  'kb.templateSaved': 'Touches par défaut enregistrées',
+  'kb.noProfile': 'Sélectionnez une instance pour gérer ses touches.',
+  'kb.notFound': 'Aucune touche dans cette instance pour le moment. Lancez le jeu une fois et ses contrôles apparaîtront ici.',
+  'kb.other': 'Autres',
+  'kb.openFolder': 'Ouvrir le dossier de l\'instance',
+  'kb.changesApply': 'Les modifications s\'écrivent directement dans le options.txt de cette instance — le même fichier que Minecraft lit au démarrage.'
 }
 
 const dict: Record<AppLanguage, Record<string, string>> = { en, es, fr }

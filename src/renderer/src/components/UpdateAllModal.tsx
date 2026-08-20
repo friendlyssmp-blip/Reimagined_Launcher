@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Modal, Button, Spinner, Toggle, Badge } from './ui'
+import { Modal, Button, Spinner, Badge } from './ui'
 import { ModIcon } from './ModIcon'
 import { IconCheck } from './icons'
 import type { ProfileMod } from '@shared/types'
@@ -138,9 +138,48 @@ export function UpdateAllModal({
                       <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Queued</span>
                     )
                   ) : (
-                    <div title={skipped ? 'Skip this update (already skipped)' : 'Skip this update — keep the current version'}>
-                      <Toggle checked={skipped} onChange={() => toggleSkip(m.slug)} label="Skip" />
-                    </div>
+                    /* v2.1.0 — Skip is a real checkbox: one click marks it (no
+                       toggle switch), so the row reads at a glance which items
+                       are kept on their current version. */
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={skipped}
+                      onClick={() => toggleSkip(m.slug)}
+                      title={skipped ? 'Include this update again' : 'Skip this update — keep the current version'}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        border: '1px solid ' + (skipped ? 'var(--accent-3)' : 'var(--border)'),
+                        background: skipped ? 'var(--accent-soft, rgba(139,92,246,0.12))' : 'transparent',
+                        color: skipped ? 'var(--accent-3)' : 'var(--text-3)',
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'border-color 120ms ease, background 120ms ease, color 120ms ease'
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: 4,
+                          border: '1px solid ' + (skipped ? 'var(--accent-3)' : 'var(--border-strong)'),
+                          background: skipped ? 'var(--accent-3)' : 'var(--bg-2)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          flexShrink: 0
+                        }}
+                      >
+                        {skipped && <IconCheck style={{ width: 10, height: 10 }} />}
+                      </span>
+                      Skip
+                    </button>
                   )}
                 </div>
               </div>

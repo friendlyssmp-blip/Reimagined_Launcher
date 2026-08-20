@@ -199,7 +199,13 @@ export const IPC = {
   fpsTestCancel: 'fpstest:cancel',
   fpsTestResults: 'fpstest:results',
   fpsTestReportPath: 'fpstest:report-path',
-  fpsTestOpenReport: 'fpstest:open-report'
+  fpsTestOpenReport: 'fpstest:open-report',
+  // v2.1.0 — Keybinds (System section)
+  keybindList: 'keybinds:list',
+  keybindSet: 'keybinds:set',
+  keybindApplyAll: 'keybinds:apply-all',
+  keybindSaveTemplate: 'keybinds:save-template',
+  keybindOpenFolder: 'keybinds:open-folder'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

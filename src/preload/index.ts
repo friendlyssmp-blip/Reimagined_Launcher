@@ -211,6 +211,14 @@ const api = {
     scanStorage: (): Promise<unknown> => ipcRenderer.invoke(IPC.storageScan),
     cleanStorage: (ids: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.storageClean, { ids })
   },
+  // v2.1.0 — Keybinds (System section)
+  keybinds: {
+    list: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.keybindList, profileId),
+    set: (payload: { profileId: string; key: string; value: string }): Promise<unknown> => ipcRenderer.invoke(IPC.keybindSet, payload),
+    applyAll: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.keybindApplyAll, profileId),
+    saveTemplate: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.keybindSaveTemplate, profileId),
+    openFolder: (profileId: string): Promise<unknown> => ipcRenderer.invoke(IPC.keybindOpenFolder, profileId)
+  },
   // v1.0.92 — Run a FPS Test (Account)
   fpsTest: {
     list: (): Promise<unknown> => ipcRenderer.invoke(IPC.fpsTestList),

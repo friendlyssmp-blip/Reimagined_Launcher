@@ -31,6 +31,14 @@ import type {
   InstallWithDepsResult
 } from '@shared/types'
 
+/* v2.1.0 — update-check cache. The Installed panel re-opens often and a full
+ * sweep is one provider lookup per installed item; caching the result per
+ * profile (5 min TTL) makes re-opens instant. The cache is validated against
+ * a signature of the installed mods, so ANY install/update/remove changes the
+ * signature and the next check re-sweeps — stale badges are impossible. */
+const updateCheckCache = new Map<string, { at: number; signature: string }>()
+const UPDATE_CHECK_TTL = 5 * 60_000
+
 /** Map a project type to its folder inside the instance. */
 function folderFor(projectType: ProjectType): string {
   switch (projectType) {
@@ -997,6 +1005,11 @@ class ModManager {
    */
   async checkUpdates(profileId: string): Promise<ProfileMod[]> {
     const profile = await this.requireProfile(profileId)
+    const signature = (profile.mods ?? []).map((m) => `${m.slug}:${m.versionId ?? ''}`).join('|')
+    const cached = updateCheckCache.get(profileId)
+    if (cached && Date.now() - cached.at < UPDATE_CHECK_TTL && cached.signature === signature) {
+      return profile.mods ?? []
+    }
     let changed = false
     // v1.0.55 — bounded concurrency: profiles with 100+ mods would otherwise
     // fire 100+ simultaneous provider calls and get rate-limited (HTTP 429),
@@ -1065,6 +1078,14 @@ class ModManager {
       await profileManager.update(profileId, { mods: updatedMods })
       eventBus.emit('mods:changed', { profileId, action: 'updates-checked' })
     }
+    updateCheckCache.set(profileId, {
+      at: Date.now(),
+      signature: (updatedMods ?? []).map((m) => `${m.slug}:${m.versionId ?? ''}`).join('|')
+    })
+    updateCheckCache.set(profileId, {
+      at: Date.now(),
+      signature: (updatedMods ?? []).map((m) => `${m.slug}:${m.versionId ?? ''}`).join('|')
+    })
     return updatedMods
   }
 
@@ -1127,7 +1148,8 @@ class ModManager {
       logger.info(`Updating ${mod.title} → ${file.filename}`)
       await runDownloadBatch([{ url: file.url, dest: tmp, expectedSize: file.size }], {
         kind: 'mods',
-        label: `${mod.title} — ${newVersionNumber}`
+        label: `${mod.title} — ${newVersionNumber}`,
+        iconUrl: mod.iconUrl
       })
     } catch (err) {
       await remove(tmp).catch(() => {})
@@ -1504,7 +1526,8 @@ class ModManager {
     try {
       await runDownloadBatch([{ url: file.url, dest: tmp, expectedSize: file.size }], {
         kind: 'mods',
-        label: `${mod.title} — ${newVersionNumber}`
+        label: `${mod.title} — ${newVersionNumber}`,
+        iconUrl: mod.iconUrl
       })
     } catch (err) {
       await remove(tmp).catch(() => {})

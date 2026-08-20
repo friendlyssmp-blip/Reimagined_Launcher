@@ -1,12 +1,52 @@
-## v2.0.4 - Nametag "R" branding removed
+## v2.1.0 - Keybinds manager (System) + Update All fixes + bigger server directory
 
-The fragmented Reimagined "R" next to player nametags (introduced in mod v1.0.33) is gone
-entirely: the NametagR renderer, its NameTagFeatureRendererMixin and the RenderTypeAccessor
-helper were deleted from the mod, the mixins list is empty again, the config field and the
-in-game K-menu toggle were removed (existing configs ignore the leftover field), and the
-EN/ES lang keys were cleaned. The bundled mod is now v1.0.37 (jars rebuilt for 26.1 + 26.2,
-verified to contain no nametag code). Nothing else changed — all FPS/pipeline/save/reload
-fixes from v2.0.1-v2.0.3 stay exactly as they were.
+### Keybinds — a new System section that manages your REAL in-game keybinds
+
+- New **Keybinds** entry in the sidebar's System section. It reads the ACTIVE instance's
+own `options.txt` — the exact file Minecraft reads at startup — so every keybind appears
+there: vanilla controls AND keybinds added by mods (Xaero's, Jade, Physics Mod, MobVolume…
+55 mod keybinds detected in the Fabric -26.2- instance alone).
+- Names and categories are resolved from the game's language files: the built-in vanilla
+dictionary plus each installed mod's `assets/<modid>/lang/en_us.json` (unresolved keys get
+a clean prettified fallback — never a raw id).
+- Click any key to rebind it — press the new key (Esc clears it). Changes write straight
+into that instance's options.txt, so they survive restarts and apply the next time you play.
+- **Apply to all instances** copies the layout of the selected instance into every other one
+(one confirmation, since it overwrites their keybind lines).
+- **Save as default for new instances** stores the layout as the template every freshly
+created instance is seeded with — create a new instance and your keybinds are already there.
+- A search box filters across names, categories and bound keys; rows group by category with
+vanilla sections first (Movement, Gameplay, Inventory, Creative, Multiplayer, Miscellaneous).
+
+### Servers — the big networks are here + favorites follow you into new instances
+
+- Directory now includes **Minemen Club, PvP HQ, MCTiers, BlocksMC, Lunar Network, Hoplite,
+VeltPvP and Purple Prison** (plus PvP/practice keywords so Recommended matches PvP setups).
+- **Favorites auto-seed**: every new instance you create is born with your favorite servers
+already written into its servers.dat — they show up in the in-game multiplayer list without
+any extra step.
+
+### Update All / Update button — fixed for real
+
+- **Downloads cover art**: Update and Change Version downloads were the only paths that
+forgot to pass the mod's icon — the Downloads page showed a bare name with no cover. Now
+the real artwork follows every update, exactly like installs.
+- **No more pre-release trap**: update checks used the newest-by-date version, which could
+flag (and "Update All" would install) an alpha over the installed stable — e.g. Sodium
+offering mc26.2-0.9.2-alpha.4. Checks now prefer the newest stable release, then beta, and
+only fall back to an alpha when nothing else exists for that Minecraft version.
+- **Stale badge eliminated**: update sweeps are cached per instance (5 min) and the cache is
+validated against the installed mods' signatures — any install/update/remove invalidates it
+instantly, so "Update All" can never leave a phantom "6 mods to update" count behind.
+- **Skip is a real checkbox**: the per-row Skip in the Update All preview is now a proper
+click-to-mark checkbox (no more toggle switch), so it reads at a glance what stays behind.
+
+### Settings polish
+
+- Removed the fake "Clear download cache" button (it only showed a toast — it never cleared
+anything) and pointed users to the real **Storage → Clear Up Space** scanner.
+- Version/loader pickers are unified through i18n — "Any Minecraft version" / "Any loader"
+read the same in English, Spanish and French across Mods and Modpacks.
 
 ## v2.0.3 - Stutter Guard can't silently break FPS anymore (safety ceiling 144 FPS on weak tiers)
 

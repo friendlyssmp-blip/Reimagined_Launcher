@@ -51,6 +51,20 @@ export interface RecentServer {
   at: string
 }
 
+/** A keybinding read from an instance's options.txt (v2.1.0). */
+export interface KeybindEntry {
+  /** Content after the `key_` prefix — e.g. `key.forward` or `xaero_minimap.open_map`. */
+  key: string
+  /** Human-readable name (from the game/mod lang files, fallback prettified). */
+  label: string
+  /** Category label (Movement / Gameplay / … or the mod's own category). */
+  category: string
+  /** Raw bound value from options.txt — e.g. `key.keyboard.w` or `key.keyboard.unknown`. */
+  raw: string
+  /** Human-readable bound key label — e.g. `W`, `Left Shift`, `Unbound`. */
+  bound: string
+}
+
 /** Live status of a server (v1.0.88) — from the modern server-list protocol. */
 export interface ServerStatus {
   address: string
