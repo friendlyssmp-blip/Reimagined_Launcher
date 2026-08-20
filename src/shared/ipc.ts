@@ -205,7 +205,9 @@ export const IPC = {
   keybindSet: 'keybinds:set',
   keybindApplyAll: 'keybinds:apply-all',
   keybindSaveTemplate: 'keybinds:save-template',
-  keybindOpenFolder: 'keybinds:open-folder'
+  keybindOpenFolder: 'keybinds:open-folder',
+  // v2.1.1 — Credits → About: open the launcher's data directory
+  systemOpenDataFolder: 'system:open-data-folder'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

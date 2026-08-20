@@ -65,10 +65,13 @@ export function scoreHardware(hw: HardwareProfile | null): TierDecision {
   }
 
   const ramGB = hw.memory.totalGB || 8
-  if (ramGB >= 32) { points += 2; reasons.push(ramGB + ' GB RAM is generous.') }
-  else if (ramGB >= 16) { points += 1; reasons.push(ramGB + ' GB RAM is comfortable.') }
-  else if (ramGB >= 8) { reasons.push(ramGB + ' GB RAM - memory is limited, heap stays conservative.') }
-  else { points -= 2; reasons.push(ramGB + ' GB RAM is tight - minimum footprint.') }
+  // v2.1.1 — the wording says "system RAM" so this reason can never be
+  // mistaken for the sessions count or the recommended-heap number shown
+  // next to it in the Performance card.
+  if (ramGB >= 32) { points += 2; reasons.push(ramGB + ' GB system RAM is generous.') }
+  else if (ramGB >= 16) { points += 1; reasons.push(ramGB + ' GB system RAM is comfortable.') }
+  else if (ramGB >= 8) { reasons.push(ramGB + ' GB system RAM - memory is limited, heap stays conservative.') }
+  else { points -= 2; reasons.push(ramGB + ' GB system RAM is tight - minimum footprint.') }
 
   if (hw.storage.type === 'SSD') { points += 1; reasons.push('SSD storage keeps world loading snappy.') }
   else if (hw.storage.type === 'HDD') reasons.push('HDD storage - chunk streaming is kept light.')

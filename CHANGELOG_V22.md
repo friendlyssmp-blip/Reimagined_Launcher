@@ -1,3 +1,66 @@
+## v2.1.1 - Keybinds grouped by their real mod + false-update fix (Physics Mod Pro) + polish pass
+
+### Keybinds — every keybind now lives in its real mod's category
+
+- Keybinds are grouped by the mod that actually registers them, resolved from each
+  mod's own language files: **Xaero's Minimap**, **Xaero's World Map**, **Voice Chat**,
+  **Jade**, **Physics Mod**, **Essential**, **Iris**, **Gamma Utils**, **Flashback** and more
+  (verified against the user's real instance: 168 keybinds, zero "Other" leftovers).
+- Xaero's Minimap and World Map keys are cleanly separated (minimap keys never leak into
+  the World Map group again).
+- Raw ids like `keybind.name.ESSENTIAL_FRIENDS` no longer appear anywhere — labels are
+  resolved from the game/mod lang files, title-cased ("Essential Friends"), and the
+  physics-mod keys get readable names (Grab Object, Toggle Physics, Physics Menu…).
+- `caps.lock` (Zoomify's Zoom) now shows as "Caps Lock".
+
+### Updates — false "Update available" badges are gone for good
+
+- **Physics Mod Pro is no longer mistaken for the free Physics Mod.** The manual jar
+  declares the same `fabric.mod.json` id (`physicsmod`), so the old id/name matching
+  linked it to the wrong Modrinth project and flagged a fake update. Manual mods are now
+  only linked to a provider by an EXACT SHA-1 match (the file provably IS a published
+  file); everything else stays "Manual install — no linked source" and never participates
+  in update checks.
+- Existing wrongly-linked entries are healed automatically: a provider-tracked item
+  without a real versionId is demoted back to manual on the next Installed open, and
+  any stale update badge is cleared.
+- Update checks now also skip any provider item without a versionId as a second safety
+  net — an unlinked install can never be flagged.
+
+### Downloads — real artwork everywhere
+
+- Version-specific installs (detail page / change version / instance picker) now pass the
+  project's real icon to the Downloads section — previously only the generic download
+  arrow appeared for those.
+- Modpack installs (Modrinth and CurseForge) now show the pack's real cover art too.
+
+### Settings → Credits → About — clearer and actionable
+
+- About is now two clearly-labelled blocks: **Description** and **Data Directory**, with
+  working **Open Folder** and **Copy Path** buttons on the path (no more bare text).
+
+### Settings → Performance — readable and honest
+
+- "Recommended memory" (GB) and "learned from N sessions" are now on separate lines so
+  a coincidental match (17 sessions vs 17 GB system RAM) can never read as one variable
+  reused for the other; the tier notes now say "system RAM" explicitly.
+- Toggle explanations sit clearly below each switch with more air and a subtle guide
+  line — no more wall of text glued to the toggle.
+- The tier reasons got a "Why this profile" header so they read as what they are.
+
+### Title-bar music player — comfortable to use
+
+- The mini player has more air between elements, a fixed-width title with ellipsis, and a
+  volume slider with a ~2× taller drag hitbox (the visual track stays thin).
+
+### Launch state — can never get stuck on "Launching…"
+
+- Launch state is reset to idle on every fresh start (never carried from a previous
+  session) — a real running game is re-detected and shows "Running", never a stale
+  "Launching…".
+- New 3-minute watchdog: if the UI is stuck in a pre-launch phase without a game process
+  appearing, it auto-returns to idle with a clear notice and a log line.
+
 ## v2.1.0 - Keybinds manager (System) + Update All fixes + bigger server directory
 
 ### Keybinds — a new System section that manages your REAL in-game keybinds

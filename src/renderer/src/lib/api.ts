@@ -91,7 +91,9 @@ export const api = {
     copySpecs: (opts: { minimal?: boolean; profileId?: string } = {}) =>
       unwrap<string>(window.reimagined.system.copySpecs(opts)),
     scanStorage: () => unwrap<StorageScanResult>(window.reimagined.system.scanStorage()),
-    cleanStorage: (ids: string[]) => unwrap<StorageCleanResult>(window.reimagined.system.cleanStorage(ids))
+    cleanStorage: (ids: string[]) => unwrap<StorageCleanResult>(window.reimagined.system.cleanStorage(ids)),
+    /** v2.1.1 — Credits → About: open the launcher's data directory. */
+    openDataFolder: () => unwrap<void>(window.reimagined.system.openDataFolder())
   },
   /** v1.0.92 — Run a FPS Test (Account). */
   fpsTest: {
@@ -240,15 +242,15 @@ export const api = {
   modpacks: {
     search: (opts: { query?: string; mcVersion?: string; loader?: 'fabric' | 'forge' | 'any'; offset?: number; limit?: number }) =>
       unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.modpacks.search(opts)),
-    install: (projectId: string, versionId: string, name?: string) =>
+    install: (projectId: string, versionId: string, name?: string, iconUrl?: string) =>
       unwrap<{ profileId: string; name: string; installed: number; skipped: string[] }>(
-        window.reimagined.modpacks.install(projectId, versionId, name)
+        window.reimagined.modpacks.install(projectId, versionId, name, iconUrl)
       ),
     searchCurseforge: (opts: { query?: string; mcVersion?: string; offset?: number; limit?: number }) =>
       unwrap<SearchPage<ModrinthSearchResult>>(window.reimagined.modpacks.searchCurseforge(opts)),
-    installCurseforge: (projectId: string, fileId: string, name?: string) =>
+    installCurseforge: (projectId: string, fileId: string, name?: string, iconUrl?: string) =>
       unwrap<{ profileId: string; name: string; installed: number; skipped: string[] }>(
-        window.reimagined.modpacks.installCurseforge(projectId, fileId, name)
+        window.reimagined.modpacks.installCurseforge(projectId, fileId, name, iconUrl)
       )
   },
 

@@ -112,7 +112,8 @@ interface MrpackIndex {
 export async function installModpack(
   projectId: string,
   versionId: string,
-  name?: string
+  name?: string,
+  iconUrl?: string
 ): Promise<{ profileId: string; name: string; installed: number; skipped: string[] }> {
   const version = await getJson<{
     id: string
@@ -125,6 +126,16 @@ export async function installModpack(
   const mrpack = version.files?.find((f) => f.filename.toLowerCase().endsWith('.mrpack'))
   if (!mrpack) throw new Error('This modpack version has no installable .mrpack file.')
 
+  // v2.1.1 — the pack's own artwork shows in the Downloads section too.
+  if (!iconUrl) {
+    try {
+      const pr = await getJson<{ icon_url?: string }>(`${API}/project/${projectId}`, { headers: headers(), timeoutMs: 15_000 })
+      if (pr?.icon_url) iconUrl = pr.icon_url
+    } catch {
+      /* artwork is best-effort */
+    }
+  }
+
   // 1. Download the pack archive.
   const tmpDir = path.join(paths.data, 'tmp', 'modpacks')
   fs.mkdirSync(tmpDir, { recursive: true })
@@ -132,16 +143,16 @@ export async function installModpack(
   if (fs.existsSync(packPath)) fs.rmSync(packPath, { force: true })
   logger.info(`Downloading modpack ${version.version_number} (${mrpack.filename})`)
   const { recordDownload } = await import('../game/content')
-  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes: mrpack.size ?? 0 })
+  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes: mrpack.size ?? 0, iconUrl })
   try {
     await downloadFile(mrpack.url, packPath, (p) => {
-      recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: p.percent, downloadedBytes: p.received, totalBytes: p.total })
+      recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: p.percent, downloadedBytes: p.received, totalBytes: p.total, iconUrl })
     }, 600_000)
   } catch (err) {
-    recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'failed', percent: 0, downloadedBytes: 0, totalBytes: mrpack.size ?? 0 })
+    recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'failed', percent: 0, downloadedBytes: 0, totalBytes: mrpack.size ?? 0, iconUrl })
     throw err
   }
-  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'done', percent: 100, downloadedBytes: mrpack.size ?? 0, totalBytes: mrpack.size ?? 0 })
+  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'done', percent: 100, downloadedBytes: mrpack.size ?? 0, totalBytes: mrpack.size ?? 0, iconUrl })
 
   // 2. Extract and read the pack index.
   const staging = path.join(tmpDir, `${projectId}-${versionId}`)
@@ -357,10 +368,21 @@ function cfLoaderFromId(id?: string): { type: 'fabric' | 'forge' | 'vanilla'; ve
 export async function installCurseforgeModpack(
   projectId: string,
   fileId: string,
-  name?: string
+  name?: string,
+  iconUrl?: string
 ): Promise<{ profileId: string; name: string; installed: number; skipped: string[] }> {
   const file = await curseforge.fileById(projectId, fileId)
   if (!file) throw new Error('This modpack file is no longer available on CurseForge.')
+
+  // v2.1.1 — the pack's own artwork shows in the Downloads section too.
+  if (!iconUrl) {
+    try {
+      const pr = await curseforge.getProjectFull(projectId, 'modpack')
+      if (pr?.iconUrl) iconUrl = pr.iconUrl
+    } catch {
+      /* artwork is best-effort */
+    }
+  }
 
   const tmpDir = path.join(paths.data, 'tmp', 'modpacks')
   fs.mkdirSync(tmpDir, { recursive: true })
@@ -369,16 +391,16 @@ export async function installCurseforgeModpack(
 
   logger.info(`Downloading CurseForge modpack ${name ?? projectId} (${file.filename})`)
   const { recordDownload } = await import('../game/content')
-  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes: file.size })
+  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: 0, downloadedBytes: 0, totalBytes: file.size, iconUrl })
   try {
     await downloadFile(file.url, packPath, (p) => {
-      recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: p.percent, downloadedBytes: p.received, totalBytes: p.total })
+      recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'downloading', percent: p.percent, downloadedBytes: p.received, totalBytes: p.total, iconUrl })
     }, 600_000)
   } catch (err) {
-    recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'failed', percent: 0, downloadedBytes: 0, totalBytes: file.size })
+    recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'failed', percent: 0, downloadedBytes: 0, totalBytes: file.size, iconUrl })
     throw err
   }
-  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'done', percent: 100, downloadedBytes: file.size, totalBytes: file.size })
+  recordDownload({ label: `Modpack ${name ?? projectId}`, kind: 'mods', status: 'done', percent: 100, downloadedBytes: file.size, totalBytes: file.size, iconUrl })
 
   // Extract + read manifest.json.
   const staging = path.join(tmpDir, `cf-${projectId}-${fileId}`)

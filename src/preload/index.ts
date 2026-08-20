@@ -129,11 +129,11 @@ const api = {
 
   modpacks: {
     search: (opts: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke(IPC.modpacksSearch, opts),
-    install: (projectId: string, versionId: string, name?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modpacksInstall, { projectId, versionId, name }),
+    install: (projectId: string, versionId: string, name?: string, iconUrl?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modpacksInstall, { projectId, versionId, name, iconUrl }),
     searchCurseforge: (opts: Record<string, unknown>): Promise<unknown> => ipcRenderer.invoke(IPC.modpacksSearchCurseforge, opts),
-    installCurseforge: (projectId: string, fileId: string, name?: string): Promise<unknown> =>
-      ipcRenderer.invoke(IPC.modpacksInstallCurseforge, { projectId, fileId, name })
+    installCurseforge: (projectId: string, fileId: string, name?: string, iconUrl?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.modpacksInstallCurseforge, { projectId, fileId, name, iconUrl })
   },
 
   /** Detached game console window controls (used by its own renderer). */
@@ -209,7 +209,9 @@ const api = {
     copySpecs: (opts: { minimal?: boolean; profileId?: string }): Promise<unknown> =>
       ipcRenderer.invoke(IPC.systemCopySpecs, opts),
     scanStorage: (): Promise<unknown> => ipcRenderer.invoke(IPC.storageScan),
-    cleanStorage: (ids: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.storageClean, { ids })
+    cleanStorage: (ids: string[]): Promise<unknown> => ipcRenderer.invoke(IPC.storageClean, { ids }),
+    // v2.1.1 — Credits → About: open the data directory
+    openDataFolder: (): Promise<unknown> => ipcRenderer.invoke(IPC.systemOpenDataFolder)
   },
   // v2.1.0 — Keybinds (System section)
   keybinds: {

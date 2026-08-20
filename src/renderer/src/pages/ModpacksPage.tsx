@@ -38,8 +38,10 @@ export function ModpacksPage() {
    * browser-style back/forward history just like the Mods page: opening a
    * pack pushes it, the back arrow returns to the previous pack or to the
    * list, and the forward arrow re-enters. */
-  const [detailPack, setDetailPack] = useState<{ projectId: string; title: string; provider: 'modrinth' | 'curseforge' } | null>(null)
-  const [packHistory, setPackHistory] = useState<{ projectId: string; title: string; provider: 'modrinth' | 'curseforge' }[]>([])
+  /* v2.1.1 — the preview also carries the pack artwork so installs made from
+     it show the real icon in the Downloads section. */
+  const [detailPack, setDetailPack] = useState<{ projectId: string; title: string; provider: 'modrinth' | 'curseforge'; iconUrl?: string } | null>(null)
+  const [packHistory, setPackHistory] = useState<{ projectId: string; title: string; provider: 'modrinth' | 'curseforge'; iconUrl?: string }[]>([])
   const [packIndex, setPackIndex] = useState(-1)
 
   useEffect(() => {
@@ -118,7 +120,7 @@ export function ModpacksPage() {
 
   /** Open a pack from the list (pushes onto the history stack). */
   const openPack = (r: ModrinthSearchResult) => {
-    const target = { projectId: r.projectId, title: r.title, provider }
+    const target = { projectId: r.projectId, title: r.title, provider, iconUrl: r.iconUrl }
     const next = packIndex + 1
     setPackHistory((h) => [...h.slice(0, next), target])
     setPackIndex(next)
@@ -166,8 +168,8 @@ export function ModpacksPage() {
     try {
       const res =
         detailPack.provider === 'curseforge'
-          ? await api.modpacks.installCurseforge(detailPack.projectId, versionId, detailPack.title)
-          : await api.modpacks.install(detailPack.projectId, versionId, detailPack.title)
+          ? await api.modpacks.installCurseforge(detailPack.projectId, versionId, detailPack.title, detailPack.iconUrl)
+          : await api.modpacks.install(detailPack.projectId, versionId, detailPack.title, detailPack.iconUrl)
       await refreshProfiles()
       setActiveProfile(res.profileId)
       notify(
@@ -199,8 +201,8 @@ export function ModpacksPage() {
       }
       const res =
         provider === 'curseforge'
-          ? await api.modpacks.installCurseforge(r.projectId, pick.id, r.title)
-          : await api.modpacks.install(r.projectId, pick.id, r.title)
+          ? await api.modpacks.installCurseforge(r.projectId, pick.id, r.title, r.iconUrl)
+          : await api.modpacks.install(r.projectId, pick.id, r.title, r.iconUrl)
       await refreshProfiles()
       setActiveProfile(res.profileId)
       notify(

@@ -1,8 +1,8 @@
 {
-  "version": "2.1.0",
-  "installer": "dist/Reimagined-Setup-2.1.0.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.0.exe",
-  "sha256": "01c17709beec4ef856d4dc5c65b23e7450a7e96a8d108dc58b89ec780390a598",
-  "notes": "Keybinds manager (System section): reads your instance's real in-game keybinds incl. mod keybinds, click-to-rebind, apply-to-all, save-as-default for new instances. Servers: Minemen, PvP HQ, MCTiers, BlocksMC, Lunar, Hoplite, VeltPvP and Purple Prison added, and your favorite servers now auto-seed into every new instance. Update All: skip is a real checkbox, update downloads show the mod's cover art, update checks stop offering pre-release alphas, and a signature-validated cache means the update count can never get stuck. Settings: removed the fake Clear download cache button (use Storage -> Clear Up Space).",
-  "publishedAt": "2026-08-20T14:15:00+00:00"
+  "version": "2.1.1",
+  "installer": "dist/Reimagined-Setup-2.1.1.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.1.exe",
+  "sha256": "5cb730001656e1fd06eb8cee4bbe66f6a356b17f1c390d5250b70ba354b9c730",
+  "notes": "Keybinds are now grouped by their real mod (Xaero's Minimap, Xaero's World Map, Voice Chat, Jade, Physics Mod, Essential, Iris...) with no raw key ids anywhere. False-update fix: Physics Mod Pro can no longer be mistaken for the free Physics Mod (manual installs only link by exact SHA-1; wrongly-linked items are healed automatically and unlinked installs never get an update badge). Downloads show the real project cover art for version-specific installs and modpacks. Credits > About has Open Folder / Copy Path on the data directory. Performance settings: recommended RAM and sessions-learned are separated so the numbers can't be confused, explanations are cleaner, and tier reasons got a 'Why this profile' header. Title-bar music player: bigger volume hitbox and more comfortable spacing. Launch state can never stick on 'Launching...': it resets on every fresh start and a 3-minute watchdog returns to idle if the game never appears.",
+  "publishedAt": "2026-08-20T15:30:00+00:00"
 }

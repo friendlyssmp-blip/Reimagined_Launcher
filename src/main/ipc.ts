@@ -468,18 +468,18 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     })
   })
 
-  on(IPC.modpacksInstallCurseforge, async (payload: { projectId?: string; fileId?: string; name?: string }) => {
+  on(IPC.modpacksInstallCurseforge, async (payload: { projectId?: string; fileId?: string; name?: string; iconUrl?: string }) => {
     if (!payload?.projectId || !payload?.fileId) throw new Error('Missing modpack project or file id.')
     const { installCurseforgeModpack } = await import('./mods/modpacks')
-    return installCurseforgeModpack(payload.projectId, payload.fileId, payload.name)
+    return installCurseforgeModpack(payload.projectId, payload.fileId, payload.name, payload.iconUrl)
   })
 
-  on(IPC.modpacksInstall, async (payload: { projectId?: string; versionId?: string; name?: string }) => {
+  on(IPC.modpacksInstall, async (payload: { projectId?: string; versionId?: string; name?: string; iconUrl?: string }) => {
     const projectId = payload?.projectId
     const versionId = payload?.versionId
     if (!projectId || !versionId) throw new Error('Missing modpack project or version id.')
     const { installModpack } = await import('./mods/modpacks')
-    return installModpack(projectId, versionId, payload?.name)
+    return installModpack(projectId, versionId, payload?.name, payload.iconUrl)
   })
 
   /* --------------------------- content detail (Part 5) --------------------------- */
@@ -822,6 +822,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   on(IPC.systemCleanReset, async () => {
     const { cleanReleaseReset } = await import('./system/reset')
     await cleanReleaseReset()
+    return true
+  })
+
+  // v2.1.1 — Credits → About: open the launcher's data directory.
+  on(IPC.systemOpenDataFolder, async () => {
+    await shell.openPath(paths.data)
     return true
   })
 

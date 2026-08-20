@@ -6,7 +6,7 @@ import { sound } from '../lib/sound'
 import { BrandLogo } from '../components/BrandLogo'
 import { MusicSection } from '../components/MusicSection'
 import { ModIcon } from '../components/ModIcon'
-import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconYoutube } from '../components/icons'
+import { IconSettings, IconGamepad, IconDownload, IconRefresh, IconImage, IconGauge, IconVolume, IconSparkle, IconPotato, IconRocket, IconYoutube, IconFolder, IconCopy } from '../components/icons'
 
 const IconBolt = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -610,7 +610,10 @@ export function SettingsPage() {
               </div>
               <div className="panel">
                 <div className="panel-title">About</div>
-                <div className="about-section" style={{ marginTop: 10, gap: 10 }}>
+                {/* v2.1.1 — About is two clearly-labelled blocks: Description and
+                    Data Directory (the path is now actionable — Open Folder and
+                    Copy Path, not bare text). */}
+                <div className="about-section" style={{ marginTop: 10, gap: 12 }}>
                   <div className="about-item">
                     <div className="about-dot" />
                     <div className="about-text">
@@ -621,8 +624,25 @@ export function SettingsPage() {
                   <div className="about-item">
                     <div className="about-dot" />
                     <div className="about-text">
-                      <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 2 }}>Data directory</h4>
-                      <p className="mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{info?.dataRoot ?? ''}</p>
+                      <h4 style={{ fontSize: 12.5, color: 'var(--text-1)', marginBottom: 4 }}>Data directory</h4>
+                      <p className="mono" style={{ fontSize: 11, wordBreak: 'break-all', marginBottom: 8 }}>{info?.dataRoot ?? ''}</p>
+                      <div className="row" style={{ gap: 8 }}>
+                        <Button size="sm" variant="ghost" onClick={() => void api.system.openDataFolder().catch((err) => notify('error', 'Could not open folder', friendlyError(err)))}>
+                          <IconFolder style={{ width: 13, height: 13 }} /> Open Folder
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (!info?.dataRoot) return
+                            void navigator.clipboard.writeText(info.dataRoot).then(() => {
+                              notify('success', 'Path copied', 'The data directory path is on your clipboard.')
+                            })
+                          }}
+                        >
+                          <IconCopy style={{ width: 13, height: 13 }} /> Copy Path
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -826,7 +846,9 @@ function PerformanceSection() {
             }}
             label="Unlimited FPS (not recommended)"
           />
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>
+          {/* v2.1.1 — toggle explanation sits clearly below the switch with
+              more air; small, dim, and never glued to the row above. */}
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.55, paddingLeft: 12, borderLeft: '2px solid var(--border)', opacity: 0.85 }}>
             {settings.unlimitedFps
               ? 'Off by default for a reason: without a frame cap the GPU runs at 100% load and on some PCs that triggers thermal shutdown or a power-protection restart. Only enable this on desktop hardware with strong cooling.'
               : 'The engine caps FPS to a safe value (matching your monitor refresh rate, max 240) so the GPU never runs unbounded — this prevents whole-PC crashes on weaker hardware.'}
@@ -846,7 +868,7 @@ function PerformanceSection() {
             }}
             label="Stutter Guard (weak PCs)"
           />
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.55, paddingLeft: 12, borderLeft: '2px solid var(--border)', opacity: 0.85 }}>
             On potato/turbo hardware the engine caps FPS at 120 instead of running uncapped — at 200+ FPS a 2-core laptop spends every spare cycle on garbage collection and heat, which is what makes the game freeze for seconds at a time. 'Unlimited FPS' above overrides this.
           </div>
         </div>
@@ -862,7 +884,7 @@ function PerformanceSection() {
             }}
             label="Force VSync off (unlock to your monitor-free FPS)"
           />
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.55, paddingLeft: 12, borderLeft: '2px solid var(--border)', opacity: 0.85 }}>
             With VSync on, a 60 Hz monitor caps the game at 60 FPS no matter the frame cap. Enabling this makes the launcher write enableVsync:false on every launch — useful on high-refresh panels with unlocked FPS.
           </div>
         </div>
@@ -891,10 +913,18 @@ function PerformanceSection() {
           >
             <PerfTierIcon tier={status?.tier ?? 'balanced'} size={15} /> {tierLabel} profile {status?.tierSource === 'auto' ? '(auto)' : '(manual)'}
           </div>
+          {/* v2.1.1 — two clearly separated facts: the recommended heap (GB)
+              and the learning stat (sessions) are on their own lines so a
+              coincidental match (17 sessions vs 17 GB system RAM) can never
+              read as one variable reused for the other. */}
           <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
             Recommended memory: <b>{Math.round((status?.recommendedMemoryMB ?? 4096) / 1024)} GB</b>
-            {status?.tuning?.sessionsLearned ? <> · learned from <b>{status.tuning.sessionsLearned}</b> session(s)</> : null}
           </div>
+          {status?.tuning?.sessionsLearned ? (
+            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+              Learning: tuned from <b>{status.tuning.sessionsLearned}</b> measured session(s)
+            </div>
+          ) : null}
           <div style={{ flex: 1 }} />
           <div className="row" style={{ gap: 6 }}>
             {(['auto', 'potato', 'balanced', 'high', 'turbo'] as const).map((t) => {
@@ -928,7 +958,10 @@ function PerformanceSection() {
         </div>
 
         {status?.tierReasons?.length ? (
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6 }}>
+          <div style={{ marginTop: 14, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+              Why this profile
+            </div>
             {status.tierReasons.map((r, i) => (
               <div key={i}>• {r}</div>
             ))}
@@ -953,7 +986,7 @@ function PerformanceSection() {
             onChange={(v) => { void updateSettings({ asyncChunkDecode: v }) }}
             label="Async chunk decode"
           />
-          <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.55, paddingLeft: 12, borderLeft: '2px solid var(--border)', opacity: 0.85 }}>
             When on, chunk packets are decoded by a small worker pool, the queue drops the
             farthest queued chunk under a burst instead of growing without limit, and finished
             chunks appear nearest-first. A reconnect or server resync re-sends chunks through

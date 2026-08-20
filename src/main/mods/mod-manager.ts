@@ -355,45 +355,11 @@ async function enrichManualModsImpl(profileId: string): Promise<{ enriched: numb
         } catch {
           /* best-effort */
         }
-        if (!project && meta.id) {
-          try {
-            const pr = await modrinth.getProject(meta.id)
-            project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
-            source = 'modrinth'
-            logger.info(`Enriched manual mod "${m.filename}" → Modrinth "${pr.slug}" by id`)
-          } catch {
-            project = null
-          }
-        }
-        if (!project && meta.name) {
-          try {
-            const cf = await curseforge.matchByExactName(meta.name, 'mod', profile.minecraftVersion)
-            if (cf) {
-              project = cf
-              source = 'curseforge'
-              logger.info(`Enriched manual mod "${m.filename}" → CurseForge "${cf.slug}" (${cf.title}) by name`)
-            }
-          } catch {
-            /* best-effort */
-          }
-        }
-        if (project && source !== 'local' && !versionId) {
-          try {
-            const versions =
-              source === 'curseforge'
-                ? await curseforge.listVersions(project.id, 'mod')
-                : await modrinth.listVersions(project.id, 'mod')
-            const inst = versions.find((v) => v.filename === activeName) ?? null
-            if (inst) {
-              versionId = inst.id
-              versionNumber = inst.versionNumber
-            } else {
-              logger.info(`Enrich: "${m.filename}" matched ${source} but no version matches its file name — update tracking needs a rename or reinstall.`)
-            }
-          } catch {
-            /* best-effort */
-          }
-        }
+        // v2.1.1 — NO id/name fallback for manual mods (same reason as
+        // identifyManualMods): only an exact SHA1 match can link a manual file
+        // to a provider, so Physics Mod Pro can never be mistaken for the free
+        // Physics Mod project again. A SHA1 hit always carries its version id,
+        // so no extra version-resolution pass is needed here.
       } else if (doNetwork && meta.name) {
         try {
           const pk = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
@@ -509,11 +475,30 @@ class ModManager {
       }
       deduped = [...byFile.values()]
     }
-    if (changed) {
-      await profileManager.update(profileId, { mods: deduped })
+    // v2.1.1 — heal wrongly-linked manual items: a provider entry with NO
+    // versionId means it was never really linked to that project (the old
+    // id/name matching could produce this — e.g. Physics Mod Pro matched to
+    // the free Physics Mod by sharing fabric.mod.json id). Demote it back to
+    // a manual item: "Manual install — no linked source". It keeps its real
+    // title/icon and stops participating in update checks.
+    let demoted = false
+    const healed = deduped.map((mod) => {
+      if ((mod.source === 'modrinth' || mod.source === 'curseforge') && !mod.versionId) {
+        demoted = true
+        return {
+          ...mod,
+          source: 'local' as const,
+          updateAvailable: null
+        }
+      }
+      return mod
+    })
+    if (demoted) {
+      await profileManager.update(profileId, { mods: healed })
       eventBus.emit('mods:changed', { profileId, action: 'reconciled' })
+      logger.info(`Demoted ${healed.filter((m, i) => m.source === 'local' && deduped[i]?.source !== 'local').length} unlinked item(s) to manual in "${profile.name}"`)
     }
-    return deduped
+    return healed
   }
 
   /**
@@ -779,6 +764,10 @@ class ModManager {
     let file: { filename: string; url: string; size: number; version: string }
     let title = itemTitle ?? projectId
     let slug = projectId
+    /* v2.1.1 — the Downloads section shows the real project artwork for every
+       install, including version-specific ones (previously only the generic
+       arrow placeholder appeared because this path never passed an icon). */
+    let iconUrl: string | undefined
 
     if (provider === 'curseforge') {
       const cf = await curseforge.fileById(projectId, versionId)
@@ -792,6 +781,15 @@ class ModManager {
         throw new LauncherError('MOD_INCOMPATIBLE', `This version does not support the ${loader} loader.`)
       }
       file = { filename: cf.filename, url: cf.url, size: cf.size, version: cf.version }
+      try {
+        const pr = await curseforge.getProjectFull(projectId, projectType)
+        if (pr) {
+          title = pr.title
+          iconUrl = pr.iconUrl ?? undefined
+        }
+      } catch {
+        /* keep the provided title */
+      }
     } else {
       const versions = await modrinth.listVersions(projectId, projectType)
       const target = versions.find((v) => v.id === versionId)
@@ -814,6 +812,7 @@ class ModManager {
         const p = await modrinth.getProject(projectId)
         title = p.title
         slug = p.slug
+        iconUrl = p.icon_url ?? undefined
       } catch {
         /* keep ids */
       }
@@ -842,7 +841,8 @@ class ModManager {
     logger.info(`Installing ${provider} ${projectId} @ ${versionId} → ${file.filename}`)
     await runDownloadBatch([{ url: file.url, dest, expectedSize: file.size }], {
       kind: 'mods',
-      label: `${title} — ${file.version}`
+      label: `${title} — ${file.version}`,
+      iconUrl
     })
 
     // Duplicates keep a DISTINCT slug so per-item actions (remove / update /
@@ -1022,8 +1022,12 @@ class ModManager {
       while (idx < profile.mods.length) {
         const i = idx++
         const mod = profile.mods[i]
-        if (mod.source !== 'modrinth' && mod.source !== 'curseforge') {
-          updatedMods[i] = mod
+        // v2.1.1 — only items with a REAL linked source participate in update
+        // checks. A provider entry without a versionId is an unlinked/manual
+        // install (e.g. Physics Mod Pro) — it must never be flagged, and any
+        // stale badge from a previous wrong match is cleared immediately.
+        if ((mod.source !== 'modrinth' && mod.source !== 'curseforge') || !mod.versionId) {
+          updatedMods[i] = mod.updateAvailable ? { ...mod, updateAvailable: null } : mod
           continue
         }
         try {
@@ -1307,35 +1311,13 @@ class ModManager {
             } catch {
               /* hash lookup is best-effort */
             }
-            if (!project && meta.id) {
-              try {
-                const pr = await modrinth.getProject(meta.id)
-                project = { id: pr.id, slug: pr.slug, title: pr.title, iconUrl: pr.icon_url }
-                source = 'modrinth'
-                logger.info(
-                  `Manual mod "${filename}" matched to Modrinth project "${pr.slug}" (${pr.title}) by id — now tracked.`
-                )
-              } catch {
-                project = null
-              }
-            }
-            // v1.0.40 — CurseForge fallback by exact name: mods that exist
-            // only on CurseForge (or whose build is not on Modrinth) still
-            // resolve to their REAL project with icon + update support.
-            if (!project && meta.name) {
-              try {
-                const cf = await curseforge.matchByExactName(meta.name, 'mod', profile.minecraftVersion)
-                if (cf) {
-                  project = cf
-                  source = 'curseforge'
-                  logger.info(
-                    `Manual mod "${filename}" matched to CurseForge project "${cf.slug}" (${cf.title}) by name — now tracked.`
-                  )
-                }
-              } catch {
-                /* name match is best-effort */
-              }
-            }
+            // v2.1.1 — NO id/name matching for manual mods. A manual file is
+            // only linked to a provider when its SHA1 proves it is EXACTLY a
+            // published file (physics-mod-pro declares the same fabric.mod.json
+            // id as the free Physics Mod, so id/name matching produced a false
+            // "update available" against the wrong project). Unmatched manual
+            // files stay source:'local' — "Manual install, no linked source" —
+            // and never participate in update checks.
           } else if (meta.name) {
             const pk = await matchPackByName(meta.name, projectType, profile.minecraftVersion, profile.loader.type)
             if (pk) {
@@ -1344,29 +1326,7 @@ class ModManager {
               logger.info(`Manual ${projectType} "${filename}" matched to ${pk.source} project "${pk.slug}" (${pk.title}) — now tracked.`)
             }
           }
-          // v1.0.40 — when a manual mod was matched by name/id (not SHA1), the
-          // installed versionId is still unknown. Resolve it by matching the
-          // local filename against the provider's version list — the same
-          // technique the SHA1 path uses — so the "Update" check can find the
-          // installed version and compare real release dates. Packs skip this
-          // (their version isn't pinned the same way).
-          if (project && source !== 'local' && projectType === 'mod' && !versionId) {
-            try {
-              const versions =
-                source === 'curseforge'
-                  ? await curseforge.listVersions(project.id, 'mod')
-                  : await modrinth.listVersions(project.id, 'mod')
-              const inst = versions.find((v) => v.filename === filename) ?? null
-              if (inst) {
-                versionId = inst.id
-                versionNumber = inst.versionNumber
-                logger.info(`Manual mod "${filename}" version resolved: ${versionNumber}`)
-              }
-            } catch {
-              /* version resolution is best-effort */
-            }
-          }
-          // v1.0.50 — an item with no provider match still shows a real icon
+          // v2.1.1 — an item with no provider match still shows a real icon
           // extracted from its own file (fabric.mod.json icon / pack.png).
           // (Re-read the buffer here — the meta reads above were scoped to
           // their branches and can't be referenced after.)

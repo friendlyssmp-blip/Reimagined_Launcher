@@ -397,6 +397,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const seed: Record<string, boolean> = {}
         for (const h of runs) if (h.profileId) seed[h.profileId] = h.running
         setRunningProfiles(seed)
+        // v2.1.1 — launch state is NEVER carried across sessions: it starts
+        // idle on every fresh start. If a game is genuinely running it is
+        // re-detected above (api.launch.list) and shows "Running", never
+        // "Launching…" from a stale flag of a previous session.
+        setLaunch({ phase: 'idle', message: '', percent: null, profileId: undefined })
         document.documentElement.dataset.theme = s.theme
         setReady(true)
       } catch (err) {
@@ -577,6 +582,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
+
+  /* v2.1.1 — Launching watchdog: if the UI is stuck in a pre-launch phase
+     (preparing/downloading/launching) and the game process never actually
+     appeared within a few minutes, force the state back to idle instead of
+     showing "Launching…" forever. This is the safety net for a lost
+     launch:status event or a launch that silently died — Home, the profile
+     card and the Play button all read this same single source of truth. */
+  useEffect(() => {
+    if (!ready) return
+    if (launch.phase !== 'preparing' && launch.phase !== 'downloading' && launch.phase !== 'launching') return
+    const pid = launch.profileId
+    const timer = setTimeout(() => {
+      const stillPreLaunch =
+        launch.phase === 'preparing' || launch.phase === 'downloading' || launch.phase === 'launching'
+      const actuallyRunning = pid ? runningMap[pid] : Object.values(runningMap).some(Boolean)
+      if (!stillPreLaunch || actuallyRunning) return
+      setLaunch({ phase: 'idle', message: '', percent: null, pid: undefined, profileId: pid })
+      notify('info', 'Launch did not complete', 'The game process never appeared — the launcher returned to idle. Try launching again.')
+      void api.logs
+        .write('warn', `Launch watchdog: state stuck in "${launch.phase}" for 3 minutes without a game process — reset to idle.`)
+        .catch(() => {})
+    }, 3 * 60_000)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, launch.phase, launch.profileId])
 
   // v1.0.96 — Game Mode: never hit the network for update checks while any
   // game is running (multi-instance safe: runningMap holds one entry per

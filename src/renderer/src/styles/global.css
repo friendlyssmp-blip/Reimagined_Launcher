@@ -3218,41 +3218,49 @@ html[data-cb='1'] .badge-accent::before {
   gap: 10px;
 }
 
-/* v1.0.87 — mini music player inside the window title bar (play/pause + next). */
+/* v1.0.87 — mini music player inside the window title bar (play/pause + next).
+   v2.1.1 — rebalanced: more air between the elements, a consistent fixed
+   title width with ellipsis, and a generous volume-slider hitbox (the track
+   stays thin but the draggable area is easy to grab). */
 .titlebar-music {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 7px;
   -webkit-app-region: no-drag;
-  padding-left: 10px;
+  padding: 0 12px;
   border-left: 1px solid var(--border);
+  height: 32px;
 }
 .titlebar-music .titlebar-btn {
-  width: 26px;
-  height: 24px;
+  width: 28px;
+  height: 26px;
 }
 .titlebar-music-name {
-  max-width: 140px;
+  width: 132px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 10.5px;
   color: var(--text-3);
-  margin-right: 4px;
+  margin-right: 1px;
 }
-/* v1.0.99 — independent music volume inside the title-bar mini player. */
+/* v1.0.99 — independent music volume inside the title-bar mini player.
+   v2.1.1 — the hitbox is now ~2× taller than the visual track so the slider
+   is comfortable to drag without changing its look. */
 .titlebar-music-vol {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 5px;
-  padding-left: 7px;
+  gap: 5px;
+  margin-left: 3px;
+  padding-left: 8px;
   border-left: 1px solid var(--border);
   color: var(--text-3);
+  height: 100%;
+  box-sizing: border-box;
 }
 .titlebar-music-vol input[type='range'] {
-  width: 56px;
-  height: 14px;
+  width: 72px;
+  height: 24px;
   margin: 0;
   accent-color: var(--accent);
   cursor: pointer;

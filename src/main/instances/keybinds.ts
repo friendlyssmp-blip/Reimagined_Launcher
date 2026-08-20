@@ -137,7 +137,7 @@ export function formatBoundKey(raw: string): string {
     const map: Record<string, string> = {
       space: 'Space', enter: 'Enter', backspace: 'Backspace', tab: 'Tab', escape: 'Esc',
       'left.shift': 'Left Shift', 'right.shift': 'Right Shift', 'left.control': 'Left Ctrl', 'right.control': 'Right Ctrl',
-      'left.alt': 'Left Alt', 'right.alt': 'Right Alt', capslock: 'Caps Lock', unknown: 'Unbound',
+      'left.alt': 'Left Alt', 'right.alt': 'Right Alt', capslock: 'Caps Lock', 'caps.lock': 'Caps Lock', unknown: 'Unbound',
       left: 'Left', right: 'Right', up: 'Up', down: 'Down', slash: '/', backslash: '\\',
       period: '.', comma: ',', minus: '-', equal: '=', semicolon: ';', quote: "'", backquote: '`',
       'left.bracket': '[', 'right.bracket': ']', delete: 'Delete', insert: 'Insert', home: 'Home',
@@ -151,25 +151,59 @@ export function formatBoundKey(raw: string): string {
   return v
 }
 
-/** Prettify an unresolved translation key into a readable fallback label. */
+/** Prettify an unresolved translation key into a readable fallback label.
+ *  Generic path segments (keybind, keybinding, title, name, category,
+ *  minecraft, text, gui) are skipped so the label never reads as raw ids.
+ *  camelCase is split into words (ReloadChunk → "Reload Chunk") and the
+ *  result is title-cased (ESSENTIAL_FRIENDS → "Essential Friends"). */
+const GENERIC_SEGMENTS = new Set(['key', 'keybind', 'keybinds', 'keybinding', 'title', 'name', 'category', 'minecraft', 'text', 'gui'])
 function prettifyKeyName(content: string): string {
-  const last = content.split('.').pop() ?? content
+  const segments = content.split('.').filter((s) => s && !GENERIC_SEGMENTS.has(s))
+  const meaningful = segments.length ? segments : [content]
+  const last = meaningful[meaningful.length - 1]
   return last
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/** Curated labels for mods whose keys have no lang entries (Physics Mod Pro). */
+const CURATED_LABELS: Record<string, string> = {
+  'physicsmod.keybinding.grabobject': 'Grab Object',
+  'physicsmod.keybinding.guiphysics': 'Physics Menu',
+  'physicsmod.keybinding.physicsmenu': 'Physics Menu',
+  'physicsmod.keybinding.togglephysics': 'Toggle Physics',
+  'physicsmod.keybinding.debug': 'Debug Physics'
 }
 
 /* ------------------------------- lang dictionary ------------------------------- */
 
+/** Translation data collected from every installed mod jar. */
 interface LangDict {
+  /** key.* translation → human label (en_us). */
   keys: Map<string, string>
-  categories: Map<string, string>
+  /** key.* translation → owning mod's fabric.mod.json id. */
+  owners: Map<string, string>
+  /** key.category.<modid>.<section> → display name (the mod's controls category). */
+  modCategories: Map<string, string>
+  /** category.* → display name (older mods use this shape). */
+  legacyCategories: Map<string, string>
+  /** Normalized mod ids (no _/-) → display name for fuzzy matching. */
+  modNames: Map<string, string>
 }
 
 const langCache = new Map<string, { at: number; dirMtime: number; dict: LangDict }>()
 const LANG_TTL = 10 * 60_000
 
-/** Collect `key.*` + `category.*` translations from every installed mod jar. */
+const norm = (s: string): string => s.toLowerCase().replace(/[_-]+/g, '')
+
+/** Collect translations + ownership from every installed mod jar: the lang
+ *  file tells us the label AND which mod registers each key — that is what
+ *  lets keybinds group by their real mod ("Xaero's Minimap", "Voice Chat"…)
+ *  instead of a generic "Other". */
 function loadLangDict(instanceRoot: string): LangDict {
   const modsDir = path.join(instanceRoot, 'mods')
   let dirMtime = 0
@@ -182,7 +216,10 @@ function loadLangDict(instanceRoot: string): LangDict {
   if (cached && Date.now() - cached.at < LANG_TTL && cached.dirMtime === dirMtime) return cached.dict
 
   const keys = new Map<string, string>()
-  const categories = new Map<string, string>()
+  const owners = new Map<string, string>()
+  const modCategories = new Map<string, string>()
+  const legacyCategories = new Map<string, string>()
+  const modNames = new Map<string, string>()
   let jars: string[] = []
   try {
     jars = fs.readdirSync(modsDir).filter((f) => f.endsWith('.jar'))
@@ -193,6 +230,19 @@ function loadLangDict(instanceRoot: string): LangDict {
     try {
       const buf = fs.readFileSync(path.join(modsDir, jar))
       const entries = zipListEntries(buf)
+      // Read fabric.mod.json (or mods.toml fallback) for the mod id/name.
+      let modid = ''
+      let modName = ''
+      const fmEntry = entries.find((e) => e.toLowerCase() === 'fabric.mod.json')
+      if (fmEntry) {
+        try {
+          const fm = JSON.parse(zipReadEntry(buf, fmEntry)!.toString('utf-8'))
+          modid = String(fm?.id ?? '')
+          modName = String(fm?.name ?? fm?.id ?? '')
+        } catch {
+          /* keep defaults */
+        }
+      }
       const langEntry = entries.find((e) => /^assets\/[^/]+\/lang\/en_us\.json$/i.test(e))
       if (!langEntry) continue
       const raw = zipReadEntry(buf, langEntry)
@@ -203,18 +253,105 @@ function loadLangDict(instanceRoot: string): LangDict {
       } catch {
         continue
       }
+      if (!modid) {
+        // Fallback mod id: the first assets/<namespace>/ segment.
+        const m = langEntry.match(/^assets\/([^/]+)\//)
+        modid = m ? m[1] : jar.replace(/\.jar$/i, '')
+      }
+      if (!modName) modName = modid
+      if (modid) {
+        modNames.set(norm(modid), modName)
+        // Some mods ship their controls category under key.category.<modid>.*
+        for (const [k, v] of Object.entries(json)) {
+          if (typeof v !== 'string') continue
+          const m = k.match(/^key\.category\.([^.]+)\./)
+          if (m && norm(m[1]) === norm(modid) && !modCategories.has(k)) {
+            modCategories.set(k, v)
+          }
+        }
+      }
       for (const [k, v] of Object.entries(json)) {
         if (typeof v !== 'string') continue
-        if (k.startsWith('key.')) keys.set(k, v)
-        else if (k.startsWith('category.')) categories.set(k, v)
+        // Keybind translations normally start with `key.`, but some mods
+        // (e.g. uku's Armor HUD) register them without the prefix
+        // (armorhud.keybind.toggle). Match both shapes so the label and
+        // the owning mod are always found.
+        const isKey = k.startsWith('key.') || /(^|\.)keybind(\.|$)/.test(k) || /(^|\.)keybinding(\.|$)/.test(k)
+        if (isKey) {
+          keys.set(k, v)
+          if (!k.startsWith('key.')) keys.set(`key.${k}`, v)
+          if (modid) {
+            owners.set(k, modid)
+            if (!k.startsWith('key.')) owners.set(`key.${k}`, modid)
+          }
+        } else if (k.startsWith('category.')) {
+          legacyCategories.set(k, v)
+        }
       }
     } catch {
       /* skip unreadable jar */
     }
   }
-  const dict: LangDict = { keys, categories }
+  const dict: LangDict = { keys, owners, modCategories, legacyCategories, modNames }
   langCache.set(instanceRoot, { at: Date.now(), dirMtime, dict })
   return dict
+}
+
+/** Best-effort mod category for a keybind content (its translation key). */
+function resolveCategory(content: string, dict: LangDict): string {
+  const fullKey = content.startsWith('key.') ? content : `key.${content}`
+  // 0. Vanilla debug keys (F3 keybinds) are vanilla Miscellaneous.
+  if (content.startsWith('debug.') || content.startsWith('key.debug.')) return 'Miscellaneous'
+  // 1. The mod that owns this exact key → its controls category, or the
+  //    mod's own display name when it defines no custom category.
+  const owner = dict.owners.get(fullKey) ?? dict.owners.get(content)
+  if (owner) {
+    const exact = [...dict.modCategories.entries()].find(([k]) => k.split('.')[2] === owner)
+    if (exact) return exact[1]
+    const byNorm = dict.modNames.get(norm(owner))
+    if (byNorm) return byNorm
+  }
+  // 2. Xaero's keybinds use the odd gui.xaero_* shape (not in lang files)
+  //    — anything mentioning minimap is the Minimap; world-map keys are
+  //    the map/world-map ones (open_map, map_zoom, dimension, settings).
+  if (content.startsWith('gui.xaero_')) {
+    if (content.includes('minimap')) return "Xaero's Minimap"
+    return /world_map|open_map|map_zoom|map_settings|quick_confirm|dimension/.test(content)
+      ? "Xaero's World Map"
+      : "Xaero's Minimap"
+  }
+  // 3. Essential registers runtime keybinds as keybind.name.* — group them
+  //    under the Essential mod name.
+  if (content.startsWith('keybind.name.')) {
+    const ess = dict.modNames.get(norm('essential'))
+    if (ess) return ess
+    return 'Essential'
+  }
+  // 4. Fuzzy ownership: the first content segment matches a mod id (after
+  //    normalization, so physicsmod ≈ physics-mod and xaero_minimap ≈
+  //    xaerominimap).
+  const first = (content.replace(/^key\./, '').split('.')[0] ?? '').toLowerCase()
+  if (first) {
+    const exact = [...dict.modCategories.entries()].find(([k]) => norm(k.split('.')[2] ?? '') === norm(first))
+    if (exact) return exact[1]
+    const byNorm = dict.modNames.get(norm(first))
+    if (byNorm) return byNorm
+    // 5. Prefix match: the first segment is a prefix of a mod id
+    //    (detailab → detailabreconst) or a suffix of it (armorhud →
+    //    ukus-armor-hud). Only trust it when the segment is specific
+    //    enough to avoid collisions.
+    if (first.length >= 4) {
+      const nf = norm(first)
+      const prefixHit = [...dict.modNames.entries()].find(([k]) => k.startsWith(nf))
+      if (prefixHit) return prefixHit[1]
+      const suffixHit = [...dict.modNames.entries()].find(([k]) => k.endsWith(nf))
+      if (suffixHit) return suffixHit[1]
+    }
+    // 6. Older category.* shape.
+    const legacy = dict.legacyCategories.get(`category.${first}`)
+    if (legacy) return legacy
+  }
+  return 'Other'
 }
 
 /* --------------------------------- options.txt --------------------------------- */
@@ -282,13 +419,8 @@ export async function listKeybinds(profileId: string): Promise<KeybindEntry[]> {
   return raw.map(({ content, value }) => {
     const lookup = content.startsWith('key.') ? content : `key.${content}`
     const label =
-      VANILLA_KEY_LABELS[content] ?? VANILLA_HOTBAR[content] ?? dict.keys.get(lookup) ?? dict.keys.get(content) ?? prettifyKeyName(content)
-    let category = VANILLA_CATEGORY[content] ?? 'Other'
-    if (category === 'Other') {
-      const modid = content.replace(/^key\./, '').split('.')[0] ?? content
-      const fromDict = dict.categories.get(`category.${modid}`)
-      if (fromDict) category = fromDict
-    }
+      VANILLA_KEY_LABELS[content] ?? VANILLA_HOTBAR[content] ?? CURATED_LABELS[content] ?? dict.keys.get(lookup) ?? dict.keys.get(content) ?? prettifyKeyName(content)
+    const category = VANILLA_CATEGORY[content] ?? resolveCategory(content, dict)
     return { key: content, label, category, raw: value, bound: formatBoundKey(value) }
   })
 }
