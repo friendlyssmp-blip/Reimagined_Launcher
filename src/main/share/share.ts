@@ -466,7 +466,9 @@ async function latestFabricLoader(mc: string): Promise<string | null> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 6000)
-    const res = await fetch(`https://meta.fabricmc.net/v2/versions/loader/${encodeURIComponent(mc)}`, { signal: ctrl.signal })
+    const isLegacy = /^1\.(\d+)/.exec(mc) !== null && Number(/^1\.(\d+)/.exec(mc)![1]) < 14
+    const metaBase = isLegacy ? 'https://meta.legacyfabric.net/v2' : 'https://meta.fabricmc.net/v2'
+    const res = await fetch(`${metaBase}/versions/loader/${encodeURIComponent(mc)}`, { signal: ctrl.signal })
     clearTimeout(timer)
     if (!res.ok) return null
     const list = (await res.json().catch(() => null)) as { version?: string }[] | null

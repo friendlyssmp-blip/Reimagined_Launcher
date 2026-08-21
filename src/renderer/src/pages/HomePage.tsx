@@ -79,7 +79,7 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
                   <button key={p.id} className={`chip ${activeProfile?.id === p.id ? 'active' : ''}`} onClick={() => setActiveProfile(p.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                     <span className="chip-glyph"><ProfileGlyph icon={p.icon} name={p.name} /></span>
                     {p.name}
-                    <Badge variant={p.loader.type !== 'vanilla' ? 'accent' : 'default'}>{p.loader.type}</Badge>
+                    <Badge variant={p.loader.type !== 'vanilla' ? 'accent' : 'default'}>{p.loader.type === 'fabric' && /^1\.(\d+)/.exec(p.minecraftVersion) !== null && Number(/^1\.(\d+)/.exec(p.minecraftVersion)![1]) < 14 ? 'Fabric (Legacy)' : p.loader.type}</Badge>
                   </button>
                 ))}
                 <button className="chip" onClick={() => onNavigate('profiles')}>+ All profiles</button>
@@ -89,7 +89,7 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
             {activeProfile && (
               <div className="stat-grid">
                 <div className="stat"><b>{activeProfile.minecraftVersion}</b><span>Version</span></div>
-                <div className="stat"><b>{activeProfile.loader.type}</b><span>Loader</span></div>
+                <div className="stat"><b>{activeProfile.loader.type === 'fabric' && /^1\.(\d+)/.exec(activeProfile.minecraftVersion) !== null && Number(/^1\.(\d+)/.exec(activeProfile.minecraftVersion)![1]) < 14 ? 'Fabric (Legacy)' : activeProfile.loader.type}</b><span>Loader</span></div>
                 <div className="stat"><b>{activeProfile.mods.length}</b><span>Mods</span></div>
                 <div className="stat"><b>{activeProfile.memory}MB</b><span>RAM</span></div>
               </div>
@@ -131,7 +131,7 @@ export function HomePage({ onNavigate }: { onNavigate: (p: Page) => void }) {
                       <div className="profile-name">{activeProfile.name}</div>
                       <div className="profile-meta">
                         <Badge>{activeProfile.minecraftVersion}</Badge>
-                        <Badge variant="accent">{activeProfile.loader.type}</Badge>
+                        <Badge variant="accent">{activeProfile.loader.type === 'fabric' && /^1\.(\d+)/.exec(activeProfile.minecraftVersion) !== null && Number(/^1\.(\d+)/.exec(activeProfile.minecraftVersion)![1]) < 14 ? 'Fabric (Legacy)' : activeProfile.loader.type}</Badge>
                       </div>
                     </div>
                   </div>

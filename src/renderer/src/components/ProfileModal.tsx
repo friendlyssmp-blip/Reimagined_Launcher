@@ -26,7 +26,7 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
   )
   const fileRef = useRef<HTMLInputElement | null>(null)
   // Loader VERSION selector — a specific Fabric/Forge build per MC version.
-  const [loaders, setLoaders] = useState<{ fabric: string[]; forge: string[]; recommendedFabric: string | null; recommendedForge: string | null } | null>(null)
+  const [loaders, setLoaders] = useState<{ fabric: string[]; forge: string[]; recommendedFabric: string | null; recommendedForge: string | null; isLegacyFabric: boolean } | null>(null)
   const [loaderVersion, setLoaderVersion] = useState(profile?.loader.version ?? '')
   const [loaderVersionsLoading, setLoaderVersionsLoading] = useState(false)
   const [loaderVersionNote, setLoaderVersionNote] = useState<string | null>(null)
@@ -92,7 +92,7 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
         }
       })
       .catch(() => {
-        if (!cancelled) setLoaders({ fabric: [], forge: [], recommendedFabric: null, recommendedForge: null })
+        if (!cancelled) setLoaders({ fabric: [], forge: [], recommendedFabric: null, recommendedForge: null, isLegacyFabric: false })
       })
       .finally(() => {
         if (!cancelled) setLoaderVersionsLoading(false)
@@ -317,7 +317,7 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
       {/* Loader version selector — only relevant when a loader is chosen. */}
       {loader !== 'vanilla' && (
         <Field
-          label={loader === 'fabric' ? 'Fabric Loader Version' : 'Forge Version'}
+          label={loader === 'fabric' ? (loaders?.isLegacyFabric ? 'Fabric (Legacy) Loader Version' : 'Fabric Loader Version') : 'Forge Version'}
           hint="Pick a specific loader build, or Auto for the latest compatible one."
         >
           {loaderVersionsLoading ? (
@@ -380,7 +380,7 @@ export function ProfileModal({ mode, profile }: { mode: 'create' | 'edit'; profi
 
       {loader !== 'vanilla' && (
         <div className="banner banner-info" style={{ marginTop: 4 }}>
-          The {loader === 'fabric' ? 'Fabric' : 'Forge'} loader {loaderVersion || '(latest)'} for {mcVersion || 'your version'} will be installed on first launch.
+          The {loader === 'fabric' ? (loaders?.isLegacyFabric ? 'Legacy Fabric' : 'Fabric') : 'Forge'} loader {loaderVersion || '(latest)'} for {mcVersion || 'your version'} will be installed on first launch.
         </div>
       )}
     </Modal>

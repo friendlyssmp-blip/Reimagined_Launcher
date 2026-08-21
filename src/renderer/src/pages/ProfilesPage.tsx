@@ -166,7 +166,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (p: Page) => void }) 
                   <div className="profile-name">{p.name}</div>
                   <div className="profile-meta">
                     <Badge>{p.minecraftVersion}</Badge>
-                    <Badge variant="accent">{p.loader.type}</Badge>
+                    <Badge variant="accent">{p.loader.type === 'fabric' && /^1\.(\d+)/.exec(p.minecraftVersion) !== null && Number(/^1\.(\d+)/.exec(p.minecraftVersion)![1]) < 14 ? 'Fabric (Legacy)' : p.loader.type}</Badge>
                     {p.mods.length > 0 && <Badge>{p.mods.length} mods</Badge>}
                   </div>
                 </div>

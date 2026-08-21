@@ -19,6 +19,7 @@
  */
 import path from 'node:path'
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import { paths } from '../paths'
 import { logger } from '../logs/logger'
 import { profileManager } from '../profiles/profile-manager'
@@ -200,15 +201,23 @@ const LANG_TTL = 10 * 60_000
 
 const norm = (s: string): string => s.toLowerCase().replace(/[_-]+/g, '')
 
-/** Collect translations + ownership from every installed mod jar: the lang
+/**
+ * Collect translations + ownership from every installed mod jar: the lang
  *  file tells us the label AND which mod registers each key — that is what
  *  lets keybinds group by their real mod ("Xaero's Minimap", "Voice Chat"…)
- *  instead of a generic "Other". */
-function loadLangDict(instanceRoot: string): LangDict {
+ *  instead of a generic "Other".
+ *
+ * v2.1.3 — fully async. The old version read EVERY mod jar synchronously
+ * (fs.readFileSync on 100+ jars) on the main process, freezing the whole
+ * launcher ("Not Responding") while the Keybinds section opened. Reads now
+ * run through fs/promises with a small concurrency pool and a periodic
+ * event-loop yield, so the scan can never block the UI.
+ */
+async function loadLangDict(instanceRoot: string): Promise<LangDict> {
   const modsDir = path.join(instanceRoot, 'mods')
   let dirMtime = 0
   try {
-    dirMtime = fs.statSync(modsDir).mtimeMs
+    dirMtime = (await fsp.stat(modsDir)).mtimeMs
   } catch {
     dirMtime = 0
   }
@@ -222,13 +231,24 @@ function loadLangDict(instanceRoot: string): LangDict {
   const modNames = new Map<string, string>()
   let jars: string[] = []
   try {
-    jars = fs.readdirSync(modsDir).filter((f) => f.endsWith('.jar'))
+    jars = (await fsp.readdir(modsDir)).filter((f) => f.endsWith('.jar'))
   } catch {
     jars = []
   }
-  for (const jar of jars) {
+
+  // Bounded-concurrency jar reader: at most JAR_CONCURRENCY reads in flight,
+  // and after every batch we yield to the event loop so the main process
+  // keeps serving the window while a large mods folder is scanned.
+  const JAR_CONCURRENCY = 6
+  const BATCH_YIELD = 8
+  const parseJar = async (jar: string): Promise<void> => {
+    let buf: Buffer
     try {
-      const buf = fs.readFileSync(path.join(modsDir, jar))
+      buf = await fsp.readFile(path.join(modsDir, jar))
+    } catch {
+      return // skip unreadable jar
+    }
+    try {
       const entries = zipListEntries(buf)
       // Read fabric.mod.json (or mods.toml fallback) for the mod id/name.
       let modid = ''
@@ -244,14 +264,14 @@ function loadLangDict(instanceRoot: string): LangDict {
         }
       }
       const langEntry = entries.find((e) => /^assets\/[^/]+\/lang\/en_us\.json$/i.test(e))
-      if (!langEntry) continue
+      if (!langEntry) return
       const raw = zipReadEntry(buf, langEntry)
-      if (!raw) continue
+      if (!raw) return
       let json: Record<string, unknown>
       try {
         json = JSON.parse(raw.toString('utf-8'))
       } catch {
-        continue
+        return
       }
       if (!modid) {
         // Fallback mod id: the first assets/<namespace>/ segment.
@@ -292,6 +312,17 @@ function loadLangDict(instanceRoot: string): LangDict {
       /* skip unreadable jar */
     }
   }
+  let done = 0
+  while (done < jars.length) {
+    const batch = jars.slice(done, done + JAR_CONCURRENCY)
+    await Promise.all(batch.map(parseJar))
+    done += batch.length
+    if (done % BATCH_YIELD === 0) {
+      // Yield to the event loop so the window keeps pumping.
+      await new Promise((r) => setImmediate(r))
+    }
+  }
+
   const dict: LangDict = { keys, owners, modCategories, legacyCategories, modNames }
   langCache.set(instanceRoot, { at: Date.now(), dirMtime, dict })
   return dict
@@ -415,7 +446,7 @@ export async function listKeybinds(profileId: string): Promise<KeybindEntry[]> {
   if (!profile) return []
   const gameDir = instancePath(profile)
   const raw = readKeyLines(gameDir)
-  const dict = loadLangDict(gameDir)
+  const dict = await loadLangDict(gameDir)
   return raw.map(({ content, value }) => {
     const lookup = content.startsWith('key.') ? content : `key.${content}`
     const label =

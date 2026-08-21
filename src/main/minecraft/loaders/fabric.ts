@@ -17,6 +17,7 @@ import { mavenPathFromName, versionManager } from '../version-manager'
 const FABRIC_META = 'https://meta.fabricmc.net/v2'
 const LEGACY_FABRIC_META = 'https://meta.legacyfabric.net/v2'
 const FABRIC_MAVEN = 'https://maven.fabricmc.net'
+const LEGACY_FABRIC_MAVEN = 'https://maven.legacyfabric.net'
 
 /**
  * v1.0.50 — Legacy Fabric ecosystem detection. Mainline Fabric Loader only
@@ -50,6 +51,11 @@ export function needsIntermediary(mcVersion: string): boolean {
 
 function fabricMetaBase(mcVersion: string): string {
   return isLegacyFabricMc(mcVersion) ? LEGACY_FABRIC_META : FABRIC_META
+}
+
+/** Return the correct Maven repository base URL for this MC version's Fabric ecosystem. */
+function fabricMavenFor(mcVersion: string): string {
+  return isLegacyFabricMc(mcVersion) ? LEGACY_FABRIC_MAVEN : FABRIC_MAVEN
 }
 
 interface FabricLoaderMeta {
@@ -197,11 +203,11 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
             if (!hasLib || !hasJar) {
               logger.warn(`Fabric ${loaderVersion} install for ${mcVersion} was missing the intermediary mappings — patching (classTweaker namespace fix).`)
               if (!hasLib) {
-                cachedJson.libraries.push({ name: intermediaryName, url: FABRIC_MAVEN })
+                cachedJson.libraries.push({ name: intermediaryName, url: fabricMavenFor(mcVersion) })
                 fs.writeFileSync(jsonPath, JSON.stringify(cachedJson, null, 2), 'utf-8')
               }
               if (!hasJar) {
-                await runDownloadBatch([{ url: `${FABRIC_MAVEN}/${interRel}`, dest: interDest }], {
+                await runDownloadBatch([{ url: `${fabricMavenFor(mcVersion)}/${interRel}`, dest: interDest }], {
                   kind: 'loader',
                   label: `Intermediary mappings for ${mcVersion}`
                 })
@@ -252,7 +258,7 @@ export async function installFabric(mcVersion: string, loaderVersion: string): P
   // this launcher previously omitted. 26.1+ is unobfuscated: no intermediary
   // is published or needed.
   const intermediaryLib = needsIntermediary(mcVersion)
-    ? { name: res.intermediary?.maven ?? `net.fabricmc:intermediary:${mcVersion}`, url: FABRIC_MAVEN }
+    ? { name: res.intermediary?.maven ?? `net.fabricmc:intermediary:${mcVersion}`, url: fabricMavenFor(mcVersion) }
     : null
   // Drop any duplicate the meta response might ever include, then add ours.
   const deps = clientLibs.filter((l) => l.name !== loaderLib.name)

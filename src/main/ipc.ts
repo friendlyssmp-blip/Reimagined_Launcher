@@ -17,7 +17,7 @@ import { settingsManager } from './settings/settings-manager'
 import { accountStore } from './auth/account-store'
 import { microsoftAuth } from './auth/microsoft-auth'
 import { versionManager } from './minecraft/version-manager'
-import { getFabricLoaders, latestFabricLoader } from './minecraft/loaders/fabric'
+import { getFabricLoaders, latestFabricLoader, isLegacyFabricMc } from './minecraft/loaders/fabric'
 import { getForgeVersions, recommendedForgeVersion } from './minecraft/loaders/forge'
 import { profileManager } from './profiles/profile-manager'
 import { modManager } from './mods/mod-manager'
@@ -280,7 +280,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       fabric: fabric.status === 'fulfilled' ? fabric.value : [],
       forge: forge.status === 'fulfilled' ? forge.value : [],
       recommendedFabric: recFabric.status === 'fulfilled' ? recFabric.value : null,
-      recommendedForge: recForge.status === 'fulfilled' ? recForge.value : null
+      recommendedForge: recForge.status === 'fulfilled' ? recForge.value : null,
+      isLegacyFabric: isLegacyFabricMc(mc)
     }
   })
 

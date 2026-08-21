@@ -70,6 +70,7 @@ export interface LoadersForResult {
   forge: string[]
   recommendedFabric: string | null
   recommendedForge: string | null
+  isLegacyFabric: boolean
 }
 
 export const api = {

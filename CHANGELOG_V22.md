@@ -1,3 +1,30 @@
+## v2.1.3 - Legacy Fabric support fixed (no more 404 on MC ≤1.13.2)
+
+### Legacy Fabric loader versions now load correctly
+
+- When creating a profile for any Minecraft version ≤1.13.2 with Fabric, the
+  launcher was hardcoded to download intermediary mappings from Fabric's normal
+  Maven (`maven.fabricmc.net`), which doesn't host Legacy Fabric artifacts —
+  every launch crashed with HTTP 404.
+- The launcher now detects when a Minecraft version falls in the Legacy Fabric
+  range and uses the correct Maven (`maven.legacyfabric.net`) + meta API
+  (`meta.legacyfabric.net`) for all intermediary and loader downloads.
+- Legacy Fabric profiles now display a **"Fabric (Legacy)"** badge across the
+  Home page, profile cards, and the loader version selector so users can
+  immediately see which ecosystem they're running.
+- The share/compact-code system also now uses the correct Legacy Fabric meta API
+  for affected versions.
+
+### Keybinds scanner no longer blocks the main thread
+
+- The keybinds page scan reads every mod jar to extract key-binding metadata;
+  previously this ran synchronously (blocking the entire launcher UI) when
+  hundreds of jars were installed.
+- The scan is now fully async with a bounded concurrency pool and event-loop
+  yields, so the launcher stays responsive.
+
+---
+
 ## v2.1.2 - Storage scan no longer freezes the launcher + duplicate mods healed on disk + external links open in the browser
 
 ### Clear Up Space no longer freezes the launcher ("Not Responding")
