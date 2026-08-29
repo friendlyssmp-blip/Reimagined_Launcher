@@ -1,3 +1,18 @@
+## v2.1.4 - FPS Boost 1.0.38 with configurable Entity Distance lock
+
+### Reimagined FPS Boost updated to 1.0.38
+
+- The bundled Reimagined FPS Boost mod is upgraded from 1.0.37 to 1.0.38.
+- New option available in the in-game mod settings (press **K**): **"Lock Entity
+  Distance"** — a toggle plus a configurable percentage (75% / 100% / 125% /
+  150% / 200% / 300% / 500%).
+- When enabled, the mod forces the chosen entity-distance scaling every tick,
+  so the game can no longer clamp it (previously stuck at 75%). Default is OFF,
+  so existing behavior is unchanged until the user enables it.
+- Fresh Fabric profiles now ship with the updated mod automatically.
+
+---
+
 ## v2.1.3 - Legacy Fabric support fixed (no more 404 on MC ≤1.13.2)
 
 ### Legacy Fabric loader versions now load correctly
