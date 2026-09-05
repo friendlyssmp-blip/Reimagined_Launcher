@@ -1,4 +1,22 @@
-## v2.1.4 - FPS Boost 1.0.38 with configurable Entity Distance lock
+## v2.1.5 - FPS Boost 1.0.39 — Entity Distance lock actually works (conflicting mod removed)
+
+### Reimagined FPS Boost updated to 1.0.39
+
+- The bundled Reimagined FPS Boost mod is upgraded from 1.0.38 to 1.0.39.
+- **Critical fix**: the Entity Distance lock (added in 1.0.38) now actually works.
+  Previous builds enforced the value via the vanilla `entityDistanceScaling` option,
+  but an installed third-party mod (BetterFPSDist) contained a mixin that overrode
+  entity render distance at the rendering level, bypassing the option entirely — so
+  the lock appeared to do nothing.
+- BetterFPSDist (and any similar mod that intercepts `shouldRenderAtSqrDistance`)
+  must NOT be installed alongside Reimagined FPS Boost when using the Entity Distance
+  lock, as it will fight the lock and clamp the value back down.
+- The launcher now ships the corrected 1.0.39 jar for both 26.1 and 26.2 Fabric
+  targets.
+- Existing instances: close Minecraft and the launcher, update to v2.1.5, and relaunch
+  — the new jar is seeded into the instance automatically.
+
+---
 
 ### Reimagined FPS Boost updated to 1.0.38
 

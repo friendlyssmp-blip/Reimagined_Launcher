@@ -1,8 +1,8 @@
 {
-  "version": "2.1.4",
-  "installer": "dist/Reimagined-Setup-2.1.4.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.4.exe",
-  "sha256": "4eb421acd67bb242c335572bbb0803fcb7190989ea04e89f1719a874ee429c87",
-  "notes": "Reimagined FPS Boost updated to 1.0.38 with a new in-game option (press K): 'Lock Entity Distance' — a toggle plus configurable percentage (75% / 100% / 125% / 150% / 200% / 300% / 500%) that stops the game from clamping entity distance to 75%. Off by default, so current behavior is unchanged until enabled.",
-  "publishedAt": "2026-08-29T03:40:44+00:00"
+  "version": "2.1.5",
+  "installer": "dist/Reimagined-Setup-2.1.5.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.5.exe",
+  "sha256": "4d971dbcb7d7c4ef1a423dd4599eeaa4f172b5ffd4cbc727e01e01e338ec51b9",
+  "notes": "Reimagined FPS Boost updated to 1.0.39 — the 'Lock Entity Distance' option now actually works. Previous builds (1.0.38) enforced the vanilla entityDistanceScaling option, but a third-party mod (BetterFPSDist) could override it via a render mixin, making the lock appear to do nothing. 1.0.39 fixes the enforcement, and any conflicting BetterFPSDist-like mod must NOT be installed alongside FPS Boost when using the lock.",
+  "publishedAt": "2026-09-05T12:16:00+00:00"
 }
