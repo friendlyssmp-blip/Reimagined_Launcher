@@ -238,6 +238,7 @@ export type AppEventType =
   | 'system:info'
   | 'streaming:changed'
   | 'storage:progress'
+  | 'game-window-detected'
 
 export interface AppEvent {
   type: AppEventType

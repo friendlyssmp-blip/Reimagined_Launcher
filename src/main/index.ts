@@ -268,6 +268,30 @@ if (!gotLock && !SMOKE && !BENCH) {
         // v1.0.19: deep links — reimagined://share/<CODE> opens Import with the code.
         registerProtocol()
         handleDeepLinkArgs(process.argv.slice(1))
+
+        // Listen for the in-app 'game-window-detected' event (emitted by the
+        // launcher runtime when the game's window handle is first seen) so the
+        // main process can do the real OS-level focus work: minimize the launcher
+        // (so the game window gets focus cleanly) and, on Windows, call
+        // SetForegroundWindow on the game window handle.
+        eventBus.on('game-window-detected', (event) => {
+          const settings = settingsManager.get()
+          if (!settings.minimizeLauncherOnGameWindow) return
+          const win = getMainWindow()
+          if (!win || win.isDestroyed()) return
+          try { win.minimize() } catch { /* best-effort */ }
+          if (process.platform === 'win32') {
+            const payload = event.payload as { pid?: number } | undefined
+            const pid = payload?.pid
+            if (pid && Number.isFinite(pid)) {
+              const { execFile } = require('node:child_process')
+              // Use PowerShell + user32!SetForegroundWindow so the game window
+              // gets focus without requiring the launcher to have foreground priority.
+              const ps = `Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace Native -PassThru | ForEach-Object { [Native.Win32]::SetForegroundWindow((Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowHandle) }`
+              void execFile('powershell', ['-NoProfile', '-Command', ps], { windowsHide: true, timeout: 5000 }).catch(() => {})
+            }
+          }
+        })
       } catch (err) {
         logger.exception('Fatal startup error', err)
         if (!SMOKE) {

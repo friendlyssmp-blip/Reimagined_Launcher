@@ -1,4 +1,18 @@
-## v2.1.6 - Update now auto-closes and reopens the launcher (no manual reopen needed)
+## v2.1.7 - Game window focus transfer on launch (fixes splash behind launcher)
+
+### Game window focus now transfers cleanly on launch
+
+- **Fixed the "game stuck on splash when the launcher stays visible" feel.** When the
+  game window is first detected during launch, the launcher now minimizes itself and
+  tries to bring the game window to the front (Windows: `SetForegroundWindow` via
+  PowerShell). The game no longer appears frozen on splash just because the launcher
+  was sitting on top.
+- New Settings → General toggle **"Transfer focus to the game window"** (ON by
+  default), so users can disable it if they prefer the launcher to stay foreground.
+- The behavior is gated behind a setting and is best-effort on each OS, so it never
+  blocks launch if the OS rejects the focus request.
+
+---
 
 ### Update flow fixed: launcher now self-closes and auto-relaunches after an update
 

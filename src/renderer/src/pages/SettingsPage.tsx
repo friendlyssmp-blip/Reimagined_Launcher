@@ -82,7 +82,8 @@ type SectionId = ReturnType<typeof getSections>[number]['id']
  *  and a short description. The search box in Settings filters this live and
  *  clicking a result jumps straight to that category. */
 const SETTINGS_INDEX: { query: string[]; section: SectionId; label: string; desc: string }[] = [
-  { query: ['close on launch', 'hide launcher', 'game starts'], section: 'general', label: 'Hide launcher when game starts', desc: 'Close the launcher window when a game starts' },
+  { query: ['close on launch', 'hide launcher', 'game starts', 'transfer focus', 'focus game'], section: 'general', label: 'Hide launcher when game starts', desc: 'Close the launcher window when a game starts' },
+  { query: ['transfer focus', 'focus game', 'game window focus', 'minimize launcher on game'], section: 'general', label: 'Transfer focus to the game window', desc: 'When the game window appears, minimize the launcher and bring the game to the front' },
   { query: ['console', 'game console', 'window on launch'], section: 'general', label: 'Open game console window on launch', desc: 'Open the detached game console when launching' },
   { query: ['ram', 'memory', 'default ram'], section: 'general', label: 'Default RAM', desc: 'Memory applied to new profiles' },
   { query: ['log level', 'logs', 'keep logs'], section: 'general', label: 'Logs', desc: 'Log level and how many days logs are kept' },
@@ -241,7 +242,19 @@ export function SettingsPage() {
                 </div>
               </div>
               <div className="panel">
-                <div className="panel-title">Default RAM</div>
+                <div className="panel">
+                <div className="panel-title">Transfer focus to the game window</div>
+                <p className="panel-sub">
+                  When enabled and the game's window is detected during launch, the launcher minimizes itself and tries to bring the game window to the front — so the game never appears stuck behind the launcher during splash.
+                </p>
+                <Toggle
+                  checked={settings.minimizeLauncherOnGameWindow ?? true}
+                  onChange={(v) => void updateSettings({ minimizeLauncherOnGameWindow: v })}
+                  label="Transfer focus to the game window"
+                />
+              </div>
+
+              <div className="panel-title">Default RAM</div>
                 <p className="panel-sub">Applied to new profiles — each profile can override it.</p>
                 <Slider value={settings.memory} min={1024} max={16384} step={512} label="Default RAM" onChange={(v) => updateSettings({ memory: v })} />
               </div>

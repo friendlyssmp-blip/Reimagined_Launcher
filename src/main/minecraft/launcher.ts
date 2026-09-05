@@ -741,17 +741,23 @@ class Launcher {
         this.stopWindowWatch(session)
         return
       }
+      const { execFile } = require('node:child_process')
       execFile(
         'powershell',
         ['-NoProfile', '-Command', `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).MainWindowHandle`],
         { windowsHide: true, timeout: 4000 },
-        (err, stdout) => {
+        (err: NodeJS.ErrnoException | null, stdout: string) => {
           if (session.windowPoller === null) return
           const handle = Number(String(stdout ?? '').trim())
           if (Number.isFinite(handle) && handle > 0) {
             const elapsedSec = Math.max(0, Math.round((Date.now() - started) / 1000))
             session.windowOpenedAt = Date.now()
             logger.info(`Minecraft window opened after ${elapsedSec}s (pid ${pid})`)
+            // v2.0.1 — when the game window is first detected, tell the main
+            // process so it can transfer focus cleanly (minimize the launcher +
+            // attempt SetForegroundWindow on Windows). This avoids the "game seems
+            // stuck on splash while the launcher stays visible" feel.
+            eventBus.emit('game-window-detected', { profileId: session.profile.id, pid, windowHandle: handle })
             eventBus.emit('launch:window-open', { elapsedSec })
             this.stopWindowWatch(session)
           } else if (Date.now() - started > 180_000) {

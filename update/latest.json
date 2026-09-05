@@ -1,8 +1,8 @@
 {
-  "version": "2.1.6",
-  "installer": "dist/Reimagined-Setup-2.1.6.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.6.exe",
-  "sha256": "131176f05979e25dd367c6b0213fc6d0ecc99126ac3add9dc6d2693d2eba9c2a",
-  "notes": "Update now auto-closes and reopens the launcher. After clicking Update, the launcher downloads the new installer, runs it silently, automatically closes itself, and a detached helper relaunches the newly installed version — no manual reopen needed. Progress messages now clearly explain each step: downloading, installing (launcher will close and reopen), and relaunching.",
-  "publishedAt": "2026-09-05T12:34:00+00:00"
+  "version": "2.1.7",
+  "installer": "dist/Reimagined-Setup-2.1.7.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.7.exe",
+  "sha256": "4428afca35901717572ab9272b1f982015b2e9de088fba51f13b5ada383fe284",
+  "notes": "Game window focus transfer on launch: when the game window is first detected, the launcher minimizes itself and tries to bring the game window to the front (Windows SetForegroundWindow via PowerShell), so the game no longer appears stuck on splash just because the launcher was sitting on top. New Settings toggle: Transfer focus to the game window (ON by default, in Settings > General). Update auto-reopen and FPS Boost 1.0.39 still included.",
+  "publishedAt": "2026-09-05T15:02:00+00:00"
 }

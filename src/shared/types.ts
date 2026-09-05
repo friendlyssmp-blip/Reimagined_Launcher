@@ -94,6 +94,13 @@ export interface LauncherSettings {
   closeOnLaunch: boolean
   /** Open the console view automatically when launching. */
   showConsoleOnLaunch: boolean
+  /**
+   * When the game window is first detected, minimize the launcher so the
+   * game window receives focus without the launcher getting in the way.
+   * ON by default — helps avoid the "game stuck on splash when launcher is visible"
+   * feel when the user alt-tabs or the launcher sits on top.
+   */
+  minimizeLauncherOnGameWindow: boolean
   /** Show snapshots and beta versions in version picker. */
   showSnapshots: boolean
   /** Low-cost rendering: static 2D previews instead of animated 3D. */

@@ -63,7 +63,8 @@ class EventBus {
       'share:deep-link': true,
       'system:info': true,
       'streaming:changed': true,
-      'storage:progress': true
+      'storage:progress': true,
+      'game-window-detected': true
     }
   }
 }

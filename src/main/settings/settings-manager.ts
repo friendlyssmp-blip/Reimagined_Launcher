@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   curseforgeProxyUrl: 'https://reimagined-cf-proxy.onrender.com',
   closeOnLaunch: false,
   showConsoleOnLaunch: true,
+  minimizeLauncherOnGameWindow: true,
   showSnapshots: false,
   performanceMode: false,
   preset: 'balanced',
