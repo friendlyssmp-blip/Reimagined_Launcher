@@ -1,8 +1,8 @@
 {
-  "version": "2.1.5",
-  "installer": "dist/Reimagined-Setup-2.1.5.exe",
-  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.5.exe",
-  "sha256": "4d971dbcb7d7c4ef1a423dd4599eeaa4f172b5ffd4cbc727e01e01e338ec51b9",
-  "notes": "Reimagined FPS Boost updated to 1.0.39 — the 'Lock Entity Distance' option now actually works. Previous builds (1.0.38) enforced the vanilla entityDistanceScaling option, but a third-party mod (BetterFPSDist) could override it via a render mixin, making the lock appear to do nothing. 1.0.39 fixes the enforcement, and any conflicting BetterFPSDist-like mod must NOT be installed alongside FPS Boost when using the lock.",
-  "publishedAt": "2026-09-05T12:16:00+00:00"
+  "version": "2.1.6",
+  "installer": "dist/Reimagined-Setup-2.1.6.exe",
+  "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.6.exe",
+  "sha256": "131176f05979e25dd367c6b0213fc6d0ecc99126ac3add9dc6d2693d2eba9c2a",
+  "notes": "Update now auto-closes and reopens the launcher. After clicking Update, the launcher downloads the new installer, runs it silently, automatically closes itself, and a detached helper relaunches the newly installed version — no manual reopen needed. Progress messages now clearly explain each step: downloading, installing (launcher will close and reopen), and relaunching.",
+  "publishedAt": "2026-09-05T12:34:00+00:00"
 }

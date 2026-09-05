@@ -1,4 +1,22 @@
-## v2.1.5 - FPS Boost 1.0.39 — Entity Distance lock actually works (conflicting mod removed)
+## v2.1.6 - Update now auto-closes and reopens the launcher (no manual reopen needed)
+
+### Update flow fixed: launcher now self-closes and auto-relaunches after an update
+
+- When clicking "Update" on a packaged install, the launcher now clearly tells the
+  user what is happening: it downloads the new installer, runs it silently, and
+  **automatically closes itself** while the installer replaces the files. A detached
+  PowerShell helper then waits for both the installer and the launcher to exit,
+  settles briefly so Windows releases every file handle, and **automatically starts
+  the newly installed launcher**.
+- The user no longer needs to manually close and reopen the launcher after an update
+  — the whole flow is hands-off once "Update" is clicked.
+- If the automatic relaunch ever fails (extremely rare), a `RELAUNCH_FAILED.txt` is
+  written next to the launcher with the path to open manually.
+- Progress messages now say: "Downloading update X.Y.Z… N%", "Installing update —
+  the launcher will close and reopen automatically…", and "Relaunching… Minecraft
+  keeps running" so the user always knows what is happening.
+
+---
 
 ### Reimagined FPS Boost updated to 1.0.39
 
