@@ -2,7 +2,7 @@
   "version": "2.1.7",
   "installer": "dist/Reimagined-Setup-2.1.7.exe",
   "url": "https://raw.githubusercontent.com/friendlyssmp-blip/Reimagined_Launcher/main/dist/Reimagined-Setup-2.1.7.exe",
-  "sha256": "566bdfcfd4d085eff3a86cf140a1060a3a257603b5b34d832bc5b018050584c8",
+  "sha256": "d02791d8937c0062342bc67be03d231b91b9beb09b330fac9af8ff2e3be4b84b",
   "notes": "Game window focus transfer on launch: when the game window is first detected, the launcher minimizes itself and tries to bring the game window to the front (Windows SetForegroundWindow via PowerShell), so the game no longer appears stuck on splash just because the launcher was sitting on top. New Settings toggle: Transfer focus to the game window (ON by default, in Settings > General). Update auto-reopen and FPS Boost 1.0.39 still included.",
   "publishedAt": "2026-09-05T15:02:00+00:00"
 }
